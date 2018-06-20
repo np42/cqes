@@ -1,24 +1,24 @@
 enum Status { INITIAL, PENDING, DISTURBED, READY }
 
-type Handler<T, C> = (value: T, fx: Fx<T, C>) => Promise<C>;
-type Action<T, C> = (value: C, fx: Fx<T, C>) => Promise<any>;
+export type Node<N, B> = (value: N, fx: Fx<N, B>) => Promise<B>;
+export type Action<N, B> = (value: B, fx: Fx<N, B>) => Promise<any>;
 
-export class Fx<T, C> {
+export class Fx<N, B> {
 
   static create(value: any) {
     return new Fx(async () => value);
   }
 
-  private node:       Handler<T, C>;
-  private trunk:      Fx<any, T>;
+  private node:       Node<N, B>;
+  private trunk:      Fx<any, N>;
   private status:     Status;
   private value:      any;
   private retryCount: number;
   private retrying:   NodeJS.Timer;
-  private pending:    Array<Action<T, C>>;
-  private branches:   Array<Fx<C, any>>;
+  private pending:    Array<Action<N, B>>;
+  private branches:   Array<Fx<B, any>>;
 
-  constructor(node: Handler<T, C>, trunk?: Fx<any, T>) {
+  constructor(node: Node<N, B>, trunk?: Fx<any, N>) {
     this.node        = node;
     this.trunk       = trunk;
     this.status      = Status.INITIAL;
@@ -35,13 +35,13 @@ export class Fx<T, C> {
     ( this.trunk instanceof Fx
       ? this.trunk.get()
       : new Promise(resolve => resolve(this.trunk))
-    ) .then(value => this.node(<T>value, this))
+    ) .then(value => this.node(<N>value, this))
       .then(value => this.fulfill(value))
       .catch(error => this.snap(error));
     return this;
   }
 
-  fulfill(value: C) {
+  fulfill(value: B) {
     this.status     = Status.READY;
     this.retryCount = 0;
     this.value      = value;
@@ -51,7 +51,7 @@ export class Fx<T, C> {
       branch.open();
   }
 
-  snap(error: Error, action?: Action<T, C>) {
+  snap(error: Error, action?: Action<N, B>) {
     if (action) this.pending.push(action);
     this.status = Status.DISTURBED;
     if (this.retryCount == 0) {
@@ -82,34 +82,34 @@ export class Fx<T, C> {
     });
   }
 
-  then(continuity: Handler<any, C>) {
+  then(continuity: Node<any, B>) {
     const previous = this.node;
-    const next = (value: any): Promise<C> => new Promise((resolve, reject) => {
+    const next = (value: any): Promise<B> => new Promise((resolve, reject) => {
       return continuity(value, this).then(resolve).catch((error: Error) => this.snap(error));
     });
     this.node = (value, fx) => (<Promise<any>>previous(value, fx)).then(next);
     return this;
   }
 
-  try(method: Action<T, C>) {
+  try(method: Action<N, B>) {
     return new Promise((resolve, reject) => {
-      const action = (value: C, fx: Fx<T, C>) => method(value, fx).then(resolve).catch(reject);
+      const action = (value: B, fx: Fx<N, B>) => method(value, fx).then(resolve).catch(reject);
       if (this.status != Status.READY) return this.pending.push(action);
-      else return this.get().then((value: C) => action(value, this));
+      else return this.get().then((value: B) => action(value, this));
     });
   }
 
-  do(method: Action<T, C>) {
+  do(method: Action<N, B>) {
     return new Promise(resolve => {
-      const action = (value: C, fx: Fx<T, C>): Promise<any> => method(value, fx)
+      const action = (value: B, fx: Fx<N, B>): Promise<any> => method(value, fx)
         .then(resolve)
         .catch((error: Error) => this.snap(error, action));
       if (this.status != Status.READY) return this.pending.push(action);
-      else return this.get().then((value: C) => action(value, this));
+      else return this.get().then((value: B) => action(value, this));
     });
   }
 
-  pipe(node: Handler<C, any>): Fx<C, any> {
+  pipe(node: Node<B, any>): Fx<B, any> {
     const branch = new Fx(node, this);
     this.branches.push(branch);
     return branch;

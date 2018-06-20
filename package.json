@@ -1,0 +1,35 @@
+{
+  "name": "cqes",
+  "version": "1.0.0",
+  "description": "CQRS / Event Sourced Framework",
+  "main": "dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/apiculteur/cqes.git"
+  },
+  "keywords": [
+    "cqrs",
+    "ddd",
+    "es",
+    "tdd",
+    "framework"
+  ],
+  "author": "Nicolas Pelletier <npelletier@apiculteur.io>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/apiculteur/cqes/issues"
+  },
+  "homepage": "https://github.com/apiculteur/cqes#readme",
+  "devDependencies": {
+    "@types/amqplib": "^0.5.7",
+    "@types/node": "^8.0.0",
+    "@types/uuid": "^3.4.3"
+  },
+  "dependencies": {
+    "amqplib": "^0.5.2",
+    "node-eventstore-client": "^0.2.3"
+  }
+}

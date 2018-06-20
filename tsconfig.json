@@ -1,0 +1,17 @@
+{ "compilerOptions":
+  { "module": "commonjs"
+  , "moduleResolution": "node"
+  , "lib": ["es5", "es6", "dom"]
+  , "target": "es6"
+  , "noImplicitAny": true
+  , "removeComments": true
+  , "preserveConstEnums": true
+  , "allowUnreachableCode": true
+  , "suppressImplicitAnyIndexErrors": true
+  , "outDir": "dist"
+  , "rootDirs": [ "src", "dist" ]
+  , "sourceMap": true
+  }
+, "include": [ "src/**/*" ]
+, "exclude": [ "node_modules", "**/*.spec.ts" ]
+}

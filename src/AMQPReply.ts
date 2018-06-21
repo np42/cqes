@@ -1,8 +1,14 @@
-import { Reply } from './Reply';
+import { Reply }   from './Reply';
+import { Message } from 'amqplib';
+
+type Replier = (action: string) => void;
 
 export class AMQPReply extends Reply {
-  constructor(message, reply) {
-    const payload = {};
+  public id: string;
+  private reply: Replier;
+
+  constructor(message: Message, reply: Replier) {
+    const payload = <any>{};
     try { Object.assign(payload, JSON.parse(message.content.toString())) }
     catch (e) { /* Fail silently */ }
     super(payload.type, payload.value);

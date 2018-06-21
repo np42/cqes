@@ -5,14 +5,15 @@ import * as ES              from 'node-eventstore-client';
 import * as URL             from 'url';
 import * as uuid            from 'uuid';
 
-export type ESConnection   = ES.EventStoreNodeConnection;
-export type ESSubscription = ES.EventStoreSubscription;
+type ESConnection   = ES.EventStoreNodeConnection;
+type ESSubscription = ES.EventStoreSubscription;
 
-export type SubscriptionHandler = Node<ESConnection, ESSubscription>;
-export type EventHandler        = (event: ESEvent) => Promise<void>;
+type SubscriptionNode = Node<ESConnection, ESSubscription>;
+type EventHandler     = (event: ESEvent) => Promise<void>;
 
-export type FxConnection   = Fx<any, ESConnection>;
-export type FxSubscription = Fx<SubscriptionHandler, ESSubscription>;
+type FxConnection   = Fx<any, ESConnection>;
+type FxSubscription = Fx<SubscriptionNode, ESSubscription>;
+type FxEventHandler = Fx<any, EventHandler>;
 
 export class ESEventBus {
 
@@ -24,7 +25,7 @@ export class ESEventBus {
     const username = decodeURIComponent((address.auth || 'admin').split(':')[0]);
     const password = decodeURIComponent((address.auth || ':changeit').split(':')[1]);
     this.credentials = new ES.UserCredentials(username, password);
-    this.connection  = new Fx((_: any, fx: FxConnection) => {
+    this.connection  = new Fx((_: any, fx: FxConnection): Promise<ESConnection> => {
       return new Promise((resolve, reject) => {
         const origin = address.protocol + '//' + address.host;
         const connection = ES.createConnection(settings, origin);
@@ -35,18 +36,18 @@ export class ESEventBus {
     }).open();
   }
 
-  subscribe(stream: string, from: number, handler: SubscriptionHandler | FxSubscription) {
+  subscribe(stream: string, from: number, handler: EventHandler | FxEventHandler) {
     const state = { from };
-    if (!(handler instanceof Fx)) handler = Fx.create(handler).open();
+    const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.connection.pipe(async (connection, fx) => {
       const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
         const event = new ESEvent(data.event);
-        handler.do((handler: Action<ES.EventStoreSubscription, any>) => handler(event)).then(() => {
+        fxHandler.do((handler: EventHandler) => handler(event)).then(() => {
           state.from = event.number;
         });
       }, () => {
         const event = new Event(stream, '$liveReached');
-        handler.do((handler: Handler) => handler(event));
+        fxHandler.do((handler: EventHandler) => handler(event));
       }, () => {
         if ((<any>subscription)._dropData.reason == 'userInitiated') {
           fx.close();

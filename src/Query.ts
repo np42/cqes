@@ -7,7 +7,7 @@ export class Query extends Serializable {
   public data:      Object;
   public meta:      Object;
 
-  constructor(view: string, method: string, data: Object, meta: Object) {
+  constructor(view: string, method: string, data = {}, meta = {}) {
     super();
     this.view      = view;
     this.createdAt = new Date();

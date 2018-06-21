@@ -8,7 +8,7 @@ export class Event extends Serializable {
   public meta:      Object;
   public number:    any;
 
-  constructor(stream: string, type: string, data: Object, meta: Object) {
+  constructor(stream: string, type: string, data = {}, meta = {}) {
     super();
     this.stream    = stream;
     this.createdAt = new Date();

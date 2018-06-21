@@ -1,14 +1,20 @@
 import { Command } from './Command';
+import { Message } from 'amqplib';
+
+type Replier = (action: string) => void;
 
 export class AMQPCommand extends Command {
-  constructor(message, reply) {
-    const payload = {};
+  public pulledAt: Date;
+  private reply: Replier;
+
+  constructor(message: Message, reply: Replier) {
+    const payload = <any>{};
     try { Object.assign(payload, JSON.parse(message.content.toString())) }
     catch (e) { /* Fail silently */ }
-    super( payload.topicId || message.fields.routingKey
-         , payload.orderType || 'Dummy'
-         , payload.orderData || {}
-         , payload.orderMeta || {}
+    super( payload.topic || message.fields.routingKey
+         , payload.type  || 'Dummy'
+         , payload.data  || {}
+         , payload.meta  || {}
          );
     this.createdAt = new Date(payload.createdAt);
     this.pulledAt  = new Date();

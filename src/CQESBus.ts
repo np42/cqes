@@ -1,90 +1,41 @@
-import Logger                           from './Logger';
+import Logger from './Logger';
 
-import { Handler as CommandHandler }    from './CommandBus';
-import { Handler as EventHandler }      from './EventBus';
+import { CommandBus, Handler as CommandHandler }  from './CommandBus';
+import { QueryBus,   Handler as QueryHandler }    from './QueryBus';
+import { EventBus,   Handler as EventHandler }    from './EventBus';
+import { StateBus,   Handler as StateHandler }    from './StateBus';
 
-import { InCommand, OutCommand }        from './Command';
-import { InQuery, OutQuery }            from './Query';
-import { InEvent, OutEvent }            from './Event';
+import { InCommand, OutCommand } from './Command';
+import { InQuery, OutQuery }     from './Query';
+import { InEvent, OutEvent }     from './Event';
+import { InState, OutState }     from './State';
 
-import { AMQPCommandBus as CommandBus } from './AMQPCommandBus';
-import { AMQPQueryBus   as QueryBus }   from './AMQPQueryBus';
-import { ESEventBus     as EventBus }   from './ESEventBus';
-import { ESEventBus     as StateBus }   from './ESEventBus';
+import { AMQPCommandBus as xCommandBus } from './AMQPCommandBus';
+import { AMQPQueryBus   as xQueryBus }   from './AMQPQueryBus';
+import { ESEventBus     as xEventBus }   from './ESEventBus';
+import { ESEventBus     as xStateBus }   from './ESEventBus';
 
-import { v1 as uuidv1 }                 from 'uuid';
-import * as URL                         from 'url';
+import { v1 as uuidv1 } from 'uuid';
+import * as URL         from 'url';
 
-export class Bus {
+export class CQESBus {
 
   private config:     any;
   private logger:     any;
-  private cbus:       Map<string, any>;
-  private qbus:       any;
-  private ebus:       any;
-  private sbus:       any;
+  private cbus:       CommandBus;
+  private qbus:       QueryBus;
+  private ebus:       EventBus;
+  private sbus:       StateBus;
 
   constructor(config: any = {}, name: any = null) {
     this.config        = config;
     const ebname       = { toString: () => name + ':Bus' };
     this.logger        = new Logger(ebname, 'red');
     //--
-    this.initCommands(config.Commands);
-    this.initQueries(config.Queries);
-    this.initEvents(config.Events);
-    this.initStates(config.States);
-  }
-
-  // Commands
-  private initCommands(config: any) {
-    return new CommandBus(config);
-  }
-
-  public async request(command: OutCommand<any>) {
-    
-  }
-
-  public listen(topic: string, handler: CommandHandler<InCommand<any>>) {
-    
-  }
-
-  // Queries
-  private initQueries(config: any) {
-
-  }
-
-  public server(endpoint: string, handler: CommandHandler<InQuery<any>>) {
-
-  }
-
-  // Events
-  private initEvents(config: any) {
-
-  }
-
-  public async publish(stream: string, position: any, events: Array<OutEvent<any>>) {
-
-  }
-
-  public read(streamId: string, from: any) {
-
-  }
-
-  public subscribe(streamId: string, from: any) {
-
-  }
-
-  // States
-  private initStates(config: any) {
-
-  }
-
-  public load(processId: string) {
-
-  }
-
-  public save(processId: string, versions: Map<string, number>, data: any) {
-
+    this.cbus = new xCommandBus(config.Commands);
+    this.qbus = new xQueryBus(config.Queries);
+    this.ebus = new xEventBus(config.Events);
+    this.sbus = new xStateBus(config.States);
   }
 
 }

@@ -1,6 +1,8 @@
-import { Fx }                      from './Fx';
-import { Handler, FxSubscription } from './CommandBus';
-import { InQuery, OutQuery }       from './Query';
+import { Fx }                                        from './Fx';
+import { Handler as CommandHandler, FxSubscription } from './CommandBus';
+import { InQuery, OutQuery }                         from './Query';
+
+export type Handler<T> = CommandHandler<T>;
 
 export interface QueryBus {
   serve(view: string, handler: Handler<InQuery<any>>): FxSubscription;

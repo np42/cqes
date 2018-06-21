@@ -1,7 +1,7 @@
 {
   "name": "cqes",
   "version": "1.0.0",
-  "description": "CQRS / Event Sourced Framework",
+  "description": "CQRS / Event Sourcing Framework",
   "main": "dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,7 +13,7 @@
   "keywords": [
     "cqrs",
     "ddd",
-    "es",
+    "event-sourcing",
     "tdd",
     "framework"
   ],
@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "amqplib": "^0.5.2",
-    "node-eventstore-client": "^0.2.3"
+    "node-eventstore-client": "^0.2.3",
+    "uuid": "^3.2.1"
   }
 }

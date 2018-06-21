@@ -1,6 +1,8 @@
 import { v1 as uuidv1 }         from 'uuid';
 import * as URL                 from 'url';
-import Logger                   from 'bhiv/Logger';
+import Logger                   from './Logger';
+import { Command }              from './Command';
+import { Event }                from './Event';
 
 type credentials  = { username: string, password: string };
 
@@ -43,15 +45,10 @@ export class Bus {
 
   // Commands
   private initCommands(config: configCommand) {
-    debugger;
-    let url = config.origin;
-    if (config.credentials != null)
-      url = URL.format({ ...URL.parse(url), ...config.credentials });
-    console.log(url);
   }
 
-  public async request(commands: Array<Command<any>>) {
-    this.cbus.next(Rx.Observable.from(commands));
+  public async request(command: Command<any>) {
+
   }
 
   public listen(topicId: string) {
@@ -69,22 +66,23 @@ export class Bus {
 
   // Events
   private initEvents(config: configEvent) {
+
   }
 
   public async publish(streamId: string, events: Array<Event<any>>) {
 
   }
 
-  public read(streamId: string, from: position) {
+  public read(streamId: string, from: any) {
 
   }
 
-  public subscribe(streamId: string, from: position) {
+  public subscribe(streamId: string, from: any) {
 
   }
 
   // States
-  private initState(config: configState) {
+  private initStates(config: configState) {
 
   }
 

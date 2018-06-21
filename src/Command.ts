@@ -1,13 +1,13 @@
 import { Serializable } from './Serializable';
 
-export class Command extends Serializable {
+export class Command<D> extends Serializable {
   public topic:     string;
   public createdAt: Date;
   public type:      string;
-  public data:      Object;
+  public data:      D;
   public meta:      Object;
 
-  constructor(topic: string, type: string, data = {}, meta = {}) {
+  constructor(topic: string, type: string, data?: D, meta?: Object) {
     super();
     this.topic     = topic;
     this.createdAt = new Date();

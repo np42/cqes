@@ -1,14 +1,14 @@
 import { Serializable } from './Serializable';
 
-export class Event extends Serializable {
+export class Event<D> extends Serializable {
   public stream:    string;
   public createdAt: Date;
   public type:      string;
-  public data:      Object;
+  public data:      D;
   public meta:      Object;
   public number:    any;
 
-  constructor(stream: string, type: string, data = {}, meta = {}) {
+  constructor(stream: string, type: string, data? : D, meta? : Object) {
     super();
     this.stream    = stream;
     this.createdAt = new Date();

@@ -9,7 +9,7 @@ type ESConnection   = ES.EventStoreNodeConnection;
 type ESSubscription = ES.EventStoreSubscription;
 
 type SubscriptionNode = Node<ESConnection, ESSubscription>;
-type EventHandler     = (event: ESEvent) => Promise<void>;
+type EventHandler     = (event: ESEvent<any>) => Promise<void>;
 
 type FxConnection   = Fx<any, ESConnection>;
 type FxSubscription = Fx<SubscriptionNode, ESSubscription>;
@@ -73,7 +73,7 @@ export class ESEventBus {
     });
   }
 
-  publish(stream: string, version: number, events: Array<Event>) {
+  publish(stream: string, version: number, events: Array<Event<any>>) {
     const esEvents = events.map(event => {
       return ES.createJsonEventData(uuid.v4(), event.data, event.meta, event.type);
     });

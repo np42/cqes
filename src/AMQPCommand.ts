@@ -3,9 +3,9 @@ import { Message } from 'amqplib';
 
 type Replier = (action: string) => void;
 
-export class AMQPCommand extends Command {
-  public pulledAt: Date;
-  private reply: Replier;
+export class AMQPCommand<D> extends Command<D> {
+  public  pulledAt: Date;
+  private reply:    Replier;
 
   constructor(message: Message, reply: Replier) {
     const payload = <any>{};

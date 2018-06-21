@@ -12,7 +12,7 @@ export class AMQPCommandBus extends AMQPBus {
     return this.consume(topic, handler, options);
   }
 
-  command(request: Command) {
+  command(request: Command<any>) {
     const options = { persistent: true };
     return this.publish(request.topic, request.serialize(), options);
   }

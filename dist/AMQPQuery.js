@@ -1,19 +1,34 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const Query_1 = require("./Query");
-class AMQPQuery extends Query_1.Query {
+class AMQPInQuery extends Query_1.InQuery {
     constructor(message, reply) {
         const payload = {};
         try {
             Object.assign(payload, JSON.parse(message.content.toString()));
         }
         catch (e) { }
-        super(message.fields.routingKey, payload.method || 'Dummy', payload.data || {}, payload.meta || {});
+        super(reply, message.fields.routingKey, payload.method || 'Dummy', payload.data || {}, payload.meta || {});
         this.createdAt = new Date(payload.createdAt);
-        Object.defineProperty(this, 'reply', { value: reply });
     }
-    resolve(content) { this.reply('resolve', content); }
-    reject(error) { this.reply('reject', error); }
 }
-exports.AMQPQuery = AMQPQuery;
+exports.AMQPInQuery = AMQPInQuery;
+class AMQPInReply extends Query_1.InReply {
+    constructor(message, reply) {
+        const payload = {};
+        try {
+            Object.assign(payload, JSON.parse(message.content.toString()));
+        }
+        catch (e) { }
+        switch (payload.type) {
+            case Query_1.ReplyType.Resolved:
+                super(reply, null, payload.data);
+                break;
+            case Query_1.ReplyType.Rejected:
+                super(reply, payload.error);
+                break;
+        }
+    }
+}
+exports.AMQPInReply = AMQPInReply;
 //# sourceMappingURL=AMQPQuery.js.map

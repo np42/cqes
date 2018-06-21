@@ -1,21 +1,22 @@
-import { Fx, Node, Action } from './Fx';
-import { ESEvent }          from './ESEvent';
-import { Event }            from './Event';
-import * as ES              from 'node-eventstore-client';
-import * as URL             from 'url';
-import * as uuid            from 'uuid';
+import { Fx, Node, Action }  from './Fx';
+import { EventBus, Handler } from './EventBus';
+import { InEvent, OutEvent } from './Event';
+import { ESInEvent }         from './ESEvent';
+import * as ES               from 'node-eventstore-client';
+import * as URL              from 'url';
+import * as uuid             from 'uuid';
 
 type ESConnection   = ES.EventStoreNodeConnection;
 type ESSubscription = ES.EventStoreSubscription;
 
 type SubscriptionNode = Node<ESConnection, ESSubscription>;
-type EventHandler     = (event: ESEvent<any>) => Promise<void>;
+type EventHandler     = (event: InEvent<any>) => Promise<void>;
 
 type FxConnection   = Fx<any, ESConnection>;
 type FxSubscription = Fx<SubscriptionNode, ESSubscription>;
 type FxEventHandler = Fx<any, EventHandler>;
 
-export class ESEventBus {
+export class ESEventBus implements EventBus {
 
   private credentials: ES.UserCredentials;
   private connection:  FxConnection;
@@ -36,17 +37,17 @@ export class ESEventBus {
     }).open();
   }
 
-  subscribe(stream: string, from: number, handler: EventHandler | FxEventHandler) {
+  subscribe(stream: string, from: number, handler: Handler<InEvent<any>>) {
     const state = { from };
     const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.connection.pipe(async (connection, fx) => {
       const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
-        const event = new ESEvent(data.event);
+        const event = new ESInEvent(data.event);
         fxHandler.do((handler: EventHandler) => handler(event)).then(() => {
           state.from = event.number;
         });
       }, () => {
-        const event = new Event(stream, '$liveReached');
+        const event = new InEvent(stream, '$liveReached');
         fxHandler.do((handler: EventHandler) => handler(event));
       }, () => {
         if ((<any>subscription)._dropData.reason == 'userInitiated') {
@@ -73,13 +74,13 @@ export class ESEventBus {
     });
   }
 
-  publish(stream: string, version: number, events: Array<Event<any>>) {
+  publish(stream: string, position: number, events: Array<OutEvent<any>>) {
     const esEvents = events.map(event => {
       return ES.createJsonEventData(uuid.v4(), event.data, event.meta, event.type);
     });
     return this.connection.try((connection, fx) => {
       return new Promise((resolve, reject) => {
-        connection.appendToStream(stream, version, esEvents, this.credentials)
+        connection.appendToStream(stream, position, esEvents, this.credentials)
           .then(resolve)
           .catch(e => {
             if (e.name == 'WrongExpectedVersionError') return reject(e);
@@ -92,7 +93,7 @@ export class ESEventBus {
   last(stream: string, count: number) {
     return this.connection.do(async connection => {
       return (await connection.readStreamEventsBackward(stream, -1, count, true, this.credentials))
-        .events.map(data => new ESEvent(data.event));
+        .events.map(data => new ESInEvent(data.event));
     });
   }
 

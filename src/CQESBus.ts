@@ -1,27 +1,19 @@
-import { v1 as uuidv1 }         from 'uuid';
-import * as URL                 from 'url';
-import Logger                   from './Logger';
-import { Command }              from './Command';
-import { Event }                from './Event';
+import Logger                           from './Logger';
 
-type credentials  = { username: string, password: string };
+import { Handler as CommandHandler }    from './CommandBus';
+import { Handler as EventHandler }      from './EventBus';
 
-// Commands
-type configCommand = { origin: string, credentials: credentials };
-type queryHandler  = (request: request, response: response) => void
+import { InCommand, OutCommand }        from './Command';
+import { InQuery, OutQuery }            from './Query';
+import { InEvent, OutEvent }            from './Event';
 
-// Queries
-type configQuery   = { listen: string, port: number }
-type responseType  = string;
-type request       = { endpoint: string, params: Array<string>, payload: any };
-type response      = { write: (chunk: any) => void, end: (chunk: any) => void }
+import { AMQPCommandBus as CommandBus } from './AMQPCommandBus';
+import { AMQPQueryBus   as QueryBus }   from './AMQPQueryBus';
+import { ESEventBus     as EventBus }   from './ESEventBus';
+import { ESEventBus     as StateBus }   from './ESEventBus';
 
-// Events
-type configEvent   = { origin: string, credentials: credentials };
-type eventPosition = number;
-
-// States
-type configState   = { origin: string, credentials: credentials };
+import { v1 as uuidv1 }                 from 'uuid';
+import * as URL                         from 'url';
 
 export class Bus {
 
@@ -44,32 +36,33 @@ export class Bus {
   }
 
   // Commands
-  private initCommands(config: configCommand) {
+  private initCommands(config: any) {
+    return new CommandBus(config);
   }
 
-  public async request(command: Command<any>) {
-
+  public async request(command: OutCommand<any>) {
+    
   }
 
-  public listen(topicId: string) {
+  public listen(topic: string, handler: CommandHandler<InCommand<any>>) {
     
   }
 
   // Queries
-  private initQueries(config: configQuery) {
+  private initQueries(config: any) {
 
   }
 
-  public server(endpoint: string, handler: queryHandler, type: responseType) {
+  public server(endpoint: string, handler: CommandHandler<InQuery<any>>) {
 
   }
 
   // Events
-  private initEvents(config: configEvent) {
+  private initEvents(config: any) {
 
   }
 
-  public async publish(streamId: string, events: Array<Event<any>>) {
+  public async publish(stream: string, position: any, events: Array<OutEvent<any>>) {
 
   }
 
@@ -82,7 +75,7 @@ export class Bus {
   }
 
   // States
-  private initStates(config: configState) {
+  private initStates(config: any) {
 
   }
 

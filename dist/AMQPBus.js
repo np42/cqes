@@ -39,7 +39,7 @@ class AMQPBus {
         if (options.noAck == null)
             options.noAck = false;
         if (options.Message == null)
-            options.Message = AMQPCommand_1.AMQPCommand;
+            options.Message = AMQPCommand_1.AMQPInCommand;
         if (options.reply == null)
             options.reply = (channel) => (message) => (method) => channel[method](message);
         if (options.channel == null)

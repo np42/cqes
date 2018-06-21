@@ -1,7 +1,7 @@
-import { Event } from './Event';
-import * as ES   from 'node-eventstore-client';
+import { InEvent } from './Event';
+import * as ES     from 'node-eventstore-client';
 
-export class ESEvent<D> extends Event<D> {
+export class ESInEvent<D> extends InEvent<D> {
 
   constructor(message: ES.RecordedEvent) {
     const data = {};
@@ -14,4 +14,5 @@ export class ESEvent<D> extends Event<D> {
     this.createdAt = new Date(message.createdEpoch);
     this.number = message.eventNumber.low;
   }
+
 }

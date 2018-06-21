@@ -1,15 +1,29 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-const Serializable_1 = require("./Serializable");
-class Command extends Serializable_1.Serializable {
-    constructor(topic, type, data, meta) {
-        super();
+class Command {
+    constructor(topic, name, data, meta) {
         this.topic = topic;
         this.createdAt = new Date();
-        this.type = type;
+        this.name = name;
         this.data = data;
         this.meta = meta;
     }
 }
-exports.Command = Command;
+class InCommand extends Command {
+    constructor(reply, topic, name, data, meta) {
+        super(topic, name, data, meta);
+        this.pulledAt = new Date();
+        Object.defineProperty(this, 'reply', { value: reply });
+    }
+    ack() { this.reply('ack'); }
+    nack() { this.reply('nack'); }
+    cancel() { this.reply('cancel'); }
+}
+exports.InCommand = InCommand;
+class OutCommand extends Command {
+    serialize() {
+        return new Buffer(JSON.stringify(this));
+    }
+}
+exports.OutCommand = OutCommand;
 //# sourceMappingURL=Command.js.map

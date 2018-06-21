@@ -8,10 +8,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+const Query_1 = require("./Query");
 const AMQPBus_1 = require("./AMQPBus");
 const AMQPQuery_1 = require("./AMQPQuery");
-const AMQPReply_1 = require("./AMQPReply");
-const Reply_1 = require("./Reply");
 const uuid = require("uuid");
 class AMQPQueryBus extends AMQPBus_1.AMQPBus {
     constructor(url) {
@@ -24,7 +23,7 @@ class AMQPQueryBus extends AMQPBus_1.AMQPBus {
                 return;
             session[reply.type](reply);
             this.pending.delete(reply.id);
-        }), { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPReply_1.AMQPReply });
+        }), { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPQuery_1.AMQPInReply });
         this.gcInterval = setInterval(() => this.gc(), 1000);
     }
     gc() {
@@ -39,12 +38,12 @@ class AMQPQueryBus extends AMQPBus_1.AMQPBus {
             this.pending.delete(key);
     }
     serve(view, handler) {
-        const options = { Message: AMQPQuery_1.AMQPQuery,
+        const options = { Message: AMQPQuery_1.AMQPInQuery,
             channel: { prefetech: 10 },
             reply: (channel) => (message) => (method, content) => __awaiter(this, void 0, void 0, function* () {
                 const options = { correlationId: message.properties.correlationId };
-                const reply = new Reply_1.Reply(method, content).serialize();
-                yield channel.sendToQueue(message.properties.replyTo, reply, options);
+                const reply = method == Query_1.ReplyType.Rejected ? new Query_1.OutReply(content) : new Query_1.OutReply(null, content);
+                yield channel.sendToQueue(message.properties.replyTo, reply.serialize(), options);
                 channel.ack(message);
             })
         };

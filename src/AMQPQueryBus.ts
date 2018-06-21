@@ -1,9 +1,9 @@
 import { Fx }                                        from './Fx';
-import { AMQPBus, MessageHandler, FxMessageHandler } from './AMQPBus';
-import { AMQPQuery }                                 from './AMQPQuery';
-import { AMQPReply }                                 from './AMQPReply';
-import { Query }                                     from './Query';
-import { Reply, Type as ReplyType }                  from './Reply';
+import { Handler }                                   from './CommandBus';
+import { QueryBus }                                  from './QueryBus';
+import { InQuery, OutQuery, ReplyType, OutReply }    from './Query';
+import { AMQPBus }                                   from './AMQPBus';
+import { AMQPInQuery, AMQPInReply }                  from './AMQPQuery';
 import { Channel, Message }                          from 'amqplib';
 import * as uuid                                     from 'uuid';
 
@@ -12,11 +12,11 @@ type Session = { expiresAt: number
                , reject: (error: any) => void
                };
 
-export class AMQPQueryBus extends AMQPBus {
+export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   private id:         string;
   private pending:    Map<string, Session>;
-  private queue:      Fx<Channel, AMQPReply>;
+  private queue:      Fx<Channel, AMQPInReply<any>>;
   private gcInterval: NodeJS.Timer;
 
   constructor(url: string) {
@@ -28,7 +28,7 @@ export class AMQPQueryBus extends AMQPBus {
       if (session == null) return ;
       session[reply.type](reply);
       this.pending.delete(reply.id);
-    }, { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPReply })
+    }, { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPInReply })
     this.gcInterval = setInterval(() => this.gc(), 1000);
   }
 
@@ -44,21 +44,21 @@ export class AMQPQueryBus extends AMQPBus {
       this.pending.delete(key);
   }
 
-  serve(view: string, handler: MessageHandler | FxMessageHandler) {
+  serve(view: string, handler: Handler<InQuery<any>>) {
     const options =
-      { Message: AMQPQuery
+      { Message: AMQPInQuery
       , channel: { prefetech: 10 }
       , reply: (channel: Channel) => (message: Message) => async (method: ReplyType, content: any) => {
           const options = { correlationId: message.properties.correlationId };
-          const reply = new Reply(method, content).serialize();
-          await channel.sendToQueue(message.properties.replyTo, reply, options);
+          const reply = method == ReplyType.Rejected ? new OutReply(content) : new OutReply(null, content);
+          await channel.sendToQueue(message.properties.replyTo, reply.serialize(), options);
           channel.ack(message);
         }
       };
     return this.consume(view, handler, options);
   }
 
-  query(request: Query, timeout = 30) {
+  query(request: OutQuery<any>, timeout = 30) {
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4() };
     const promise = new Promise((resolve, reject) => {
       const session = { expiresAt: Date.now() + (timeout * 1000), resolve, reject };

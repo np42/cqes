@@ -1,6 +1,4 @@
-import { Serializable } from './Serializable';
-
-export class Event<D> extends Serializable {
+class Event<D> {
   public stream:    string;
   public createdAt: Date;
   public type:      string;
@@ -9,7 +7,6 @@ export class Event<D> extends Serializable {
   public number:    any;
 
   constructor(stream: string, type: string, data? : D, meta? : Object) {
-    super();
     this.stream    = stream;
     this.createdAt = new Date();
     this.type      = type;
@@ -18,4 +15,12 @@ export class Event<D> extends Serializable {
     this.number    = -2;
   }
 
+}
+
+export class InEvent<D> extends Event<D> {}
+
+export class OutEvent<D> extends Event<D> {
+  serialize() {
+    return new Buffer(JSON.stringify(this));
+  }
 }

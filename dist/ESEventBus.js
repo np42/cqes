@@ -9,8 +9,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const Fx_1 = require("./Fx");
-const ESEvent_1 = require("./ESEvent");
 const Event_1 = require("./Event");
+const ESEvent_1 = require("./ESEvent");
 const ES = require("node-eventstore-client");
 const URL = require("url");
 const uuid = require("uuid");
@@ -35,12 +35,12 @@ class ESEventBus {
         const fxHandler = (handler instanceof Fx_1.Fx ? handler : Fx_1.Fx.create(handler)).open();
         return this.connection.pipe((connection, fx) => __awaiter(this, void 0, void 0, function* () {
             const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
-                const event = new ESEvent_1.ESEvent(data.event);
+                const event = new ESEvent_1.ESInEvent(data.event);
                 fxHandler.do((handler) => handler(event)).then(() => {
                     state.from = event.number;
                 });
             }, () => {
-                const event = new Event_1.Event(stream, '$liveReached');
+                const event = new Event_1.InEvent(stream, '$liveReached');
                 fxHandler.do((handler) => handler(event));
             }, () => {
                 if (subscription._dropData.reason == 'userInitiated') {
@@ -68,13 +68,13 @@ class ESEventBus {
             });
         });
     }
-    publish(stream, version, events) {
+    publish(stream, position, events) {
         const esEvents = events.map(event => {
             return ES.createJsonEventData(uuid.v4(), event.data, event.meta, event.type);
         });
         return this.connection.try((connection, fx) => {
             return new Promise((resolve, reject) => {
-                connection.appendToStream(stream, version, esEvents, this.credentials)
+                connection.appendToStream(stream, position, esEvents, this.credentials)
                     .then(resolve)
                     .catch(e => {
                     if (e.name == 'WrongExpectedVersionError')
@@ -88,7 +88,7 @@ class ESEventBus {
     last(stream, count) {
         return this.connection.do((connection) => __awaiter(this, void 0, void 0, function* () {
             return (yield connection.readStreamEventsBackward(stream, -1, count, true, this.credentials))
-                .events.map(data => new ESEvent_1.ESEvent(data.event));
+                .events.map(data => new ESEvent_1.ESInEvent(data.event));
         }));
     }
 }

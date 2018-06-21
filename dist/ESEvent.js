@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const Event_1 = require("./Event");
-class ESEvent extends Event_1.Event {
+class ESInEvent extends Event_1.InEvent {
     constructor(message) {
         const data = {};
         try {
@@ -18,5 +18,5 @@ class ESEvent extends Event_1.Event {
         this.number = message.eventNumber.low;
     }
 }
-exports.ESEvent = ESEvent;
+exports.ESInEvent = ESInEvent;
 //# sourceMappingURL=ESEvent.js.map

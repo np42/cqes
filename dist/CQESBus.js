@@ -8,8 +8,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const URL = require("url");
 const Logger_1 = require("./Logger");
+const AMQPCommandBus_1 = require("./AMQPCommandBus");
 class Bus {
     constructor(config = {}, name = null) {
         this.config = config;
@@ -21,28 +21,21 @@ class Bus {
         this.initStates(config.States);
     }
     initCommands(config) {
-        debugger;
-        let url = config.origin;
-        if (config.credentials != null) {
-            const username = encodeURIComponent(config.credentials.username);
-            const password = encodeURIComponent(config.credentials.password);
-            url = URL.format(Object.assign({}, URL.parse(url), { auth: username + ':' + password }));
-        }
-        console.log(url);
+        return new AMQPCommandBus_1.AMQPCommandBus(config);
     }
     request(command) {
         return __awaiter(this, void 0, void 0, function* () {
         });
     }
-    listen(topicId) {
+    listen(topic, handler) {
     }
     initQueries(config) {
     }
-    server(endpoint, handler, type) {
+    server(endpoint, handler) {
     }
     initEvents(config) {
     }
-    publish(streamId, events) {
+    publish(stream, position, events) {
         return __awaiter(this, void 0, void 0, function* () {
         });
     }

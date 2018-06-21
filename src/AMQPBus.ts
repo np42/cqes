@@ -1,12 +1,10 @@
-import { Fx }          from './Fx';
-import { AMQPCommand } from './AMQPCommand';
-import * as amqp       from 'amqplib';
+import { Fx }                                        from './Fx';
+import { Handler, FxMessageHandler, MessageHandler } from './CommandBus';
+import { AMQPInCommand }                             from './AMQPCommand';
+import * as amqp                                     from 'amqplib';
 
 type FxConnection = Fx<any, amqp.Connection>;
 type FxChannel = Fx<amqp.Connection, amqp.Channel>;
-export type FxMessageHandler = Fx<any, MessageHandler>;
-
-export type MessageHandler = (message: any) => Promise<void>;
 
 //export type Options = { channel: ChannelOptions, queue: QueueOptions, reply: any, Message: Serializable };
 //export type ChannelOptions = { prefetch: number };
@@ -39,23 +37,23 @@ export class AMQPBus {
     return this.channels.get(queue);
   }
 
-  consume(queue: string, handler: MessageHandler | FxMessageHandler, options: any) {
+  consume(queue: string, handler: Handler<any>, options: any) {
     if (options == null)                 options = {};
     if (options.noAck == null)           options.noAck = false;
-    if (options.Message == null)         options.Message = AMQPCommand;
+    if (options.Message == null)         options.Message = AMQPInCommand;
     if (options.reply == null)           options.reply = (channel: amqp.Channel) =>
       (message: amqp.Message) => (method: string) => channel[method](message)
     if (options.channel == null)         options.channel = {};
     if (!(options.channel.prefetch > 0)) options.channel.prefetch = 1;
     if (options.queue == null)           options.queue = {};
     if (options.queue.durable == null)   options.queue.durable = true;
-    const fxHandler = <FxMessageHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
+    const fxHandler = <FxMessageHandler<any>>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.getChannel(queue, options.queue).pipe(async channel => {
       await channel.prefetch(options.channel.prefetch, false);
       const replier = options.reply(channel);
       return channel.consume(queue, rawMessage => {
         const message = new options.Message(rawMessage, replier(rawMessage));
-        fxHandler.do(async (handler: MessageHandler) => handler(message));
+        fxHandler.do(async (handler: MessageHandler<any>) => handler(message));
       }, options);
     });
   }

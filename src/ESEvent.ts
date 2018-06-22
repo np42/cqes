@@ -10,7 +10,7 @@ export class ESInEvent<D> extends InEvent<D> {
     const meta = {};
     try { Object.assign(meta, JSON.parse(message.metadata.toString() || null)) }
     catch (e) { /* Fail silently */ }
-    super(message.eventStreamId, message.eventType, <any>data, meta);
+    super(message.eventStreamId, message.eventType, <D>data, meta);
     this.createdAt = new Date(message.createdEpoch);
     this.number = message.eventNumber.low;
   }

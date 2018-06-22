@@ -1,4 +1,4 @@
-import { Fx }                    from './Fx';
+import { Fx }                from './Fx';
 import { InEvent, OutEvent } from './Event';
 
 export interface Subscription { stop: () => void };

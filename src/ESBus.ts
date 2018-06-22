@@ -1,10 +1,16 @@
-import { Fx, Node, Action }  from './Fx';
-import { EventBus, Handler } from './EventBus';
-import { InEvent, OutEvent } from './Event';
-import { ESInEvent }         from './ESEvent';
-import * as ES               from 'node-eventstore-client';
-import * as URL              from 'url';
-import * as uuid             from 'uuid';
+import { Fx, Node, Action }      from './Fx';
+
+import { EventBus, Handler }     from './EventBus';
+import { InEvent, OutEvent }     from './Event';
+import { ESInEvent }             from './ESEvent';
+
+import { StateBus }              from './StateBus';
+import { InState, OutState }     from './State';
+import { ESInState, ESOutState } from './ESState';
+
+import * as ES                   from 'node-eventstore-client';
+import * as URL                  from 'url';
+import * as uuid                 from 'uuid';
 
 type ESConnection   = ES.EventStoreNodeConnection;
 type ESSubscription = ES.EventStoreSubscription;
@@ -16,7 +22,7 @@ type FxConnection   = Fx<any, ESConnection>;
 type FxSubscription = Fx<SubscriptionNode, ESSubscription>;
 type FxEventHandler = Fx<any, EventHandler>;
 
-export class ESEventBus implements EventBus {
+export class ESBus implements EventBus, StateBus {
 
   private credentials: ES.UserCredentials;
   private connection:  FxConnection;
@@ -37,6 +43,7 @@ export class ESEventBus implements EventBus {
     }).open();
   }
 
+  //-- Event
   subscribe(stream: string, from: number, handler: Handler<InEvent<any>>) {
     const state = { from };
     const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
@@ -61,19 +68,6 @@ export class ESEventBus implements EventBus {
     });
   }
 
-  tweak(stream: string, version: number, metadata: Object) {
-    return this.connection.try((connection, fx) => {
-      return new Promise((resolve, reject) => {
-        connection.setStreamMetadataRaw(stream, version, metadata, this.credentials)
-          .then(resolve)
-          .catch(e => {
-            if (e.name == 'WrongExpectedVersionError') return reject(e);
-            else return fx.snap(e);
-          });
-      });
-    });
-  }
-
   publish(stream: string, position: number, events: Array<OutEvent<any>>) {
     const esEvents = events.map(event => {
       return ES.createJsonEventData(uuid.v4(), event.data, event.meta, event.type);
@@ -90,10 +84,35 @@ export class ESEventBus implements EventBus {
     });
   }
 
-  last(stream: string, count: number) {
+  //-- State
+  save(process: string, versions: Map<string, any>, snapshot: OutState<any>) {
+    return this.publish(process, -2, [new ESOutState(snapshot)]);
+  }
+
+  restore(process: string): Promise<InState<any>> {
+    return this.last(process, 1, event => new ESInState(event));
+  }
+
+
+  //-- helpers
+  last(stream: string, count: number, wrapper?: (event: any) => any): Promise<any> {
     return this.connection.do(async connection => {
+      if (wrapper == null) wrapper = event => new ESInEvent(event);
       return (await connection.readStreamEventsBackward(stream, -1, count, true, this.credentials))
-        .events.map(data => new ESInEvent(data.event));
+        .events.map(data => wrapper(data.event));
+    });
+  }
+
+  tweak(stream: string, version: number, metadata: Object) {
+    return this.connection.try((connection, fx) => {
+      return new Promise((resolve, reject) => {
+        connection.setStreamMetadataRaw(stream, version, metadata, this.credentials)
+          .then(resolve)
+          .catch(e => {
+            if (e.name == 'WrongExpectedVersionError') return reject(e);
+            else return fx.snap(e);
+          });
+      });
     });
   }
 

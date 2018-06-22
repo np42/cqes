@@ -11,10 +11,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const Fx_1 = require("./Fx");
 const Event_1 = require("./Event");
 const ESEvent_1 = require("./ESEvent");
+const ESState_1 = require("./ESState");
 const ES = require("node-eventstore-client");
 const URL = require("url");
 const uuid = require("uuid");
-class ESEventBus {
+class ESBus {
     constructor(url, settings = {}) {
         const address = URL.parse(url, true);
         const username = decodeURIComponent((address.auth || 'admin').split(':')[0]);
@@ -72,11 +73,10 @@ class ESEventBus {
         });
     }
     save(process, versions, snapshot) {
+        return this.publish(process, -2, [new ESState_1.ESOutState(snapshot)]);
     }
     restore(process) {
-        return new Promise(resolve => {
-            this.last(process, 1, event => new InState(event));
-        });
+        return this.last(process, 1, event => new ESState_1.ESInState(event));
     }
     last(stream, count, wrapper) {
         return this.connection.do((connection) => __awaiter(this, void 0, void 0, function* () {
@@ -101,5 +101,5 @@ class ESEventBus {
         });
     }
 }
-exports.ESEventBus = ESEventBus;
-//# sourceMappingURL=ESEventBus.js.map
+exports.ESBus = ESBus;
+//# sourceMappingURL=ESBus.js.map

@@ -3,7 +3,7 @@ import Logger from './Logger';
 import { CommandBus, Handler as CommandHandler }  from './CommandBus';
 import { QueryBus,   Handler as QueryHandler }    from './QueryBus';
 import { EventBus,   Handler as EventHandler }    from './EventBus';
-import { StateBus,   Handler as StateHandler }    from './StateBus';
+import { StateBus }                               from './StateBus';
 
 import { InCommand, OutCommand } from './Command';
 import { InQuery, OutQuery }     from './Query';
@@ -12,8 +12,8 @@ import { InState, OutState }     from './State';
 
 import { AMQPCommandBus as xCommandBus } from './AMQPCommandBus';
 import { AMQPQueryBus   as xQueryBus }   from './AMQPQueryBus';
-import { ESEventBus     as xEventBus }   from './ESEventBus';
-import { ESEventBus     as xStateBus }   from './ESEventBus';
+import { ESBus          as xEventBus }   from './ESBus';
+import { ESBus          as xStateBus }   from './ESBus';
 
 import { v1 as uuidv1 } from 'uuid';
 import * as URL         from 'url';

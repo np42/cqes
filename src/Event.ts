@@ -1,6 +1,5 @@
 class Event<D> {
   public stream:    string;
-  public createdAt: Date;
   public type:      string;
   public data:      D;
   public meta:      Object;
@@ -8,7 +7,6 @@ class Event<D> {
 
   constructor(stream: string, type: string, data? : D, meta? : Object) {
     this.stream    = stream;
-    this.createdAt = new Date();
     this.type      = type;
     this.data      = data;
     this.meta      = meta;
@@ -17,7 +15,13 @@ class Event<D> {
 
 }
 
-export class InEvent<D> extends Event<D> {}
+export class InEvent<D> extends Event<D> {
+  public createdAt: Date;
+  constructor(stream: string, type: string, data?: D, meta?: Object) {
+    super(stream, type, data, meta);
+    this.createdAt = new Date();
+  }
+}
 
 export class OutEvent<D> extends Event<D> {
   serialize() {

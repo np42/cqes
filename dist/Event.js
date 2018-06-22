@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 class Event {
     constructor(stream, type, data, meta) {
         this.stream = stream;
-        this.createdAt = new Date();
         this.type = type;
         this.data = data;
         this.meta = meta;
@@ -11,6 +10,10 @@ class Event {
     }
 }
 class InEvent extends Event {
+    constructor(stream, type, data, meta) {
+        super(stream, type, data, meta);
+        this.createdAt = new Date();
+    }
 }
 exports.InEvent = InEvent;
 class OutEvent extends Event {

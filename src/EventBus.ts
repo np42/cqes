@@ -10,6 +10,7 @@ export type MessageHandler<T> = (message: T) => Promise<void>;
 export type Handler<T>        = MessageHandler<T> | FxMessageHandler<T>;
 
 export interface EventBus {
+  publish(stream: string, position: any, events: Array<OutEvent<any>>): Promise<any>;
   subscribe(stream: string, position: any, handler: Handler<InEvent<any>>): FxSubscription;
-  publish(stream: string, position: any, request: Array<OutEvent<any>>): Promise<any>;
+  consume(stream: string, group: string, handler: Handler<InEvent<any>>): FxSubscription;
 }

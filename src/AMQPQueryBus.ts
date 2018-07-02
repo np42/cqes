@@ -21,15 +21,10 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   constructor(url: string) {
     super(url);
-    this.id      = 'RPC-' + uuid.v1();
-    this.pending = new Map();
-    this.queue   = this.consume(this.id, async reply => {
-      const session = this.pending.get(reply.id);
-      if (session == null) return ;
-      session[reply.type](reply);
-      this.pending.delete(reply.id);
-    }, { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPInReply })
-    this.gcInterval = setInterval(() => this.gc(), 1000);
+    this.id         = 'RPC-' + uuid.v1();
+    this.pending    = new Map();
+    this.queue      = null;
+    this.gcInterval = null;
   }
 
   gc() {
@@ -43,6 +38,18 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     for (const key of expired)
       this.pending.delete(key);
   }
+
+  listenReply() {
+    this.gcInterval = setInterval(() => this.gc(), 1000);
+    this.queue = this.consume(this.id, async reply => {
+      const session = this.pending.get(reply.id);
+      if (session == null) return ;
+      session[reply.type](reply);
+      this.pending.delete(reply.id);
+    }, { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPInReply })
+  }
+
+  //--
 
   serve(view: string, handler: Handler<InQuery<any>>) {
     const options =
@@ -59,6 +66,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
   }
 
   query(request: OutQuery<any>, timeout = 30) {
+    if (this.queue == null) this.listenReply();
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4() };
     const promise = new Promise((resolve, reject) => {
       const session = { expiresAt: Date.now() + (timeout * 1000), resolve, reject };

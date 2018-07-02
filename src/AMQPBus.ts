@@ -18,11 +18,10 @@ export class AMQPBus {
   constructor(url: string) {
     this.connection =
       new Fx((_: any, fx: FxConnection): Promise<amqp.Connection> => <any>amqp.connect(url))
-      .then(async (connection, fx) => {
-        connection.on('close', () => fx.snap(new Error('Connection close')));
+      .and(async (connection, fx) => {
+        connection.on('close', () => fx.failWith(new Error('Connection close')));
         return connection;
-      })
-      .open();
+      });
     this.channels = new Map();
   }
 

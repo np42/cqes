@@ -3,6 +3,7 @@ import { Fx, Node, Action }      from './Fx';
 import { EventBus, Handler }     from './EventBus';
 import { InEvent, OutEvent }     from './Event';
 import { ESInEvent }             from './ESEvent';
+import { ESInCommand }           from './ESCommand';
 
 import { StateBus }              from './StateBus';
 import { InState, OutState }     from './State';
@@ -38,36 +39,12 @@ export class ESBus implements EventBus, StateBus {
         const connection = ES.createConnection(settings, origin);
         connection.connect().catch(reject);
         connection.once('connected', endpoint => resolve(connection));
-        connection.once('closed', () => fx.snap(new Error('Connection closed')));
+        connection.once('closed', () => fx.failWith(new Error('Connection closed')));
       });
-    }).open();
-  }
-
-  //-- Event
-  subscribe(stream: string, from: number, handler: Handler<InEvent<any>>) {
-    const state = { from };
-    const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
-    return this.connection.pipe(async (connection, fx) => {
-      const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
-        const event = new ESInEvent(data.event);
-        fxHandler.do((handler: EventHandler) => handler(event)).then(() => {
-          state.from = event.number;
-        });
-      }, () => {
-        const event = new InEvent(stream, '$liveReached');
-        fxHandler.do((handler: EventHandler) => handler(event));
-      }, () => {
-        if ((<any>subscription)._dropData.reason == 'userInitiated') {
-          fx.close();
-        } else {
-          subscription.stop();
-          fx.snap(new Error('Connection lost'));
-        }
-      }, this.credentials);
-      return subscription;
     });
   }
 
+  //-- Event
   publish(stream: string, position: number, events: Array<OutEvent<any>>) {
     const esEvents = events.map(event => {
       return ES.createJsonEventData(uuid.v4(), event.data, event.meta, event.type);
@@ -78,21 +55,75 @@ export class ESBus implements EventBus, StateBus {
           .then(resolve)
           .catch(e => {
             if (e.name == 'WrongExpectedVersionError') return reject(e);
-            else return fx.snap(e);
+            else return fx.failWith(e);
           });
       });
     });
   }
 
+  subscribe(stream: string, from: number, handler: Handler<InEvent<any>>) {
+    const state = { from };
+    const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
+    return this.connection.pipe(async (connection, fx) => {
+      const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
+        if (data.event == null) { // When event deleted
+          state.from = data.originalEventNumber.low;
+        } else { // When normal event
+          const event = new ESInEvent(data.event);
+          fxHandler.do((handler: EventHandler) => handler(event)).then(() => {
+            state.from = data.originalEventNumber.low;
+          });
+        }
+      }, () => {
+        const event = new InEvent(stream, '$liveReached');
+        fxHandler.do((handler: EventHandler) => handler(event));
+      }, () => {
+        if ((<any>subscription)._dropData.reason == 'userInitiated') {
+          fx.close();
+        } else {
+          subscription.stop();
+          fx.failWith(new Error('Connection lost'));
+        }
+      }, this.credentials);
+      return subscription;
+    });
+  }
+
+  consume(group: string, stream: string, handler: Handler<InEvent<any>>) {
+    const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
+    return this.connection.pipe(async (connection, fx) => {
+      const subscription = connection.connectToPersistentSubscription(stream, group, (sub, data) => {
+        if (data.event != null) {
+          const replier = (method: string) => sub[method](data);
+          const event = new ESInCommand(data.event, replier);
+          fxHandler.do((handler: EventHandler) => handler(event)).then(() => {
+            state.from = data.originalEventNumber.low;
+          });
+        }
+      }, () => {
+        if ((<any>subscription)._dropData.reason == 'userInitiated') {
+          fx.close();
+        } else {
+          subscription.stop();
+          fx.failWith(new Error('Connection lost'));
+        }
+      }, this.credentials, 1, false);
+    });
+  }
+
   //-- State
-  save(process: string, versions: Map<string, any>, snapshot: OutState<any>) {
-    return this.publish(process, -2, [new ESOutState(snapshot)]);
+  save(process: string, position: any, failWithshot: OutState<any>) {
+    return this.publish(process, -2, [new ESOutState(failWithshot)]);
   }
 
   restore(process: string): Promise<InState<any>> {
-    return this.last(process, 1, event => new ESInState(event));
+    return new Promise(resolve => {
+      return this.last(process, 1, event => new ESInState(event)).then(result => {
+        if (result.length == 0) return resolve(null);
+        else return resolve(result[0]);
+      });
+    });
   }
-
 
   //-- helpers
   last(stream: string, count: number, wrapper?: (event: any) => any): Promise<any> {
@@ -110,7 +141,7 @@ export class ESBus implements EventBus, StateBus {
           .then(resolve)
           .catch(e => {
             if (e.name == 'WrongExpectedVersionError') return reject(e);
-            else return fx.snap(e);
+            else return fx.failWith(e);
           });
       });
     });

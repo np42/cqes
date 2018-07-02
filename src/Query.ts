@@ -5,7 +5,7 @@ class Query<D> {
   public createdAt: Date;
   public method:    string;
   public data:      D;
-  public meta:      Object;
+  public meta:      any;
 
   constructor(view: string, method: string, data: D, meta: Object) {
     this.view      = view;

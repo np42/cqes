@@ -3,7 +3,7 @@ class Command<D> {
   public createdAt: Date;
   public name:      string;
   public data:      D;
-  public meta:      Object;
+  public meta:      any;
 
   constructor(topic: string, name: string, data: D, meta: Object) {
     this.topic     = topic;
@@ -14,7 +14,7 @@ class Command<D> {
   }
 }
 
-export type CommandReplier = (action: string) => void;
+export type CommandReplier = (action: string, reason?: any) => void;
 
 export class InCommand<D> extends Command<D> {
   private reply:    CommandReplier;
@@ -24,9 +24,9 @@ export class InCommand<D> extends Command<D> {
     this.pulledAt  = new Date();
     Object.defineProperty(this, 'reply', { value: reply });
   }
-  ack()    { this.reply('ack'); }
-  nack()   { this.reply('nack'); }
-  cancel() { this.reply('cancel'); }
+  ack()                { this.reply('ack'); }
+  nack(reason?: any)   { this.reply('nack', reason); }
+  cancel(reason?: any) { this.reply('cancel', reason); }
 }
 
 export class OutCommand<D> extends Command<D> {

@@ -1,5 +1,5 @@
 {
-  "name": "cqes",
+  "name": "@apiculteur/cqes",
   "version": "1.0.0",
   "description": "CQRS / Event Sourcing Framework",
   "main": "dist/index.js",

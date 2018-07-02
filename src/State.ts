@@ -1,12 +1,12 @@
 class State<D> {
   public process:   string;
-  public versions:  Map<string, any>;
+  public position:  any;
   public data:      D;
   public meta:      Object;
 
-  constructor(process: string, versions: Map<string, any>, data?: D, meta?: Object) {
+  constructor(process: string, position: any, data?: D, meta?: Object) {
     this.process  = process;
-    this.versions = versions
+    this.position = position;
     this.data     = data;
     this.meta     = meta;
   }
@@ -15,8 +15,8 @@ class State<D> {
 
 export class InState<D> extends State<D> {
   public createdAt: Date;
-  constructor(process: string, versions: Map<string, any>, data?: D, meta?: Object) {
-    super(process, versions, data, meta);
+  constructor(process: string, position: any, data?: D, meta?: Object) {
+    super(process, position, data, meta);
     this.createdAt = new Date();
   }
 }

@@ -27,10 +27,14 @@ class Fx {
         this.branches = [];
         this.nocache = options ? options.nocache : false;
         this.events = null;
-        this.on('aborted', () => { for (const branch of this.branches)
-            branch.emit('aborted'); });
-        this.on('disrupted', e => { for (const branch of this.branches)
-            branch.failWith(e); });
+        this.on('aborted', () => {
+            for (const branch of this.branches)
+                branch.abort();
+        });
+        this.on('disrupted', e => {
+            for (const branch of this.branches)
+                branch.failWith(e);
+        });
     }
     static create(value) {
         return new Fx(() => __awaiter(this, void 0, void 0, function* () { return value; }));
@@ -42,6 +46,19 @@ class Fx {
             this.events.set(event, [fn]);
         else
             this.events.get(event).push(fn);
+        return this;
+    }
+    off(event, fn) {
+        if (this.events == null)
+            return this;
+        if (!this.events.has(event))
+            return this;
+        const events = this.events.get(event);
+        const offset = events.indexOf(fn);
+        if (offset >= 0)
+            events.splice(offset, 1);
+        if (events.length == 0)
+            this.events.delete(event);
         return this;
     }
     emit(event, payload) {
@@ -74,12 +91,11 @@ class Fx {
         return this.node(value, this);
     }
     abort() {
-        if (!this.trunk)
-            return false;
-        const offset = this.trunk.branches.indexOf(this);
-        if (offset >= 0)
-            this.trunk.branches.splice(offset, 1);
-        return offset >= 0;
+        if (this.trunk != null) {
+            const offset = this.trunk.branches.indexOf(this);
+            if (offset >= 0)
+                this.trunk.branches.splice(offset, 1);
+        }
         this.emit('aborted');
     }
     fulfill(value) {
@@ -105,7 +121,7 @@ class Fx {
         else if (!(this.trunk instanceof Fx)) {
             if (this.retrying == null) {
                 this.retryCount += 1;
-                console.log('>' + String(error));
+                console.log(String(error));
                 const delay = Math.min(this.retryCount * this.retryCount * 42, 5000);
                 this.retrying = setTimeout(() => { this.retrying = null; this.open(); }, delay);
             }
@@ -176,18 +192,29 @@ exports.Fx = Fx;
 class FxWrap extends Fx {
     constructor(node, options) {
         super(node, options);
-        this.on('aborted', () => this.mayGet().then((fx) => fx.abort()));
-        this.on('disrupted', () => this.mayGet().then((fx) => fx.abort()));
     }
     get() {
         return new Promise(resolve => {
             super.get().then((fx) => fx.get().then(resolve));
         });
     }
+    abort() {
+        this.mayGet().then((fx) => fx.abort());
+        super.abort();
+    }
+    fulfill(value) {
+        if (this.value != null)
+            this.value.abort();
+        super.fulfill(value);
+    }
     produce(value) {
         return new Promise((resolve, reject) => {
+            const holder = this;
             return super.produce(value).then((fx) => {
-                fx.branches.push(this);
+                fx.on('disrupted', function self(error) {
+                    fx.off('disrupted', self);
+                    holder.failWith(error);
+                });
                 return resolve(fx);
             }).catch(reject);
         });

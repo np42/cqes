@@ -34,8 +34,14 @@ export class Fx<N, B> {
     this.branches    = [];
     this.nocache     = options ? options.nocache : false;
     this.events      = null;
-    this.on('aborted', () => { for (const branch of this.branches) branch.emit('aborted'); });
-    this.on('disrupted', e => { for (const branch of this.branches) branch.failWith(e); });
+    this.on('aborted', () => {
+      for (const branch of this.branches)
+        branch.abort();
+    });
+    this.on('disrupted', e => {
+      for (const branch of this.branches)
+        branch.failWith(e);
+    });
   }
 
   //-------
@@ -44,6 +50,16 @@ export class Fx<N, B> {
     if (this.events == null) this.events = new Map();
     if (!this.events.has(event)) this.events.set(event, [fn]);
     else this.events.get(event).push(fn);
+    return this;
+  }
+
+  off(event: string, fn: Handler) {
+    if (this.events == null) return this;
+    if (!this.events.has(event)) return this;
+    const events = this.events.get(event);
+    const offset = events.indexOf(fn);
+    if (offset >= 0) events.splice(offset, 1);
+    if (events.length == 0) this.events.delete(event);
     return this;
   }
 
@@ -76,10 +92,10 @@ export class Fx<N, B> {
   }
 
   abort() {
-    if (!this.trunk) return false;
-    const offset = this.trunk.branches.indexOf(this);
-    if (offset >= 0) this.trunk.branches.splice(offset, 1);
-    return offset >= 0;
+    if (this.trunk != null) {
+      const offset = this.trunk.branches.indexOf(this);
+      if (offset >= 0) this.trunk.branches.splice(offset, 1);
+    }
     this.emit('aborted');
   }
 
@@ -105,7 +121,7 @@ export class Fx<N, B> {
     } else if (!(this.trunk instanceof Fx)) {
       if (this.retrying == null) {
         this.retryCount += 1;
-        console.log('>' + String(error));
+        console.log(String(error));
         const delay = Math.min(this.retryCount * this.retryCount * 42, 5000);
         this.retrying = setTimeout(() => { this.retrying = null; this.open() }, delay);
       }
@@ -176,8 +192,6 @@ export class FxWrap<N, B> extends Fx<any, B> {
 
   constructor(node: Node<N, B>, options?: Options) {
     super(node, options);
-    this.on('aborted', () => this.mayGet().then((fx: any) => fx.abort()));
-    this.on('disrupted', () => this.mayGet().then((fx: any) => fx.abort()));
   }
 
   get(): Promise<any> {
@@ -186,10 +200,24 @@ export class FxWrap<N, B> extends Fx<any, B> {
     });
   }
 
+  abort() {
+    this.mayGet().then((fx: any) => fx.abort());
+    super.abort();
+  }
+
+  fulfill(value: B) {
+    if (this.value != null) (<any>this.value).abort();
+    super.fulfill(value)
+  }
+
   produce(value: N): Promise<B> {
     return new Promise((resolve, reject) => {
+      const holder = this;
       return super.produce(value).then((fx: any) => {
-        fx.branches.push(this);
+        fx.on('disrupted', function self(error: any) {
+          fx.off('disrupted', self);
+          holder.failWith(error);
+        });
         return resolve(fx);
       }).catch(reject);
     });

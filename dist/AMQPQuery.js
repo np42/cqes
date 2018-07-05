@@ -14,7 +14,7 @@ class AMQPInQuery extends Query_1.InQuery {
 }
 exports.AMQPInQuery = AMQPInQuery;
 class AMQPInReply extends Query_1.InReply {
-    constructor(message, reply) {
+    constructor(message) {
         const payload = {};
         try {
             Object.assign(payload, JSON.parse(message.content.toString()));
@@ -22,12 +22,13 @@ class AMQPInReply extends Query_1.InReply {
         catch (e) { }
         switch (payload.type) {
             case Query_1.ReplyType.Resolved:
-                super(reply, null, payload.data);
+                super(null, payload.data);
                 break;
             case Query_1.ReplyType.Rejected:
-                super(reply, payload.error);
+                super(payload.error);
                 break;
         }
+        this.id = message.properties.correlationId;
     }
 }
 exports.AMQPInReply = AMQPInReply;

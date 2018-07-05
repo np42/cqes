@@ -49,9 +49,9 @@ export class AMQPBus {
     const fxHandler = <FxMessageHandler<any>>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.getChannel(queue, options.queue).pipe(async channel => {
       await channel.prefetch(options.channel.prefetch, false);
-      const replier = options.reply(channel);
+      const replier = options.noAck ? null : options.reply(channel);
       return channel.consume(queue, rawMessage => {
-        const message = new options.Message(rawMessage, replier(rawMessage));
+        const message = new options.Message(rawMessage, options.noAck ? null : replier(rawMessage));
         fxHandler.do(async (handler: MessageHandler<any>) => handler(message));
       }, options);
     });

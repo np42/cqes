@@ -15,16 +15,10 @@ const uuid = require("uuid");
 class AMQPQueryBus extends AMQPBus_1.AMQPBus {
     constructor(url) {
         super(url);
-        this.id = 'RPC-' + uuid.v1();
+        this.id = '~RPC-' + uuid.v1();
         this.pending = new Map();
-        this.queue = this.consume(this.id, (reply) => __awaiter(this, void 0, void 0, function* () {
-            const session = this.pending.get(reply.id);
-            if (session == null)
-                return;
-            session[reply.type](reply);
-            this.pending.delete(reply.id);
-        }), { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPQuery_1.AMQPInReply });
-        this.gcInterval = setInterval(() => this.gc(), 1000);
+        this.queue = null;
+        this.gcInterval = null;
     }
     gc() {
         const expired = [];
@@ -34,8 +28,20 @@ class AMQPQueryBus extends AMQPBus_1.AMQPBus {
                 continue;
             expired.push(key);
         }
-        for (const key of expired)
+        for (const key of expired) {
+            this.pending.get(key).reject(new Error('Timed out'));
             this.pending.delete(key);
+        }
+    }
+    listenReply() {
+        this.gcInterval = setInterval(() => this.gc(), 1000);
+        this.queue = this.consume(this.id, (reply) => __awaiter(this, void 0, void 0, function* () {
+            const session = this.pending.get(reply.id);
+            if (session == null)
+                return;
+            session[reply.type](reply);
+            this.pending.delete(reply.id);
+        }), { noAck: true, channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPQuery_1.AMQPInReply });
     }
     serve(view, handler) {
         const options = { Message: AMQPQuery_1.AMQPInQuery,
@@ -50,7 +56,9 @@ class AMQPQueryBus extends AMQPBus_1.AMQPBus {
         return this.consume(view, handler, options);
     }
     query(request, timeout = 30) {
-        const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4() };
+        if (this.queue == null)
+            this.listenReply();
+        const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
         const promise = new Promise((resolve, reject) => {
             const session = { expiresAt: Date.now() + (timeout * 1000), resolve, reject };
             this.pending.set(options.correlationId, session);

@@ -21,7 +21,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   constructor(url: string) {
     super(url);
-    this.id         = 'RPC-' + uuid.v1();
+    this.id         = '~RPC-' + uuid.v1();
     this.pending    = new Map();
     this.queue      = null;
     this.gcInterval = null;
@@ -35,8 +35,10 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
       if (item.expiresAt > now) continue ;
       expired.push(key);
     }
-    for (const key of expired)
+    for (const key of expired) {
+      this.pending.get(key).reject(new Error('Timed out'));
       this.pending.delete(key);
+    }
   }
 
   listenReply() {
@@ -46,7 +48,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
       if (session == null) return ;
       session[reply.type](reply);
       this.pending.delete(reply.id);
-    }, { channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPInReply })
+    }, { noAck: true, channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPInReply })
   }
 
   //--
@@ -67,7 +69,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   query(request: OutQuery<any>, timeout = 30) {
     if (this.queue == null) this.listenReply();
-    const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4() };
+    const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
     const promise = new Promise((resolve, reject) => {
       const session = { expiresAt: Date.now() + (timeout * 1000), resolve, reject };
       this.pending.set(options.correlationId, session);

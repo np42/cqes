@@ -17,8 +17,8 @@ class Command<D> {
 export type CommandReplier = (action: string, reason?: any) => void;
 
 export class InCommand<D> extends Command<D> {
-  private reply:    CommandReplier;
-  public  pulledAt: Date;
+  protected reply:    CommandReplier;
+  public    pulledAt: Date;
   constructor(reply: CommandReplier, topic: string, name: string, data?: D, meta?: Object) {
     super(topic, name, data, meta);
     this.pulledAt  = new Date();

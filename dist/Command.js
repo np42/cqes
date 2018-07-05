@@ -16,8 +16,8 @@ class InCommand extends Command {
         Object.defineProperty(this, 'reply', { value: reply });
     }
     ack() { this.reply('ack'); }
-    nack() { this.reply('nack'); }
-    cancel() { this.reply('cancel'); }
+    nack(reason) { this.reply('nack', reason); }
+    cancel(reason) { this.reply('cancel', reason); }
 }
 exports.InCommand = InCommand;
 class OutCommand extends Command {

@@ -2,6 +2,7 @@ import { Fx, Node, Action }      from './Fx';
 
 import { EventBus, Handler }     from './EventBus';
 import { InEvent, OutEvent }     from './Event';
+import { InCommand }             from './Command';
 import { ESInEvent }             from './ESEvent';
 import { ESInCommand }           from './ESCommand';
 
@@ -18,10 +19,12 @@ type ESSubscription = ES.EventStoreSubscription;
 
 type SubscriptionNode = Node<ESConnection, ESSubscription>;
 type EventHandler     = (event: InEvent<any>) => Promise<void>;
+type CommandHandler   = (command: InCommand<any>) => Promise<void>;
 
-type FxConnection   = Fx<any, ESConnection>;
-type FxSubscription = Fx<SubscriptionNode, ESSubscription>;
-type FxEventHandler = Fx<any, EventHandler>;
+type FxConnection     = Fx<any, ESConnection>;
+type FxSubscription   = Fx<SubscriptionNode, ESSubscription>;
+type FxEventHandler   = Fx<any, EventHandler>;
+type FxCommandHandler = Fx<any, CommandHandler>;
 
 export class ESBus implements EventBus, StateBus {
 
@@ -79,7 +82,7 @@ export class ESBus implements EventBus, StateBus {
         fxHandler.do((handler: EventHandler) => handler(event));
       }, () => {
         if ((<any>subscription)._dropData.reason == 'userInitiated') {
-          fx.close();
+          fx.abort();
         } else {
           subscription.stop();
           fx.failWith(new Error('Connection lost'));
@@ -89,20 +92,22 @@ export class ESBus implements EventBus, StateBus {
     });
   }
 
-  consume(group: string, stream: string, handler: Handler<InEvent<any>>) {
-    const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
+  consume(topic: string, handler: Handler<InCommand<any>>) {
+    const group  = topic.substr(0, topic.indexOf(':'));
+    const stream = topic.substr(group.length + 1);
+    const fxHandler = <FxCommandHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.connection.pipe(async (connection, fx) => {
-      const subscription = connection.connectToPersistentSubscription(stream, group, (sub, data) => {
+      return connection.connectToPersistentSubscription(stream, group, (sub, data) => {
         if (data.event != null) {
           const replier = (method: string) => sub[method](data);
-          const event = new ESInCommand(data.event, replier);
-          fxHandler.do((handler: EventHandler) => handler(event)).then(() => {
-            state.from = data.originalEventNumber.low;
-          });
+          const command = new ESInCommand(data.event, replier);
+          fxHandler.do((handler: CommandHandler) => handler(command));
+        } else {
+          sub.acknowledge(data);
         }
-      }, () => {
+      }, (subscription) => {
         if ((<any>subscription)._dropData.reason == 'userInitiated') {
-          fx.close();
+          fx.abort();
         } else {
           subscription.stop();
           fx.failWith(new Error('Connection lost'));
@@ -130,7 +135,7 @@ export class ESBus implements EventBus, StateBus {
     return this.connection.do(async connection => {
       if (wrapper == null) wrapper = event => new ESInEvent(event);
       return (await connection.readStreamEventsBackward(stream, -1, count, true, this.credentials))
-        .events.map(data => wrapper(data.event));
+        .events.map(data => wrapper(data.event)).reverse();
     });
   }
 

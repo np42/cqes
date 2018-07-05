@@ -6,7 +6,7 @@ class Query {
         this.createdAt = new Date();
         this.method = method;
         this.data = data;
-        this.meta = meta;
+        this.meta = meta || null;
     }
 }
 class InQuery extends Query {
@@ -38,14 +38,10 @@ class Reply {
     }
 }
 class InReply extends Reply {
-    constructor(reply, error, data) {
+    constructor(error, data) {
         super(error, data);
         this.pulledAt = new Date();
-        Object.defineProperty(this, 'reply', { value: reply });
     }
-    ack() { this.reply('ack'); }
-    nack() { this.reply('nack'); }
-    cancel() { this.reply('cancel'); }
 }
 exports.InReply = InReply;
 class OutReply extends Reply {

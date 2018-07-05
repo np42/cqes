@@ -14,10 +14,10 @@ export class CQESBus {
 
   private config:  any;
   private logger:  any;
-  public C:       CommandBus;
-  public Q:       QueryBus;
-  public E:       EventBus;
-  public S:       StateBus;
+  public C:        CommandBus;
+  public Q:        QueryBus;
+  public E:        EventBus;
+  public S:        StateBus;
 
   constructor(config: any = {}, name: any = null) {
     this.config        = config;

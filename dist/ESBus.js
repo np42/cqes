@@ -11,6 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const Fx_1 = require("./Fx");
 const Event_1 = require("./Event");
 const ESEvent_1 = require("./ESEvent");
+const ESCommand_1 = require("./ESCommand");
 const ESState_1 = require("./ESState");
 const ES = require("node-eventstore-client");
 const URL = require("url");
@@ -27,33 +28,9 @@ class ESBus {
                 const connection = ES.createConnection(settings, origin);
                 connection.connect().catch(reject);
                 connection.once('connected', endpoint => resolve(connection));
-                connection.once('closed', () => fx.snap(new Error('Connection closed')));
+                connection.once('closed', () => fx.failWith(new Error('Connection closed')));
             });
-        }).open();
-    }
-    subscribe(stream, from, handler) {
-        const state = { from };
-        const fxHandler = (handler instanceof Fx_1.Fx ? handler : Fx_1.Fx.create(handler)).open();
-        return this.connection.pipe((connection, fx) => __awaiter(this, void 0, void 0, function* () {
-            const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
-                const event = new ESEvent_1.ESInEvent(data.event);
-                fxHandler.do((handler) => handler(event)).then(() => {
-                    state.from = event.number;
-                });
-            }, () => {
-                const event = new Event_1.InEvent(stream, '$liveReached');
-                fxHandler.do((handler) => handler(event));
-            }, () => {
-                if (subscription._dropData.reason == 'userInitiated') {
-                    fx.close();
-                }
-                else {
-                    subscription.stop();
-                    fx.snap(new Error('Connection lost'));
-                }
-            }, this.credentials);
-            return subscription;
-        }));
+        });
     }
     publish(stream, position, events) {
         const esEvents = events.map(event => {
@@ -67,23 +44,84 @@ class ESBus {
                     if (e.name == 'WrongExpectedVersionError')
                         return reject(e);
                     else
-                        return fx.snap(e);
+                        return fx.failWith(e);
                 });
             });
         });
     }
-    save(process, versions, snapshot) {
-        return this.publish(process, -2, [new ESState_1.ESOutState(snapshot)]);
+    subscribe(stream, from, handler) {
+        const state = { from };
+        const fxHandler = (handler instanceof Fx_1.Fx ? handler : Fx_1.Fx.create(handler)).open();
+        return this.connection.pipe((connection, fx) => __awaiter(this, void 0, void 0, function* () {
+            const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
+                if (data.event == null) {
+                    state.from = data.originalEventNumber.low;
+                }
+                else {
+                    const event = new ESEvent_1.ESInEvent(data.event);
+                    fxHandler.do((handler) => handler(event)).then(() => {
+                        state.from = data.originalEventNumber.low;
+                    });
+                }
+            }, () => {
+                const event = new Event_1.InEvent(stream, '$liveReached');
+                fxHandler.do((handler) => handler(event));
+            }, () => {
+                if (subscription._dropData.reason == 'userInitiated') {
+                    fx.abort();
+                }
+                else {
+                    subscription.stop();
+                    fx.failWith(new Error('Connection lost'));
+                }
+            }, this.credentials);
+            return subscription;
+        }));
+    }
+    consume(topic, handler) {
+        const group = topic.substr(0, topic.indexOf(':'));
+        const stream = topic.substr(group.length + 1);
+        const fxHandler = (handler instanceof Fx_1.Fx ? handler : Fx_1.Fx.create(handler)).open();
+        return this.connection.pipe((connection, fx) => __awaiter(this, void 0, void 0, function* () {
+            return connection.connectToPersistentSubscription(stream, group, (sub, data) => {
+                if (data.event != null) {
+                    const replier = (method) => sub[method](data);
+                    const command = new ESCommand_1.ESInCommand(data.event, replier);
+                    fxHandler.do((handler) => handler(command));
+                }
+                else {
+                    sub.acknowledge(data);
+                }
+            }, (subscription) => {
+                if (subscription._dropData.reason == 'userInitiated') {
+                    fx.abort();
+                }
+                else {
+                    subscription.stop();
+                    fx.failWith(new Error('Connection lost'));
+                }
+            }, this.credentials, 1, false);
+        }));
+    }
+    save(process, position, failWithshot) {
+        return this.publish(process, -2, [new ESState_1.ESOutState(failWithshot)]);
     }
     restore(process) {
-        return this.last(process, 1, event => new ESState_1.ESInState(event));
+        return new Promise(resolve => {
+            return this.last(process, 1, event => new ESState_1.ESInState(event)).then(result => {
+                if (result.length == 0)
+                    return resolve(null);
+                else
+                    return resolve(result[0]);
+            });
+        });
     }
     last(stream, count, wrapper) {
         return this.connection.do((connection) => __awaiter(this, void 0, void 0, function* () {
             if (wrapper == null)
                 wrapper = event => new ESEvent_1.ESInEvent(event);
             return (yield connection.readStreamEventsBackward(stream, -1, count, true, this.credentials))
-                .events.map(data => wrapper(data.event));
+                .events.map(data => wrapper(data.event)).reverse();
         }));
     }
     tweak(stream, version, metadata) {
@@ -95,7 +133,7 @@ class ESBus {
                     if (e.name == 'WrongExpectedVersionError')
                         return reject(e);
                     else
-                        return fx.snap(e);
+                        return fx.failWith(e);
                 });
             });
         });

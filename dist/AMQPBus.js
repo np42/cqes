@@ -15,11 +15,10 @@ class AMQPBus {
     constructor(url) {
         this.connection =
             new Fx_1.Fx((_, fx) => amqp.connect(url))
-                .then((connection, fx) => __awaiter(this, void 0, void 0, function* () {
-                connection.on('close', () => fx.snap(new Error('Connection close')));
+                .and((connection, fx) => __awaiter(this, void 0, void 0, function* () {
+                connection.on('close', () => fx.failWith(new Error('Connection close')));
                 return connection;
-            }))
-                .open();
+            }));
         this.channels = new Map();
     }
     getChannel(queue, options) {
@@ -53,9 +52,9 @@ class AMQPBus {
         const fxHandler = (handler instanceof Fx_1.Fx ? handler : Fx_1.Fx.create(handler)).open();
         return this.getChannel(queue, options.queue).pipe((channel) => __awaiter(this, void 0, void 0, function* () {
             yield channel.prefetch(options.channel.prefetch, false);
-            const replier = options.reply(channel);
+            const replier = options.noAck ? null : options.reply(channel);
             return channel.consume(queue, rawMessage => {
-                const message = new options.Message(rawMessage, replier(rawMessage));
+                const message = new options.Message(rawMessage, options.noAck ? null : replier(rawMessage));
                 fxHandler.do((handler) => __awaiter(this, void 0, void 0, function* () { return handler(message); }));
             }, options);
         }));

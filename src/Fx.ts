@@ -1,4 +1,4 @@
-enum Status { INITIAL, PENDING, DISRUPTED, READY }
+enum Status { INITIAL, PENDING, DISRUPTED, READY, ABORTED }
 
 export type Node<N, B> = (value: N, fx: Fx<N, B>)   => Promise<B>;
 export type Action<N, B> = (value: B, fx: Fx<N, B>) => Promise<any>;
@@ -16,6 +16,7 @@ export class Fx<N, B> {
   protected trunk:      Fx<any, N>;
   protected branches:   Array<Fx<B, any>>;
   protected pending:    Array<Action<N, B>>;
+  protected bridge:     Fx<any, any>;
   protected value:      B;
   protected retryCount: number;
   protected retrying:   NodeJS.Timer;
@@ -34,14 +35,6 @@ export class Fx<N, B> {
     this.branches    = [];
     this.nocache     = options ? options.nocache : false;
     this.events      = null;
-    this.on('aborted', () => {
-      for (const branch of this.branches)
-        branch.abort();
-    });
-    this.on('disrupted', e => {
-      for (const branch of this.branches)
-        branch.failWith(e);
-    });
   }
 
   //-------
@@ -51,6 +44,15 @@ export class Fx<N, B> {
     if (!this.events.has(event)) this.events.set(event, [fn]);
     else this.events.get(event).push(fn);
     return this;
+  }
+
+  one(event: string, fn: Handler) {
+    const clear = () => {
+      this.off(event, fn);
+      this.off(event, clear);
+    };
+    this.on(event, fn);
+    this.on(event, clear);
   }
 
   off(event: string, fn: Handler) {
@@ -91,15 +93,8 @@ export class Fx<N, B> {
     return this.node(value, this);
   }
 
-  abort() {
-    if (this.trunk != null) {
-      const offset = this.trunk.branches.indexOf(this);
-      if (offset >= 0) this.trunk.branches.splice(offset, 1);
-    }
-    this.emit('aborted');
-  }
-
   fulfill(value: B) {
+    if (this.status == Status.ABORTED) return ;
     this.status     = Status.READY;
     this.retryCount = 0;
     this.value      = value;
@@ -111,12 +106,17 @@ export class Fx<N, B> {
   }
 
   failWith(error: Error, action?: Action<N, B>) {
+    if (this.status == Status.ABORTED) return ;
     if (action) this.pending.push(action);
     this.status = Status.DISRUPTED;
     if (this.retryCount == 0) {
       this.retryCount += 1;
       console.log(error);
       this.emit('disrupted', error);
+      for (const branch of this.branches)
+        branch.failWith(error);
+      if (this.bridge)
+        this.bridge.failWith(error);
       this.retrying = setTimeout(() => { this.retrying = null; this.open() }, 42);
     } else if (!(this.trunk instanceof Fx)) {
       if (this.retrying == null) {
@@ -131,8 +131,25 @@ export class Fx<N, B> {
     }
   }
 
+  abort() {
+    this.status = Status.ABORTED;
+    if (this.retrying != null) {
+      clearTimeout(this.retrying);
+      this.retrying = null;
+      this.retryCount = 0;
+    }
+    if (this.trunk != null) {
+      const offset = this.trunk.branches.indexOf(this);
+      if (offset >= 0) this.trunk.branches.splice(offset, 1);
+    }
+    this.emit('disrupted', 'Aborting');
+    this.emit('aborted');
+    for (const branch of this.branches)
+      branch.abort();
+  }
+
   get(): Promise<B> {
-    return new Promise(resolve => {
+    return new Promise((resolve, reject) => {
       if (this.nocache) this.status = Status.INITIAL;
       switch (this.status) {
       case Status.INITIAL: case Status.PENDING: case Status.DISRUPTED:
@@ -141,6 +158,8 @@ export class Fx<N, B> {
         return ;
       case Status.READY:
         return resolve(this.value);
+      case Status.ABORTED:
+        return reject('CANNOT_GET_ABORTED');
       }
     });
   }
@@ -200,36 +219,29 @@ export class FxWrap<N, B> extends Fx<any, B> {
     });
   }
 
-  abort() {
-    this.mayGet().then((fx: any) => fx.abort());
-    super.abort();
-  }
-
-  fulfill(value: B) {
-    if (this.value != null) (<any>this.value).abort();
-    super.fulfill(value)
-  }
-
-  produce(value: N): Promise<B> {
-    return new Promise((resolve, reject) => {
-      const holder = this;
-      return super.produce(value).then((fx: any) => {
-        fx.on('disrupted', function self(error: any) {
-          fx.off('disrupted', self);
-          holder.failWith(error);
-        });
-        return resolve(fx);
-      }).catch(reject);
-    });
-  }
-
   mayGet() {
     if (this.status == Status.INITIAL) return new Promise(() => {});
     return super.get();
   }
 
-  open() {
-    return super.open();
+  produce(value: any): Promise<B> {
+    return new Promise((resolve, reject) => {
+      return super.produce(value).then((fx: any) => {
+        if (this.value != null) (<any>this.value).abort();
+        fx.bridge = this;
+        return resolve(fx);
+      }).catch(reject);
+    });
+  }
+
+  failWith(error: any) {
+    this.mayGet().then((fx: any) => fx.abort());
+    super.failWith(error)
+  }
+
+  abort() {
+    this.mayGet().then((fx: any) => fx.abort());
+    super.abort();
   }
 
 }

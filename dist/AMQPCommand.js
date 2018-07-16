@@ -13,6 +13,7 @@ class AMQPInCommand extends Command_1.InCommand {
         super(reply, payload.topic || message.fields.routingKey, payload.name || 'Dummy', payload.data, payload.meta);
         this.createdAt = new Date(payload.createdAt);
     }
+    cancel(reason) { this.reply('reject', reason); }
 }
 exports.AMQPInCommand = AMQPInCommand;
 //# sourceMappingURL=AMQPCommand.js.map

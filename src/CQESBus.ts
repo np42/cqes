@@ -30,4 +30,11 @@ export class CQESBus {
     this.S = new xStateBus(config.States);
   }
 
+  stop() {
+    //this.C.stop();
+    //this.Q.stop();
+    //this.E.stop();
+    //this.S.stop();
+  }
+
 }

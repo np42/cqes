@@ -1,28 +1,41 @@
-import { InState, OutState }  from './State';
-import { OutEvent }           from './Event';
-import * as ES                from 'node-eventstore-client';
+import { State, StateData }    from './State';
+import { OutEvent, EventData } from './Event';
+import * as ES                 from 'node-eventstore-client';
 
-export class ESInState<D> extends InState<D> {
+export class ESInState<D extends StateData> extends State<D> {
 
-  constructor(message: ES.RecordedEvent) {
-    const payload = { data: <D>null, position: -1 };
+  constructor(StateDataClass: new (_: any) => D, message: ES.RecordedEvent) {
+    const payload = { data: <any>null, position: -1 };
     try { Object.assign(payload, JSON.parse(message.data.toString())) }
     catch (e) { /* Fail silently */ }
-    const meta = {};
-    try { Object.assign(meta, JSON.parse(message.metadata.toString() || null)) }
-    catch (e) { /* Fail silently */ }
     const data = payload.data;
-    super(message.eventStreamId, payload.position, data, meta);
-    this.createdAt = new Date(message.createdEpoch);
+    super(StateDataClass, data, payload.position);
   }
 
 }
 
-export class ESOutState<D> extends OutEvent<{ position: any, data: D }> {
+export class ESOutState<D extends StateData> extends OutEvent<Snapshoted> {
 
-  constructor(state: OutState<D>) {
-    const payload = { position: state.position, data: state.data };
-    super(state.process, 'Snapshot', payload, state.meta);
+  constructor(state: State<D>) {
+    super(state.process, new Snapshoted(state));
   }
 
+}
+
+class Snapshoted extends EventData {
+  public position:  number;
+  public timestamp: number;
+  public data:      any;
+  constructor(data: any) {
+    super();
+    this.position  = data.position;
+    this.timestamp = Date.now();
+    this.data      = data.data;
+  }
+}
+
+interface ESOutStateData {
+  position: any;
+  timestamp: number;
+  data: StateData;
 }

@@ -5,7 +5,11 @@ class Command {
         this.topic = topic;
         this.createdAt = new Date();
         this.name = name;
+        if (!(data instanceof Object))
+            data = {};
         this.data = data;
+        if (!(meta instanceof Object))
+            meta = {};
         this.meta = meta;
     }
 }
@@ -16,14 +20,19 @@ class InCommand extends Command {
         Object.defineProperty(this, 'reply', { value: reply });
     }
     ack() { this.reply('ack'); }
-    nack(reason) { this.reply('nack', reason); }
     cancel(reason) { this.reply('cancel', reason); }
 }
 exports.InCommand = InCommand;
 class OutCommand extends Command {
+    constructor(topic, instance, meta) {
+        super(topic, instance.constructor.name, instance, meta);
+    }
     serialize() {
         return new Buffer(JSON.stringify(this));
     }
 }
 exports.OutCommand = OutCommand;
+class CommandData {
+}
+exports.CommandData = CommandData;
 //# sourceMappingURL=Command.js.map

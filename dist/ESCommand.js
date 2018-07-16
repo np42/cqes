@@ -15,6 +15,7 @@ class ESInCommand extends Command_1.InCommand {
         catch (e) { }
         super(reply, message.eventStreamId, message.eventType, data, meta);
         this.createdAt = new Date(message.createdEpoch);
+        this.number = message.eventNumber.low;
     }
     ack() { this.reply('acknowledge'); }
     cancel() { this.reply('fail'); }

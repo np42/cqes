@@ -16,10 +16,12 @@ export class AMQPBus {
   private channels: Map<string, FxChannel>;
 
   constructor(url: string) {
+    const name  = 'AMQP.Connection';
     this.connection =
-      new Fx((_: any, fx: FxConnection): Promise<amqp.Connection> => <any>amqp.connect(url))
+      new Fx((_: any, fx: FxConnection): Promise<amqp.Connection> => <any>amqp.connect(url), { name })
       .and(async (connection, fx) => {
-        connection.on('close', () => fx.failWith(new Error('Connection close')));
+        connection.on('error', (error: any) => fx.failWith(error));
+        connection.on('close', () => fx.failWith(new Error('AMQP: Connection close')));
         return connection;
       });
     this.channels = new Map();
@@ -32,7 +34,7 @@ export class AMQPBus {
       const channel = await connection.createConfirmChannel();
       await channel.assertQueue(queue, options);
       return channel;
-    }));
+    }, { name: 'AMQP.Channel' }));
     return this.channels.get(queue);
   }
 
@@ -47,14 +49,24 @@ export class AMQPBus {
     if (options.queue == null)           options.queue = {};
     if (options.queue.durable == null)   options.queue.durable = true;
     const fxHandler = <FxMessageHandler<any>>(handler instanceof Fx ? handler : Fx.create(handler)).open();
-    return this.getChannel(queue, options.queue).pipe(async channel => {
+    return this.getChannel(queue, options.queue).pipe(async (channel, fx) => {
       await channel.prefetch(options.channel.prefetch, false);
       const replier = options.noAck ? null : options.reply(channel);
-      return channel.consume(queue, rawMessage => {
-        const message = new options.Message(rawMessage, options.noAck ? null : replier(rawMessage));
-        fxHandler.do(async (handler: MessageHandler<any>) => handler(message));
+      let active = true;
+      const subscription = await channel.consume(queue, rawMessage => {
+        if (active) {
+          const message = new options.Message(rawMessage, options.noAck ? null : replier(rawMessage));
+          fxHandler.do(async (handler: MessageHandler<any>) => handler(message));
+        } else {
+          channel.reject(rawMessage, true);
+        }
       }, options);
-    });
+      fx.on('aborted', () => {
+        active = false;
+        channel.cancel(subscription.consumerTag);
+      });
+      return subscription;
+    }, { name: 'AMQP.Consumer' }).open();
   }
 
   publish(queue: string, message: Buffer, options: any) {

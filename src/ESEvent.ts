@@ -1,7 +1,7 @@
-import { InEvent } from './Event';
-import * as ES     from 'node-eventstore-client';
+import { InEvent, EventData } from './Event';
+import * as ES                from 'node-eventstore-client';
 
-export class ESInEvent<D> extends InEvent<D> {
+export class ESInEvent<D extends EventData> extends InEvent<D> {
 
   constructor(message: ES.RecordedEvent) {
     const data = {};

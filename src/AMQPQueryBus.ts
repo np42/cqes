@@ -72,6 +72,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
     const promise = new Promise((resolve, reject) => {
       const session = { expiresAt: Date.now() + (timeout * 1000), resolve, reject };
+      (<any>options).expiration = String(timeout * 1000);
       this.pending.set(options.correlationId, session);
       this.publish(request.view, request.serialize(), options);
     });

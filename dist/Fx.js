@@ -17,20 +17,21 @@ var Status;
     Status[Status["ABORTED"] = 4] = "ABORTED";
 })(Status || (Status = {}));
 class Fx {
-    constructor(node, options) {
+    constructor(node, options = {}) {
         this.node = node;
-        this.trunk = options ? options.trunk : null;
         this.status = Status.INITIAL;
         this.value = null;
         this.retryCount = 0;
         this.retrying = null;
+        this.events = null;
         this.pending = [];
         this.branches = [];
-        this.nocache = options ? options.nocache : false;
-        this.events = null;
+        this.name = options.name || null;
+        this.trunk = options.trunk || null;
+        this.nocache = options.nocache || false;
     }
-    static create(value) {
-        return new Fx(() => __awaiter(this, void 0, void 0, function* () { return value; }));
+    static create(value, options = {}) {
+        return new Fx(() => __awaiter(this, void 0, void 0, function* () { return value; }), options);
     }
     on(event, fn) {
         if (this.events == null)
@@ -110,8 +111,8 @@ class Fx {
             this.pending.push(action);
         this.status = Status.DISRUPTED;
         if (this.retryCount == 0) {
+            console.log('Fx:', 0, error);
             this.retryCount += 1;
-            console.log(error);
             this.emit('disrupted', error);
             for (const branch of this.branches)
                 branch.failWith(error);
@@ -121,8 +122,8 @@ class Fx {
         }
         else if (!(this.trunk instanceof Fx)) {
             if (this.retrying == null) {
+                console.log('Fx:', this.retryCount, String(error));
                 this.retryCount += 1;
-                console.log(String(error));
                 const delay = Math.min(this.retryCount * this.retryCount * 42, 5000);
                 this.retrying = setTimeout(() => { this.retrying = null; this.open(); }, delay);
             }
@@ -164,6 +165,7 @@ class Fx {
                 case Status.READY:
                     return resolve(this.value);
                 case Status.ABORTED:
+                    debugger;
                     return reject('CANNOT_GET_ABORTED');
             }
         });
@@ -177,9 +179,14 @@ class Fx {
         this.node = (value, fx) => previous(value, fx).then(next);
         return this;
     }
-    try(method) {
+    try(method, count = 1) {
         return new Promise((resolve, reject) => {
-            const action = (value, fx) => method(value, fx).then(resolve).catch(reject);
+            const action = (value, fx) => method(value, fx).then(resolve).catch((error) => {
+                if (count > 1)
+                    return this.try(method, count - 1).then(resolve).catch(reject);
+                else
+                    return reject(error);
+            });
             if (this.status != Status.READY)
                 return this.pending.push(action), this.open();
             else
@@ -197,14 +204,18 @@ class Fx {
                 return this.get().then((value) => action(value, this));
         });
     }
-    pipe(node) {
-        const branch = new Fx(node, { trunk: this });
+    pipe(node, options = {}) {
+        const branch = new Fx(node, Object.assign({}, options, { trunk: this }));
         this.branches.push(branch);
+        if (this.status == Status.READY)
+            branch.open();
         return branch;
     }
-    merge(node) {
-        const branch = new FxWrap(node, { trunk: this });
+    merge(node, options = {}) {
+        const branch = new FxWrap(node, Object.assign({}, options, { trunk: this }));
         this.branches.push(branch);
+        if (this.status == Status.READY)
+            branch.open();
         return branch;
     }
 }
@@ -221,7 +232,10 @@ class FxWrap extends Fx {
     mayGet() {
         if (this.status == Status.INITIAL)
             return new Promise(() => { });
-        return super.get();
+        if (this.status == Status.READY && this.nocache == false)
+            return { then: (f) => f(this.value) };
+        else
+            return super.get();
     }
     produce(value) {
         return new Promise((resolve, reject) => {
@@ -238,6 +252,8 @@ class FxWrap extends Fx {
         super.failWith(error);
     }
     abort() {
+        if (this.status == Status.ABORTED)
+            return;
         this.mayGet().then((fx) => fx.abort());
         super.abort();
     }

@@ -1,24 +1,33 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 class State {
-    constructor(process, position, data, meta) {
-        this.process = process;
+    constructor(StateDataClass, data, position) {
+        if (StateDataClass == null)
+            StateDataClass = DummyStateData;
+        if (position == null)
+            position = -1;
+        this.process = StateDataClass.name;
         this.position = position;
-        this.data = data;
-        this.meta = meta;
+        this.data = new StateDataClass(data);
     }
 }
-class InState extends State {
-    constructor(process, position, data, meta) {
-        super(process, position, data, meta);
-        this.createdAt = new Date();
+exports.State = State;
+class StateData {
+    type(event) {
+        return event;
+    }
+    apply(events) {
+        if (!(events instanceof Array))
+            events = [events];
+        for (const event of events) {
+            if (!(event.type in this))
+                continue;
+            const typedEvent = this.type(event);
+            this[event.type](typedEvent);
+        }
     }
 }
-exports.InState = InState;
-class OutState extends State {
-    serialize() {
-        return new Buffer(JSON.stringify(this));
-    }
+exports.StateData = StateData;
+class DummyStateData extends StateData {
 }
-exports.OutState = OutState;
 //# sourceMappingURL=State.js.map

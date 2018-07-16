@@ -1,7 +1,7 @@
-import { InCommand, CommandReplier } from './Command';
-import { Message }                   from 'amqplib';
+import { InCommand, CommandReplier, CommandData } from './Command';
+import { Message }                                from 'amqplib';
 
-export class AMQPInCommand<D> extends InCommand<D> {
+export class AMQPInCommand<D extends CommandData> extends InCommand<D> {
   constructor(message: Message, reply: CommandReplier) {
     const payload = { topic: <string>null, name: <string>null, createdAt: <number>null
                     , data: <D>null, meta: <Object>null
@@ -16,4 +16,5 @@ export class AMQPInCommand<D> extends InCommand<D> {
          );
     this.createdAt = new Date(payload.createdAt);
   }
+  cancel(reason?: any) { this.reply('reject', reason); }
 }

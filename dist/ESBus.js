@@ -30,7 +30,7 @@ class ESBus {
                 connection.once('connected', endpoint => resolve(connection));
                 connection.once('closed', () => fx.failWith(new Error('Connection closed')));
             });
-        });
+        }, { name: 'ES.Connection' });
     }
     publish(stream, position, events) {
         const esEvents = events.map(event => {
@@ -53,7 +53,12 @@ class ESBus {
         const state = { from };
         const fxHandler = (handler instanceof Fx_1.Fx ? handler : Fx_1.Fx.create(handler)).open();
         return this.connection.pipe((connection, fx) => __awaiter(this, void 0, void 0, function* () {
-            const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
+            const hasPosition = state.from >= -1 && state.from != null;
+            const fn = hasPosition ? 'subscribeToStreamFrom' : 'subscribeToStream';
+            const args = [stream];
+            if (hasPosition)
+                args.push(state.from);
+            args.push(true, (_, data) => {
                 if (data.event == null) {
                     state.from = data.originalEventNumber.low;
                 }
@@ -63,10 +68,13 @@ class ESBus {
                         state.from = data.originalEventNumber.low;
                     });
                 }
-            }, () => {
-                const event = new Event_1.InEvent(stream, '$liveReached');
-                fxHandler.do((handler) => handler(event));
-            }, () => {
+            });
+            if (hasPosition)
+                args.push(() => {
+                    const event = new Event_1.InEvent(stream, '$liveReached');
+                    fxHandler.do((handler) => handler(event));
+                });
+            args.push(() => {
                 if (subscription._dropData.reason == 'userInitiated') {
                     fx.abort();
                 }
@@ -75,8 +83,9 @@ class ESBus {
                     fx.failWith(new Error('Connection lost'));
                 }
             }, this.credentials);
+            const subscription = connection[fn].apply(connection, args);
             return subscription;
-        }));
+        }), { name: 'ES.Subscriber' }).open();
     }
     consume(topic, handler) {
         const group = topic.substr(0, topic.indexOf(':'));
@@ -101,20 +110,24 @@ class ESBus {
                     fx.failWith(new Error('Connection lost'));
                 }
             }, this.credentials, 1, false);
-        }));
+        }), { name: 'ES.Consumer' }).open();
     }
-    save(process, position, failWithshot) {
-        return this.publish(process, -2, [new ESState_1.ESOutState(failWithshot)]);
-    }
-    restore(process) {
+    restore(StateDataClass, process) {
+        if (process == null)
+            process = StateDataClass.name;
         return new Promise(resolve => {
-            return this.last(process, 1, event => new ESState_1.ESInState(event)).then(result => {
+            return this.last(process, 1, event => new ESState_1.ESInState(StateDataClass, event)).then(result => {
                 if (result.length == 0)
                     return resolve(null);
                 else
                     return resolve(result[0]);
             });
         });
+    }
+    save(state) {
+        const process = state.process;
+        const event = new ESState_1.ESOutState(state);
+        return this.publish(process, -2, [event]);
     }
     last(stream, count, wrapper) {
         return this.connection.do((connection) => __awaiter(this, void 0, void 0, function* () {

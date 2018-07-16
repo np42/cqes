@@ -15,6 +15,8 @@ class CQESBus {
         this.E = new ESBus_1.ESBus(config.Events);
         this.S = new ESBus_2.ESBus(config.States);
     }
+    stop() {
+    }
 }
 exports.CQESBus = CQESBus;
 //# sourceMappingURL=CQESBus.js.map

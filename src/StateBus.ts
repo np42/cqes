@@ -1,7 +1,7 @@
-import { Fx }                from './Fx';
-import { InState, OutState } from './State';
+import { Fx }               from './Fx';
+import { State, StateData } from './State';
 
 export interface StateBus {
-  restore(process: string): Promise<InState<any>>;
-  save(process: string, versions: Map<string, any>, snapshot: OutState<any>): Promise<any>;
+  restore<D extends StateData>(StateDataClass: new (_: any) => D, process?: string): Promise<State<D>>;
+  save<D extends StateData>(state: State<D>): Promise<any>;
 }

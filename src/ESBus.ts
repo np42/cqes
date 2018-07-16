@@ -7,7 +7,7 @@ import { ESInEvent }             from './ESEvent';
 import { ESInCommand }           from './ESCommand';
 
 import { StateBus }              from './StateBus';
-import { InState, OutState }     from './State';
+import { State, StateData }      from './State';
 import { ESInState, ESOutState } from './ESState';
 
 import * as ES                   from 'node-eventstore-client';
@@ -44,7 +44,7 @@ export class ESBus implements EventBus, StateBus {
         connection.once('connected', endpoint => resolve(connection));
         connection.once('closed', () => fx.failWith(new Error('Connection closed')));
       });
-    });
+    }, { name: 'ES.Connection' });
   }
 
   //-- Event
@@ -68,19 +68,28 @@ export class ESBus implements EventBus, StateBus {
     const state = { from };
     const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.connection.pipe(async (connection, fx) => {
-      const subscription = connection.subscribeToStreamFrom(stream, state.from, true, (_, data) => {
-        if (data.event == null) { // When event deleted
+      const hasPosition = state.from >= -1 && state.from != null;
+      const fn = hasPosition ? 'subscribeToStreamFrom' : 'subscribeToStream';
+      const args = <Array<any>>[stream];
+      if (hasPosition) args.push(state.from);
+      args.push(/* resolveLinkTos */ true, /* eventAppeared */(_: any, data: any) => {
+        if (data.event == null) {
+          // When event deleted
           state.from = data.originalEventNumber.low;
-        } else { // When normal event
+        } else {
+          // When normal event
           const event = new ESInEvent(data.event);
           fxHandler.do((handler: EventHandler) => handler(event)).then(() => {
             state.from = data.originalEventNumber.low;
           });
         }
-      }, () => {
-        const event = new InEvent(stream, '$liveReached');
-        fxHandler.do((handler: EventHandler) => handler(event));
-      }, () => {
+      });
+      if (hasPosition)
+        args.push(/* liveProcessingStarted */ () => {
+          const event = new InEvent(stream, '$liveReached');
+          fxHandler.do((handler: EventHandler) => handler(event));
+        });
+      args.push(/* subscriptionDropped */() => {
         if ((<any>subscription)._dropData.reason == 'userInitiated') {
           fx.abort();
         } else {
@@ -88,8 +97,9 @@ export class ESBus implements EventBus, StateBus {
           fx.failWith(new Error('Connection lost'));
         }
       }, this.credentials);
+      const subscription = connection[fn].apply(connection, args);
       return subscription;
-    });
+    }, { name: 'ES.Subscriber' }).open();
   }
 
   consume(topic: string, handler: Handler<InCommand<any>>) {
@@ -113,21 +123,24 @@ export class ESBus implements EventBus, StateBus {
           fx.failWith(new Error('Connection lost'));
         }
       }, this.credentials, 1, false);
-    });
+    }, { name: 'ES.Consumer' }).open();
   }
 
   //-- State
-  save(process: string, position: any, failWithshot: OutState<any>) {
-    return this.publish(process, -2, [new ESOutState(failWithshot)]);
-  }
-
-  restore(process: string): Promise<InState<any>> {
+  restore<D extends StateData>(StateDataClass: new (_: any) => D, process?: string): Promise<State<D>> {
+    if (process == null) process = StateDataClass.name;
     return new Promise(resolve => {
-      return this.last(process, 1, event => new ESInState(event)).then(result => {
+      return this.last(process, 1, event => new ESInState(StateDataClass, event)).then(result => {
         if (result.length == 0) return resolve(null);
         else return resolve(result[0]);
       });
     });
+  }
+
+  save<D extends StateData>(state: State<D>) {
+    const process = state.process;
+    const event = new ESOutState(state);
+    return this.publish(process, -2, [event]);
   }
 
   //-- helpers

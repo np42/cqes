@@ -28,18 +28,30 @@ class ESBus {
                 const connection = ES.createConnection(settings, origin);
                 connection.connect().catch(reject);
                 connection.once('connected', endpoint => resolve(connection));
+                connection.once('reconnecting', () => fx.failWith(new Error('Connection interrupted')));
                 connection.once('closed', () => fx.failWith(new Error('Connection closed')));
+                fx.on('disrupted', () => connection.close());
             });
         }, { name: 'ES.Connection' });
     }
     publish(stream, position, events) {
+        const meta = {};
         const esEvents = events.map(event => {
+            for (const key in event.meta)
+                if (key.charAt(0) == '$')
+                    meta[key] = event.meta[key];
             return ES.createJsonEventData(uuid.v4(), event.data, event.meta, event.type);
         });
         return this.connection.try((connection, fx) => {
             return new Promise((resolve, reject) => {
                 connection.appendToStream(stream, position, esEvents, this.credentials)
-                    .then(resolve)
+                    .then((result) => {
+                    if (Object.keys(meta).length == 0)
+                        return resolve(result);
+                    return connection.setStreamMetadataRaw(stream, -2, meta, this.credentials)
+                        .then(() => resolve(result))
+                        .catch(e => fx.failWith(e));
+                })
                     .catch(e => {
                     if (e.name == 'WrongExpectedVersionError')
                         return reject(e);
@@ -63,7 +75,7 @@ class ESBus {
                     state.from = data.originalEventNumber.low;
                 }
                 else {
-                    const event = new ESEvent_1.ESInEvent(data.event);
+                    const event = new ESEvent_1.ESInEvent(data.event, data.originalEvent);
                     fxHandler.do((handler) => handler(event)).then(() => {
                         state.from = data.originalEventNumber.low;
                     });
@@ -85,7 +97,7 @@ class ESBus {
             }, this.credentials);
             const subscription = connection[fn].apply(connection, args);
             return subscription;
-        }), { name: 'ES.Subscriber' }).open();
+        }), { name: 'ES.Subscriber.' + stream }).open();
     }
     consume(topic, handler) {
         const group = topic.substr(0, topic.indexOf(':'));
@@ -110,7 +122,7 @@ class ESBus {
                     fx.failWith(new Error('Connection lost'));
                 }
             }, this.credentials, 1, false);
-        }), { name: 'ES.Consumer' }).open();
+        }), { name: 'ES.Consumer.' + topic }).open();
     }
     restore(StateDataClass, process) {
         if (process == null)

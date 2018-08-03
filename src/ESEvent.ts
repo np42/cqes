@@ -3,7 +3,7 @@ import * as ES                from 'node-eventstore-client';
 
 export class ESInEvent<D extends EventData> extends InEvent<D> {
 
-  constructor(message: ES.RecordedEvent) {
+  constructor(message: ES.RecordedEvent, original?: ES.RecordedEvent) {
     const data = {};
     try { Object.assign(data, JSON.parse(message.data.toString())) }
     catch (e) { /* Fail silently */ }
@@ -12,7 +12,7 @@ export class ESInEvent<D extends EventData> extends InEvent<D> {
     catch (e) { /* Fail silently */ }
     super(message.eventStreamId, message.eventType, <D>data, meta);
     this.createdAt = new Date(message.createdEpoch);
-    this.number = message.eventNumber.low;
+    this.number = Math.max(message.eventNumber.low, original ? original.eventNumber.low : -1);
   }
 
 }

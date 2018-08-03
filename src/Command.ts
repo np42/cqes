@@ -24,6 +24,7 @@ export class InCommand<D extends CommandData> extends Command<D> {
   constructor(reply: CommandReplier, topic: string, name: string, data?: D, meta?: Object) {
     super(topic, name, data, meta);
     this.pulledAt  = new Date();
+    if (reply == null) reply = (action: string, reason?: any) => void(0);
     Object.defineProperty(this, 'reply', { value: reply });
   }
   ack()                { this.reply('ack'); }

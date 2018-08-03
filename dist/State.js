@@ -26,6 +26,9 @@ class StateData {
             this[event.type](typedEvent);
         }
     }
+    toString() {
+        return this.id;
+    }
 }
 exports.StateData = StateData;
 class DummyStateData extends StateData {

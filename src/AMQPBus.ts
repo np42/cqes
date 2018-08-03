@@ -34,7 +34,7 @@ export class AMQPBus {
       const channel = await connection.createConfirmChannel();
       await channel.assertQueue(queue, options);
       return channel;
-    }, { name: 'AMQP.Channel' }));
+    }, { name: 'AMQP.Channel.' + queue }));
     return this.channels.get(queue);
   }
 
@@ -66,7 +66,7 @@ export class AMQPBus {
         channel.cancel(subscription.consumerTag);
       });
       return subscription;
-    }, { name: 'AMQP.Consumer' }).open();
+    }, { name: 'AMQP.Consumer.' + queue }).open();
   }
 
   publish(queue: string, message: Buffer, options: any) {

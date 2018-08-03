@@ -17,6 +17,8 @@ export class State<D extends StateData> {
 
 export class StateData {
 
+  public id: string;
+
   protected type(event: InEvent<any>) {
     return event;
   }
@@ -28,6 +30,10 @@ export class StateData {
       const typedEvent = this.type(event);
       this[event.type](typedEvent);
     }
+  }
+
+  public toString() {
+    return this.id;
   }
 
 }

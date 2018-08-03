@@ -17,6 +17,8 @@ class InCommand extends Command {
     constructor(reply, topic, name, data, meta) {
         super(topic, name, data, meta);
         this.pulledAt = new Date();
+        if (reply == null)
+            reply = (action, reason) => void (0);
         Object.defineProperty(this, 'reply', { value: reply });
     }
     ack() { this.reply('ack'); }

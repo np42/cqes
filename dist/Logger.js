@@ -6,44 +6,45 @@ class Logger {
     constructor(name, color) {
         this.name = name;
         this.color = color || 'reset';
+        this.stipColors = !(process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY);
     }
     debugger(...args) {
-        const message = colors.bgBlue(['DBG'.bold, this._date(), colors[this.color](this.name),
+        const message = colors.bgBlue([colors.bold('DBG'), this._date(), colors[this.color](this.name),
             this._format(args),
             '>>>>>>>>>>>>>>>>>> DEBUG ME <<<<<<<<<<<<<<<<<<<'
         ].join(' '));
-        process.stdout.write(message + '\n');
+        this._write('debugger', message);
         debugger;
     }
     debug(...args) {
         const message = [colors.blue('DBG'), this._date(), colors[this.color](this.name),
             this._format(args)
         ].join(' ');
-        process.stdout.write(message + '\n');
+        this._write('debug', message);
     }
     stats(...args) {
         const message = [colors.magenta('STA'), this._date(), colors[this.color](this.name),
             this._format(args)
         ].join(' ');
-        process.stdout.write(message + '\n');
+        this._write('stats', message);
     }
     log(...args) {
         const message = [colors.green('LOG'), this._date(), colors[this.color](this.name),
             this._format(args)
         ].join(' ');
-        process.stdout.write(message + '\n');
+        this._write('log', message);
     }
     warn(...args) {
         const message = [colors.yellow('WRN'), this._date(), colors[this.color](this.name),
             this._format(args)
         ].join(' ');
-        process.stdout.write(message + '\n');
+        this._write('warn', message);
     }
     alert(...args) {
-        const message = [colors.yellow('WRN').bold, this._date(), colors[this.color](this.name),
+        const message = [colors.bold(colors.yellow('WRN')), this._date(), colors[this.color](this.name),
             this._format(args)
         ].join(' ');
-        process.stdout.write(message + '\n');
+        this._write('alert', message);
     }
     error(...args) {
         const e = args[0];
@@ -54,12 +55,17 @@ class Logger {
         const message = [colors.red('ERR'), this._date(), colors[this.color](this.name),
             error
         ].join(' ');
-        process.stdout.write(message + '\n');
+        this._write('error', message);
     }
     todo(...args) {
-        const message = [colors.bgRed('TODO').white.bold, this._date(), colors[this.color](this.name),
+        const message = [colors.bold(colors.white(colors.bgRed('TODO'))), this._date(), colors[this.color](this.name),
             this._format(args)
         ].join(' ');
+        this._write('todo', message);
+    }
+    _write(type, message) {
+        if (this.stipColors)
+            message = colors.reset(message);
         process.stdout.write(message + '\n');
     }
     _format(args) {
@@ -77,7 +83,7 @@ class Logger {
     }
     _sprintf(pattern, args) {
         return pattern
-            .replace(/%(blue|red|green|yellow|cyan|magenta|grey|s|j)/g, (_, fmt) => {
+            .replace(/%(blue|red|green|yellow|cyan|magenta|grey|bold|s|j|J)/g, (_, fmt) => {
             switch (fmt) {
                 case 's':
                     {
@@ -88,13 +94,15 @@ class Logger {
                     }
                     break;
                 case 'j':
+                case 'J':
                     {
                         const arg = args.shift();
-                        return JSON.stringify(arg, function (key, value) {
+                        const str = JSON.stringify(arg, function (key, value) {
                             if (this[key] instanceof Buffer)
                                 return '<Buffer>';
                             return value;
                         });
+                        return fmt == 'j' ? colors.grey(str) : str;
                     }
                     break;
                 default:

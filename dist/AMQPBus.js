@@ -31,7 +31,7 @@ class AMQPBus {
             const channel = yield connection.createConfirmChannel();
             yield channel.assertQueue(queue, options);
             return channel;
-        }), { name: 'AMQP.Channel' }));
+        }), { name: 'AMQP.Channel.' + queue }));
         return this.channels.get(queue);
     }
     consume(queue, handler, options) {
@@ -70,7 +70,7 @@ class AMQPBus {
                 channel.cancel(subscription.consumerTag);
             });
             return subscription;
-        }), { name: 'AMQP.Consumer' }).open();
+        }), { name: 'AMQP.Consumer.' + queue }).open();
     }
     publish(queue, message, options) {
         if (options == null)

@@ -3,23 +3,25 @@ const colors = require('colors/safe');
 
 export default class Logger {
 
-  private name:  string;
-  private color: string;
+  private name:       string;
+  private color:      string;
+  private stipColors: boolean;
 
   constructor(name: any, color: string);
   constructor(name: string, color: string) {
-    this.name = name;
-    this.color = color || 'reset';
+    this.name       = name;
+    this.color      = color || 'reset';
+    this.stipColors = !(process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY);
   }
 
   debugger(...args: Array<any>) {
     const message = colors.bgBlue(
-      ['DBG'.bold, this._date(), colors[this.color](this.name)
+      [ colors.bold('DBG'), this._date(), colors[this.color](this.name)
       , this._format(args)
       , '>>>>>>>>>>>>>>>>>> DEBUG ME <<<<<<<<<<<<<<<<<<<'
       ].join(' ')
     );
-    process.stdout.write(message + '\n');
+    this._write('debugger', message);
     debugger;
   }
 
@@ -28,7 +30,7 @@ export default class Logger {
       [ colors.blue('DBG'), this._date(), colors[this.color](this.name)
       , this._format(args)
       ].join(' ');
-    process.stdout.write(message + '\n');
+    this._write('debug', message);
   }
 
   stats(...args: Array<any>) {
@@ -36,7 +38,7 @@ export default class Logger {
       [ colors.magenta('STA'), this._date(), colors[this.color](this.name)
       , this._format(args)
       ].join(' ');
-    process.stdout.write(message + '\n');
+    this._write('stats', message);
   }
 
   log(...args: Array<any>) {
@@ -44,7 +46,7 @@ export default class Logger {
       [ colors.green('LOG'), this._date(), colors[this.color](this.name)
       , this._format(args)
       ].join(' ');
-    process.stdout.write(message + '\n');
+    this._write('log', message);
   }
 
   warn(...args: Array<any>) {
@@ -52,15 +54,15 @@ export default class Logger {
       [ colors.yellow('WRN'), this._date(), colors[this.color](this.name)
       , this._format(args)
       ].join(' ');
-    process.stdout.write(message + '\n');
+    this._write('warn', message);
   }
 
   alert(...args: Array<any>) {
     const message =
-      [ colors.yellow('WRN').bold, this._date(), colors[this.color](this.name)
+      [ colors.bold(colors.yellow('WRN')), this._date(), colors[this.color](this.name)
       , this._format(args)
       ].join(' ');
-    process.stdout.write(message + '\n');
+    this._write('alert', message);
   }
 
   error(...args: Array<any>) {
@@ -73,14 +75,21 @@ export default class Logger {
       [ colors.red('ERR'), this._date(), colors[this.color](this.name)
       , error
       ].join(' ');
-    process.stdout.write(message + '\n');
+    this._write('error', message);
   }
 
   todo(...args: Array<any>) {
     const message =
-      [ colors.bgRed('TODO').white.bold, this._date(), colors[this.color](this.name)
+      [ colors.bold(colors.white(colors.bgRed('TODO'))), this._date(), colors[this.color](this.name)
       , this._format(args)
       ].join(' ');
+    this._write('todo', message);
+  }
+
+  // ------
+
+  _write(type: string, message: string) {
+    if (this.stipColors) message = colors.reset(message);
     process.stdout.write(message + '\n');
   }
 
@@ -98,19 +107,20 @@ export default class Logger {
 
   _sprintf(pattern: string, args: Array<any>) {
     return pattern
-      .replace(/%(blue|red|green|yellow|cyan|magenta|grey|s|j)/g, (_, fmt) => {
+      .replace(/%(blue|red|green|yellow|cyan|magenta|grey|bold|s|j|J)/g, (_, fmt) => {
         switch (fmt) {
         case 's': {
           const arg = args.shift();
           if (typeof arg == 'string') return arg;
           return inspect(arg);
         } break ;
-        case 'j': {
+        case 'j': case 'J': {
           const arg = args.shift();
-          return JSON.stringify(arg, function (key: string, value: any) {
+          const str = JSON.stringify(arg, function (key: string, value: any) {
             if (this[key] instanceof Buffer) return '<Buffer>';
             return value;
           });
+          return fmt == 'j' ? colors.grey(str) : str;
         } break ;
         default: {
           return colors[fmt](args.shift());

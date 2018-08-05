@@ -2,49 +2,46 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const util_1 = require("util");
 const colors = require('colors/safe');
+const globalOptions = new Map();
 class Logger {
-    constructor(name, color) {
+    static setOption(key, data) {
+        globalOptions.set(key, data);
+    }
+    constructor(name, color = 'reset') {
         this.name = name;
-        this.color = color || 'reset';
-        this.stipColors = !(process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY);
+        this.color = color;
+        this.withColor = globalOptions.has('withColor') ? globalOptions.get('withColor')
+            : process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY;
     }
     debugger(...args) {
-        const message = colors.bgBlue([colors.bold('DBG'), this._date(), colors[this.color](this.name),
-            this._format(args),
-            '>>>>>>>>>>>>>>>>>> DEBUG ME <<<<<<<<<<<<<<<<<<<'
-        ].join(' '));
-        this._write('debugger', message);
+        const message = colors.bgBlue(this._headers('DEBUGGER', 'bold') + ' ' + this._format(args));
+        this._write('debug', message);
         debugger;
     }
+    todo(...args) {
+        const message = this._headers('TODO', 'bold', 'white') + ' ' + this._format(args);
+        this._write('debug', message);
+    }
     debug(...args) {
-        const message = [colors.blue('DBG'), this._date(), colors[this.color](this.name),
-            this._format(args)
-        ].join(' ');
+        const message = this._headers('DBG', 'blue') + ' ' + this._format(args);
         this._write('debug', message);
     }
     stats(...args) {
-        const message = [colors.magenta('STA'), this._date(), colors[this.color](this.name),
-            this._format(args)
-        ].join(' ');
+        const message = this._headers('STA', 'magenta') + ' ' + this._format(args);
         this._write('stats', message);
     }
     log(...args) {
-        const message = [colors.green('LOG'), this._date(), colors[this.color](this.name),
-            this._format(args)
-        ].join(' ');
+        const message = this._headers('LOG', 'green') + ' ' + this._format(args);
         this._write('log', message);
     }
     warn(...args) {
-        const message = [colors.yellow('WRN'), this._date(), colors[this.color](this.name),
-            this._format(args)
-        ].join(' ');
-        this._write('warn', message);
+        const message = this._headers('WRN', 'yellow') + ' ' + this._format(args);
+        this._write('warning', message);
     }
     alert(...args) {
-        const message = [colors.bold(colors.yellow('WRN')), this._date(), colors[this.color](this.name),
-            this._format(args)
-        ].join(' ');
+        const message = this._headers('WRN', 'bold', 'yellow') + ' ' + this._format(args);
         this._write('alert', message);
+        this._alert(message);
     }
     error(...args) {
         const e = args[0];
@@ -52,21 +49,55 @@ class Logger {
             : (args.length == 1 && typeof e == 'string') ? e
                 : (args.length == 1 && e && e.message) ? e.message
                     : this._format(args);
-        const message = [colors.red('ERR'), this._date(), colors[this.color](this.name),
-            error
-        ].join(' ');
+        const message = this._headers('ERR', 'red') + ' ' + error;
         this._write('error', message);
     }
-    todo(...args) {
-        const message = [colors.bold(colors.white(colors.bgRed('TODO'))), this._date(), colors[this.color](this.name),
-            this._format(args)
-        ].join(' ');
-        this._write('todo', message);
-    }
     _write(type, message) {
-        if (this.stipColors)
-            message = colors.reset(message);
-        process.stdout.write(message + '\n');
+        switch (type) {
+            default: return process.stdout.write(message + '\n');
+            case 'warning':
+            case 'alert':
+            case 'error': return process.stderr.write(message + '\n');
+        }
+    }
+    _alert(message) {
+        const stack = new Error().stack;
+        const origin = stack.split('\n')[3];
+        const now = Date.now();
+        const frequency = ((globalOptions.get('alertFrequency') | 0) || 60) * 1000;
+        if (this.alerts[origin] == null)
+            this.alerts[origin] = { last: now, times: 0 };
+        const info = this.alerts[origin];
+        if (info.last + frequency < now) {
+            info.last = now, info.times = 0;
+        }
+    }
+    _headers(tagName, ...modifiers) {
+        const name = this.withColor ? colors[String(this.color)](String(this.name)) : String(this.name);
+        return this._tag(tagName, modifiers) + ' ' + this._date() + ' ' + name;
+    }
+    _tag(name, modifiers) {
+        if (this.withColor) {
+            for (let i = 0; i < modifiers.length; i += 1)
+                name = colors[modifiers[i]](name);
+            return name;
+        }
+        else {
+            return name;
+        }
+    }
+    _date() {
+        const date = new Date();
+        const Y = date.getFullYear();
+        const M = this._datePad(date.getMonth() + 1);
+        const D = this._datePad(date.getDate());
+        const h = this._datePad(date.getHours());
+        const m = this._datePad(date.getMinutes());
+        const s = this._datePad(date.getSeconds());
+        return [Y, '-', M, '-', D, ' ', h, ':', m, ':', s].join('');
+    }
+    _datePad(number) {
+        return number < 10 ? '0' + number : '' + number;
     }
     _format(args) {
         if (typeof args[0] == 'string') {
@@ -117,19 +148,6 @@ class Logger {
                 return '';
             return ' ' + args.map(item => util_1.inspect(item)).join(', ');
         });
-    }
-    _date() {
-        const date = new Date();
-        const Y = date.getFullYear();
-        const M = this._datePad(date.getMonth() + 1);
-        const D = this._datePad(date.getDate());
-        const h = this._datePad(date.getHours());
-        const m = this._datePad(date.getMinutes());
-        const s = this._datePad(date.getSeconds());
-        return [Y, '-', M, '-', D, ' ', h, ':', m, ':', s].join('');
-    }
-    _datePad(number) {
-        return number < 10 ? '0' + number : '' + number;
     }
 }
 exports.default = Logger;

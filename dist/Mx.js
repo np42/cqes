@@ -2,6 +2,15 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 var Mx;
 (function (Mx) {
+    function typeOf(data) {
+        const type = typeName(data);
+        if (type != 'Object')
+            return { type, data };
+        if ('$mx' in data)
+            return { type: data.$mx, data: data.pattern };
+        return { type, data };
+    }
+    Mx.typeOf = typeOf;
     function typeName(data) {
         const type = Object.prototype.toString.call(data);
         return type.substring(8, type.length - 1);
@@ -32,28 +41,29 @@ var Mx;
                         return true;
                 return false;
             case 'Equiv':
-                switch (typeName(pattern.pattern)) {
+                const { type, data } = typeOf(pattern);
+                switch (type) {
                     case 'String':
                     case 'Number':
                     case 'Boolean':
-                        return payload == pattern;
+                        return payload == data;
                     case 'Array':
                     case 'Arguments':
                         if (typeName(payload) != 'Array')
                             return false;
-                        if (pattern.pattern.length > payload.length)
+                        if (data.length > payload.length)
                             return false;
-                        for (let i = 0; i < pattern.pattern.length; i += 1)
-                            if (!match(pattern.pattern[i], payload[i]))
+                        for (let i = 0; i < data.length; i += 1)
+                            if (!match(data[i], payload[i]))
                                 return false;
                         return true;
                     case 'Object':
                         if (typeName(payload) != 'Object')
                             return false;
-                        for (const key in pattern) {
+                        for (const key in data) {
                             if (!(key in payload))
                                 return false;
-                            if (!match(pattern[key], payload[key]))
+                            if (!match(data[key], payload[key]))
                                 return false;
                         }
                         return true;

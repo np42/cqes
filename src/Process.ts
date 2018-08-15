@@ -1,24 +1,18 @@
 import { hostname } from 'os';
 import { readFile } from 'fs';
 import { join }     from 'path';
-import * as express from 'express';
-import * as http    from 'http';
 import * as url     from 'url';
 
 const yaml          = require('js-yaml');
 const extendify     = require('extendify');
 const CLArgs        = require('command-line-args');
 
-import { Service, IService } from 'bhiv/Service';
-import { Repository } from 'bhiv/Repository';
+import { Service, IService } from './Service';
 
 enum ActionTypes
 { LoadMainConfig
-, StartHttpServer
 , SetConfig
 , RegisterService
-, RegisterRepository
-, RegisterProcessManager
 };
 
 interface Task { type: ActionTypes, payload: any };
@@ -32,11 +26,8 @@ export default new class Process extends Service {
 
   private argv:         any;
   private loading:      Array<Task>;
-  private app:          express.Express;
-  private http:         http.Server;
   private services:     Map<string, Service>;
   private managers:     Map<string, Service>;
-  private repositories: Map<string, Repository>;
 
   public  rootpath:     string;
   public  environment:  string;
@@ -50,14 +41,12 @@ export default new class Process extends Service {
     this.rootpath     = this.argv.rootpath || join(__dirname, '../../..');
     this.loading      = [];
     this.services     = new Map();
-    this.repositories = new Map();
     this.managers     = new Map();
     this.loadConstant();
     process.on('uncaughtException', error => this.logger.error('exception', error.stack || error));
     process.on('unhandledRejection', error => this.logger.error('reject', error.stack || error));
     //--
     this.loading.push({ type: ActionTypes.LoadMainConfig, payload: this.rootpath });
-    this.loading.push({ type: ActionTypes.StartHttpServer, payload: this.name });
   }
 
   private loadConstant() {
@@ -72,49 +61,12 @@ export default new class Process extends Service {
     this.environment = environ;
   }
 
-  private startHttpServer(name: string) {
-    const config = (this.config.Process || {})[name] || {};
-
-    this.app = express();
-    this.app.use((req, res, next) => {
-      if (req.headers['origin'] != null)
-        res.header("Access-Control-Allow-Origin", <string>req.headers['origin']);
-      if (req.headers['access-control-request-method'] != null)
-        res.header('Access-Control-Allow-Methods', <string>req.headers['access-control-request-method']);
-      if (req.headers['access-control-request-headers'] != null)
-        res.header("Access-Control-Allow-Headers", <string>req.headers['access-control-request-headers']);
-      if (req.method == 'OPTIONS') return res.send(204);
-      else return next();
-    });
-
-    if (config.Http != null) {
-      this.http = http.createServer(this.app);
-      this.http.listen(config.Http.port, config.Http.ip || '127.0.0.1');
-    }
-  }
-
   public setConfig(config: any) {
     this.loading.push({ type: ActionTypes.SetConfig, payload: config });
   }
 
   public registerService(Module: IService) {
     this.loading.push({ type: ActionTypes.RegisterService, payload: Module });
-  }
-
-  public registerRepository(Module: IService) {
-    this.loading.push({ type: ActionTypes.RegisterRepository, payload: Module });
-  }
-
-  public registerProcessManager(Module: IService) {
-    this.loading.push({ type: ActionTypes.RegisterProcessManager, payload: Module });
-  }
-
-  public getRepository(name: string) {
-    return this.repositories.get(name);
-  }
-
-  public getProcessManager(name: string) {
-    return this.managers.get(name);
   }
 
   public async run() {
@@ -126,11 +78,8 @@ export default new class Process extends Service {
     const task = this.loading.shift();
     switch (task.type) {
     case ActionTypes.LoadMainConfig:         return this.loadMainConfig(task.payload);
-    case ActionTypes.StartHttpServer:        return this.startHttpServer(task.payload);
     case ActionTypes.SetConfig:              return this.loadCustomConfig(task.payload);
     case ActionTypes.RegisterService:        return this.loadService(task.payload);
-    case ActionTypes.RegisterRepository:     return this.loadRepository(task.payload);
-    case ActionTypes.RegisterProcessManager: return this.loadProcessManager(task.payload);
     }
   }
 
@@ -212,18 +161,6 @@ export default new class Process extends Service {
     const config = await this.getModuleConfig(Module.name, 'Service');
     const instance = new Module(config);
     this.services.set(Module.name, instance);
-  }
-
-  private async loadRepository(Module: Repository) {
-    const config = await this.getModuleConfig(Module.name, 'Repository');
-    const instance = new Module(config);
-    this.repositories.set(Module.name, instance);
-  }
-
-  private async loadProcessManager(Module: Repository) {
-    const config = await this.getModuleConfig(Module.name, 'ProcessManager');
-    const instance = new Module(config);
-    this.managers.set(Module.name, instance);
   }
 
 };

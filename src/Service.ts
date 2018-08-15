@@ -1,11 +1,11 @@
-import Logger                                 from 'bhiv/Bus/Logger';
-import { Fx }                                 from 'bhiv/Bus/Fx';
-import { CQESBus }                            from 'bhiv/Bus/CQESBus';
-import { FxSubscription }                     from 'bhiv/Bus/CommandBus';
-import { InCommand, OutCommand, CommandData } from 'bhiv/Bus/Command';
-import { InEvent, OutEvent, EventData }       from 'bhiv/Bus/Event';
-import { InQuery, OutQuery }                  from 'bhiv/Bus/Query';
-import { State, StateData }                   from 'bhiv/Bus/State';
+import Logger                                 from './Logger';
+import { Fx }                                 from './Fx';
+import { CQESBus }                            from './CQESBus';
+import { FxSubscription }                     from './CommandBus';
+import { InCommand, OutCommand, CommandData } from './Command';
+import { InEvent, OutEvent, EventData }       from './Event';
+import { InQuery, OutQuery }                  from './Query';
+import { State, StateData }                   from './State';
 
 // Remove this interface
 export interface IService {

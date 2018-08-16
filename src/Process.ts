@@ -37,14 +37,14 @@ export default new class Process extends Service {
   constructor() {
     super({});
     this.name         = Process.nameOf(process.env.pm_exec_path || process.argv[1]);
-    this.argv         = CLArgs({ name: 'rootpath', defaultOption: true }, { partial: true });
-    this.rootpath     = this.argv.rootpath || join(__dirname, '../../..');
+    this.argv         = CLArgs({ name: 'rootpath' }, { partial: true });
+    this.rootpath     = this.argv.rootpath || process.cwd();
     this.loading      = [];
     this.services     = new Map();
     this.managers     = new Map();
     this.loadConstant();
-    process.on('uncaughtException', error => this.logger.error('exception', error.stack || error));
-    process.on('unhandledRejection', error => this.logger.error('reject', error.stack || error));
+    process.on('uncaughtException', (error: any) => this.logger.error('exception', error.stack || error));
+    process.on('unhandledRejection', (error: any) => this.logger.error('reject', error.stack || error));
     //--
     this.loading.push({ type: ActionTypes.LoadMainConfig, payload: this.rootpath });
   }

@@ -9,7 +9,7 @@
   , "allowUnreachableCode": true
   , "suppressImplicitAnyIndexErrors": true
   , "declaration": true
-  , "noUnusedLocals": true
+  //, "noUnusedLocals": true
   , "strictFunctionTypes": false
   , "allowSyntheticDefaultImports": true
   , "outDir": "dist"

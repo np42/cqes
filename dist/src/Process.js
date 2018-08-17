@@ -11,10 +11,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const os_1 = require("os");
 const fs_1 = require("fs");
 const path_1 = require("path");
+const Service_1 = require("./Service");
 const yaml = require('js-yaml');
 const extendify = require('extendify');
 const CLArgs = require('command-line-args');
-const Service_1 = require("./Service");
 var ActionTypes;
 (function (ActionTypes) {
     ActionTypes[ActionTypes["LoadMainConfig"] = 0] = "LoadMainConfig";
@@ -23,7 +23,7 @@ var ActionTypes;
 })(ActionTypes || (ActionTypes = {}));
 ;
 ;
-exports.default = new class Process extends Service_1.Service {
+class Process extends Service_1.Service {
     static nameOf(path) {
         try {
             return path.split('/').pop().replace(/^(.+?)\.[a-z]+$/, '$1');
@@ -158,5 +158,7 @@ exports.default = new class Process extends Service_1.Service {
             this.services.set(Module.name, instance);
         });
     }
-};
+}
+exports.default = Process;
+;
 //# sourceMappingURL=Process.js.map

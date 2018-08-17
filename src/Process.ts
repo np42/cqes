@@ -2,11 +2,11 @@ import { hostname } from 'os';
 import { readFile } from 'fs';
 import { join }     from 'path';
 
-const yaml          = require('js-yaml');
-const extendify     = require('extendify');
-const CLArgs        = require('command-line-args');
-
 import { Service, IService } from './Service';
+
+const yaml       = require('js-yaml');
+const extendify  = require('extendify');
+const CLArgs     = require('command-line-args');
 
 enum ActionTypes
 { LoadMainConfig
@@ -16,7 +16,7 @@ enum ActionTypes
 
 interface Task { type: ActionTypes, payload: any };
 
-export default new class Process extends Service {
+export default class Process extends Service {
 
   public static nameOf(path: string) {
     try { return path.split('/').pop().replace(/^(.+?)\.[a-z]+$/, '$1'); }

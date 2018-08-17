@@ -1,3 +1,4 @@
+import _Logger from './src/Logger'
 import * as P from './src/Process'
 import * as S from './src/Service'
 import * as C from './src/Command'
@@ -10,6 +11,7 @@ import * as L from './src/Lx'
 
 export const Process     = P.default
 export const Service     = S.Service
+export const Logger      = _Logger
 
 export const InCommand   = C.InCommand
 export const OutCommand  = C.OutCommand

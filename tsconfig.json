@@ -8,10 +8,13 @@
   , "preserveConstEnums": true
   , "allowUnreachableCode": true
   , "suppressImplicitAnyIndexErrors": true
+  , "declaration": true
+  , "noUnusedLocals": true
+  , "strictFunctionTypes": false
+  , "allowSyntheticDefaultImports": true
   , "outDir": "dist"
-  , "rootDirs": [ "src", "dist" ]
   , "sourceMap": true
   }
-, "include": [ "index.ts", "src/**/*" ]
+, "include": [ "index.ts" ]
 , "exclude": [ "node_modules", "**/*.spec.ts" ]
 }

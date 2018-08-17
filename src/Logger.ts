@@ -1,4 +1,4 @@
-import { inspect, format } from 'util';
+import { inspect } from 'util';
 const colors = require('colors/safe');
 
 type optionName = 'withColor' | 'alertFrequency';

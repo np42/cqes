@@ -1,4 +1,4 @@
-import { Fx, Node, Action }      from './Fx';
+import { Fx }                    from './Fx';
 
 import { EventBus, Handler }     from './EventBus';
 import { InEvent, OutEvent }     from './Event';
@@ -15,14 +15,11 @@ import * as URL                  from 'url';
 import * as uuid                 from 'uuid';
 
 type ESConnection   = ES.EventStoreNodeConnection;
-type ESSubscription = ES.EventStoreSubscription;
 
-type SubscriptionNode = Node<ESConnection, ESSubscription>;
 type EventHandler     = (event: InEvent<any>) => Promise<void>;
 type CommandHandler   = (command: InCommand<any>) => Promise<void>;
 
 type FxConnection     = Fx<any, ESConnection>;
-type FxSubscription   = Fx<SubscriptionNode, ESSubscription>;
 type FxEventHandler   = Fx<any, EventHandler>;
 type FxCommandHandler = Fx<any, CommandHandler>;
 
@@ -50,7 +47,7 @@ export class ESBus implements EventBus, StateBus {
   }
 
   //-- Event
-  publish(stream: string, position: number, events: Array<OutEvent<any>>) {
+  public publish(stream: string, position: number, events: Array<OutEvent<any>>) {
     const meta = {};
     const esEvents = events.map(event => {
       for (const key in event.meta)
@@ -75,7 +72,7 @@ export class ESBus implements EventBus, StateBus {
     });
   }
 
-  subscribe(stream: string, from: number, handler: Handler<InEvent<any>>) {
+  public subscribe(stream: string, from: number, handler: Handler<InEvent<any>>) {
     const state = { from };
     const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.connection.pipe(async (connection, fx) => {
@@ -113,7 +110,7 @@ export class ESBus implements EventBus, StateBus {
     }, { name: 'ES.Subscriber.' + stream }).open();
   }
 
-  consume(topic: string, handler: Handler<InCommand<any>>) {
+  public consume(topic: string, handler: Handler<InCommand<any>>) {
     const group  = topic.substr(0, topic.indexOf(':'));
     const stream = topic.substr(group.length + 1);
     const fxHandler = <FxCommandHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
@@ -138,7 +135,9 @@ export class ESBus implements EventBus, StateBus {
   }
 
   //-- State
-  restore<D extends StateData>(StateDataClass: new (_: any) => D, process?: string): Promise<State<D>> {
+  public restore<D extends StateData>(
+    StateDataClass: new (_: any) => D, process?: string
+  ): Promise<State<D>> {
     if (process == null) process = StateDataClass.name;
     return new Promise(resolve => {
       return this.last(process, 1, event => new ESInState(StateDataClass, event)).then(result => {
@@ -148,14 +147,14 @@ export class ESBus implements EventBus, StateBus {
     });
   }
 
-  save<D extends StateData>(state: State<D>) {
+  public save<D extends StateData>(state: State<D>) {
     const process = state.process;
     const event = new ESOutState(state);
     return this.publish(process, -2, [event]);
   }
 
   //-- helpers
-  last(stream: string, count: number, wrapper?: (event: any) => any): Promise<any> {
+  public last(stream: string, count: number, wrapper?: (event: any) => any): Promise<any> {
     return this.connection.do(async connection => {
       if (wrapper == null) wrapper = event => new ESInEvent(event);
       return (await connection.readStreamEventsBackward(stream, -1, count, true, this.credentials))
@@ -163,7 +162,7 @@ export class ESBus implements EventBus, StateBus {
     });
   }
 
-  tweak(stream: string, version: number, metadata: Object) {
+  public tweak(stream: string, version: number, metadata: Object) {
     return this.connection.try((connection, fx) => {
       return new Promise((resolve, reject) => {
         connection.setStreamMetadataRaw(stream, version, metadata, this.credentials)

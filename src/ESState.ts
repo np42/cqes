@@ -33,9 +33,3 @@ class Snapshoted extends EventData {
     this.data      = data.data;
   }
 }
-
-interface ESOutStateData {
-  position: any;
-  timestamp: number;
-  data: StateData;
-}

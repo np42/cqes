@@ -27,7 +27,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     this.gcInterval = null;
   }
 
-  gc() {
+  private gc() {
     // FIXME write a better algo
     const expired = [];
     const now = Date.now();
@@ -41,7 +41,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     }
   }
 
-  listenReply() {
+  private listenReply() {
     this.gcInterval = setInterval(() => this.gc(), 1000);
     this.queue = this.consume(this.id, async reply => {
       const session = this.pending.get(reply.id);
@@ -53,7 +53,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   //--
 
-  serve(view: string, handler: Handler<InQuery<any>>) {
+  public serve(view: string, handler: Handler<InQuery<any>>) {
     const options =
       { Message: AMQPInQuery
       , channel: { prefetech: 10 }
@@ -67,7 +67,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     return this.consume(view, handler, options);
   }
 
-  query(request: OutQuery<any>, timeout = 30) {
+  public query(request: OutQuery<any>, timeout = 30) {
     if (this.queue == null) this.listenReply();
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
     const promise = new Promise((resolve, reject) => {

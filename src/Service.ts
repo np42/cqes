@@ -1,9 +1,8 @@
 import Logger                                 from './Logger';
 import { Fx }                                 from './Fx';
 import { CQESBus }                            from './CQESBus';
-import { FxSubscription }                     from './CommandBus';
 import { InCommand, OutCommand, CommandData } from './Command';
-import { InEvent, OutEvent, EventData }       from './Event';
+import { OutEvent }                           from './Event';
 import { InQuery, OutQuery }                  from './Query';
 import { State, StateData }                   from './State';
 
@@ -43,7 +42,7 @@ export class Service {
     this.color      = 'yellow';
     this._color     = { toString: () => this.color };
     this.logger     = new Logger(this._name, <any>this._color);
-    this.bus        = config.Bus ? new CQESBus(config.Bus, this._name) : null;
+    this.bus        = config.Bus ? new CQESBus(config.Bus) : null;
     this.stream     = null;
   }
 
@@ -144,7 +143,6 @@ export class Service {
       if (restoredState != null) return restoredState;
       return new State(StateDataClass, -1);
     }, { name: fxName('Snapshot'), nocache: true }).merge((state: State<D>) => {
-      const session = { stream, state };
       this.logger.log('Start rehydrating %s from %s', stream, state.position);
       return new Promise(resolve => {
         const fx = this.bus.E.subscribe(stream, state.position, async event => {

@@ -8,12 +8,12 @@ export class AMQPCommandBus extends AMQPBus implements CommandBus {
     super(url)
   }
 
-  listen(topic: string, handler: Handler<InCommand<any>>) {
+  public listen(topic: string, handler: Handler<InCommand<any>>) {
     const options = { channel: { prefetch: 10 } };
     return this.consume(topic, handler, options);
   }
 
-  command(request: OutCommand<any>) {
+  public command(request: OutCommand<any>) {
     const options = { persistent: true };
     return this.publish(request.topic, request.serialize(), options);
   }

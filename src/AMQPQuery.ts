@@ -1,6 +1,6 @@
-import { CommandReplier }                        from './Command';
-import { InQuery, ReplyType, InReply, OutReply } from './Query';
-import { Message }                               from 'amqplib';
+import { CommandReplier }              from './Command';
+import { InQuery, ReplyType, InReply } from './Query';
+import { Message }                     from 'amqplib';
 
 export class AMQPInQuery<D> extends InQuery<D> {
   constructor(message: Message, reply: CommandReplier) {

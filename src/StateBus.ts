@@ -1,4 +1,3 @@
-import { Fx }               from './Fx';
 import { State, StateData } from './State';
 
 export interface StateBus {

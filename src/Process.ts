@@ -1,7 +1,6 @@
 import { hostname } from 'os';
 import { readFile } from 'fs';
 import { join }     from 'path';
-import * as url     from 'url';
 
 const yaml          = require('js-yaml');
 const extendify     = require('extendify');
@@ -27,7 +26,6 @@ export default new class Process extends Service {
   private argv:         any;
   private loading:      Array<Task>;
   private services:     Map<string, Service>;
-  private managers:     Map<string, Service>;
 
   public  rootpath:     string;
   public  environment:  string;
@@ -41,7 +39,6 @@ export default new class Process extends Service {
     this.rootpath     = this.argv.rootpath || process.cwd();
     this.loading      = [];
     this.services     = new Map();
-    this.managers     = new Map();
     this.loadConstant();
     process.on('uncaughtException', (error: any) => this.logger.error('exception', error.stack || error));
     process.on('unhandledRejection', (error: any) => this.logger.error('reject', error.stack || error));
@@ -132,17 +129,10 @@ export default new class Process extends Service {
     const userConfig   = this.config[name] || {};
     const config       = this.resolve(extend(moduleConfig, userConfig, this.config.$all || {}));
     while ((function resolve(base, node) {
-      let altered = false;
       while ('_' in node) {
         const layer = base[node._] || {};
         delete node._;
-        altered = true;
         Object.assign(node, layer);
-      }
-      for (const key in node) {
-        if (node[key] instanceof Object)
-          if (resolve(base, node[key]))
-            altered = true;
       }
     })(this.config, config));
     return config;

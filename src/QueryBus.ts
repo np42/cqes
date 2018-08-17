@@ -1,4 +1,3 @@
-import { Fx }                                        from './Fx';
 import { Handler as CommandHandler, FxSubscription } from './CommandBus';
 import { InQuery, OutQuery }                         from './Query';
 

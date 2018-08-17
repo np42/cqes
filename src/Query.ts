@@ -1,5 +1,3 @@
-import { CommandReplier } from './Command';
-
 class Query<D> {
   public view:      string;
   public createdAt: Date;

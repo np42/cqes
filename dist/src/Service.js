@@ -21,7 +21,7 @@ class Service {
         this.color = 'yellow';
         this._color = { toString: () => this.color };
         this.logger = new Logger_1.default(this._name, this._color);
-        this.bus = config.Bus ? new CQESBus_1.CQESBus(config.Bus, this._name) : null;
+        this.bus = config.Bus ? new CQESBus_1.CQESBus(config.Bus) : null;
         this.stream = null;
     }
     dispatch(state, command) {
@@ -127,7 +127,6 @@ class Service {
                 return restoredState;
             return new State_1.State(StateDataClass, -1);
         }), { name: fxName('Snapshot'), nocache: true }).merge((state) => {
-            const session = { stream, state };
             this.logger.log('Start rehydrating %s from %s', stream, state.position);
             return new Promise(resolve => {
                 const fx = this.bus.E.subscribe(stream, state.position, (event) => __awaiter(this, void 0, void 0, function* () {

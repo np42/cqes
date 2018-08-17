@@ -39,7 +39,6 @@ exports.default = new class Process extends Service_1.Service {
         this.rootpath = this.argv.rootpath || process.cwd();
         this.loading = [];
         this.services = new Map();
-        this.managers = new Map();
         this.loadConstant();
         process.on('uncaughtException', (error) => this.logger.error('exception', error.stack || error));
         process.on('unhandledRejection', (error) => this.logger.error('reject', error.stack || error));
@@ -134,17 +133,10 @@ exports.default = new class Process extends Service_1.Service {
             const userConfig = this.config[name] || {};
             const config = this.resolve(extend(moduleConfig, userConfig, this.config.$all || {}));
             while ((function resolve(base, node) {
-                let altered = false;
                 while ('_' in node) {
                     const layer = base[node._] || {};
                     delete node._;
-                    altered = true;
                     Object.assign(node, layer);
-                }
-                for (const key in node) {
-                    if (node[key] instanceof Object)
-                        if (resolve(base, node[key]))
-                            altered = true;
                 }
             })(this.config, config))
                 ;

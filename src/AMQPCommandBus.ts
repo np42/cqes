@@ -1,6 +1,8 @@
-import { CommandBus, Handler }   from './CommandBus';
-import { InCommand, OutCommand } from './Command';
-import { AMQPBus }               from './AMQPBus';
+import { CommandBus, Handler }   from './CommandBus'
+import { InCommand, OutCommand } from './Command'
+import { AMQPBus }               from './AMQPBus'
+
+const PREFIX = 'Command-'
 
 export class AMQPCommandBus extends AMQPBus implements CommandBus {
 
@@ -9,13 +11,13 @@ export class AMQPCommandBus extends AMQPBus implements CommandBus {
   }
 
   public listen(topic: string, handler: Handler<InCommand<any>>) {
-    const options = { channel: { prefetch: 10 } };
-    return this.consume(topic, handler, options);
+    const options = { channel: { prefetch: 10 } }
+    return this.consume(PREFIX + topic, handler, options)
   }
 
   public command(request: OutCommand<any>) {
-    const options = { persistent: true };
-    return this.publish(request.topic, request.serialize(), options);
+    const options = { persistent: true }
+    return this.publish(PREFIX + request.topic, request.serialize(), options)
   }
 
 }

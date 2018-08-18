@@ -4,6 +4,7 @@
   "description": "CQRS / Event Sourcing Framework",
   "main": "dist/index.js",
   "scripts": {
+    "postinstall": "tsc"
     "watch": "nodemon -e ts -x 'tsc || echo'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -1,5 +1,15 @@
 export namespace Mx {
 
+  export type Rule = (payload: any, options?: any) => boolean;
+
+  export const rules = <Map<string, Rule>>new Map();
+
+  rules.set('not-empty-string', payload => {
+    if (typeof payload != 'string') return false;
+    if (payload == '') return false;
+    return true;
+  });
+
   export function typeOf(data: any) {
     const type = typeName(data);
     if (type != 'Object') return { type, data };
@@ -25,12 +35,22 @@ export namespace Mx {
     return 'Equiv';
   }
 
+  export function checkRule(rule: Rule | string, options: any, payload: any) {
+    if (typeof rule == 'string') rule = rules.get(rule);
+    if (rule == null) return false;
+    return '';
+  }
+
   export function match(pattern: any, payload: any) {
     switch (actionName(pattern)) {
     case 'IsNull':
       return payload == null;
     case 'Test':
       return pattern.test(payload);
+    case 'Rule':
+      const rule = rules.get(pattern.rule);
+      if (rule == null) return false;
+      return rule(payload, pattern.options);
     case 'OneOf':
       for (let i = 0; i < pattern.length; i += 1)
         if (match(pattern[i], payload))

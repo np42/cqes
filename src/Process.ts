@@ -8,29 +8,12 @@ const yaml       = require('js-yaml');
 const extendify  = require('extendify');
 const CLArgs     = require('command-line-args');
 
-enum ActionTypes
-{ LoadMainConfig
-, SetConfig
-, RegisterService
-};
-
-type Service = any;
-
-interface Task { type: ActionTypes, payload: any };
-
 export class Process {
 
-  public static nameOf(path: string) {
-    try { return path.split('/').pop().replace(/^(.+?)\.[a-z]+$/, '$1'); }
-    catch (e) { return 'BhivProcess'; }
-  }
-
-  public  name:         string;
   private config:       any;
   private argv:         any;
   private logger:       Logger;
-  private loading:      Array<Task>;
-  private services:     Map<string, Service>;
+  private services:     Map<string, any>;
 
   public  rootpath:     string;
   public  environment:  string;
@@ -38,17 +21,17 @@ export class Process {
   public  launcher:     string;
 
   constructor() {
-    this.name         = Process.nameOf(process.env.pm_exec_path || process.argv[1]);
-    this.argv         = CLArgs({ name: 'rootpath' }, { partial: true });
-    this.rootpath     = this.argv.rootpath || process.cwd();
-    this.logger       = new Logger(this.name);
-    this.loading      = [];
+    this.argv         = CLArgs( [ { name: 'root', type: String }
+                                , { name: 'group', type: String, defaultOption: true }
+                                ]
+                              , { partial: true }
+                              );
+    this.rootpath     = this.argv.root || process.cwd();
+    this.logger       = new Logger(this.argv.group || 'Process');
     this.services     = new Map();
     this.loadConstant();
     process.on('uncaughtException', (error: any) => this.logger.error('exception', error.stack || error));
     process.on('unhandledRejection', (error: any) => this.logger.error('reject', error.stack || error));
-    //--
-    this.loading.push({ type: ActionTypes.LoadMainConfig, payload: this.rootpath });
   }
 
   private loadConstant() {
@@ -61,28 +44,6 @@ export class Process {
     this.hostname    = hostname();
     this.launcher    = process.stdin.isTTY ? 'console' : 'daemon';
     this.environment = environ;
-  }
-
-  public setConfig(config: any) {
-    this.loading.push({ type: ActionTypes.SetConfig, payload: config });
-  }
-
-  public registerService(Module: Service) {
-    this.loading.push({ type: ActionTypes.RegisterService, payload: Module });
-  }
-
-  public async run() {
-    while (this.loading.length > 0)
-      await this.nextTick();
-  }
-
-  private async nextTick(): Promise<void> {
-    const task = this.loading.shift();
-    switch (task.type) {
-    case ActionTypes.LoadMainConfig:         return this.loadMainConfig(task.payload);
-    case ActionTypes.SetConfig:              return this.loadCustomConfig(task.payload);
-    case ActionTypes.RegisterService:        return this.loadService(task.payload);
-    }
   }
 
   private  getConfigFileList(): Array<string> {
@@ -117,45 +78,49 @@ export class Process {
     return config;
   }
 
-  private async loadMainConfig(rootpath: string): Promise<void> {
-    const directory = join(rootpath, 'config');
-    this.config = await this.getConfig(directory);
+  private async loadConfig(): Promise<void> {
+    const directory = join(this.rootpath, 'config');
+    this.config = await this.getConfig(directory) || {};
   }
 
-  private async loadCustomConfig(config: any) {
-    const extend = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
-    this.config = extend(this.config, config);
-  }
-
-  public async getModuleConfig(name: string, type: string) {
-    const extend       = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
-    const directory    = join(this.rootpath, 'dist', type, name);
-    const moduleConfig = await this.getConfig(directory);
-    const userConfig   = this.config[name] || {};
-    const config       = this.resolve(extend(moduleConfig, userConfig, this.config.$all || {}));
-    while ((function resolve(base, node) {
-      while ('_' in node) {
-        const layer = base[node._] || {};
-        delete node._;
-        Object.assign(node, layer);
+  private async loadServices() {
+    if (this.config.Process == null)
+      return this.logger.log('No .Process property');
+    const process = this.config.Process;
+    if (process[this.argv.group] == null)
+      return this.logger.log('Process group "%s" not found', this.argv.group);
+    const group = process[this.argv.group];
+    if (group.services == null)
+      return this.logger.log('No service for "%s" to load', this.argv.group);
+    for (let i = 0; i < group.services.length; i += 1) {
+      const service = String(group.services[i]);
+      if (service[0] == '$') {
+        const nodeName = service.substr(1);
+        this.logger.log('Loading Native Service: %s', nodeName);
+        const path = join(__dirname, '../srv', nodeName, nodeName + '.js');
+        const node = require(path).default;
+        this.services.set(service, node);
+      } else {
+        const nodeName = service;
+        this.logger.log('Loading Custom Service: %s', nodeName);
+        const path = join(this.rootpath, 'dist/src', nodeName, nodeName + '.js');
+        const node = require(path).default;
+        this.services.set(service, node);
       }
-    })(this.config, config));
-    return config;
+    }
   }
 
-  private resolve(data: any) {
-    JSON.stringify(data, function (key, value) {
-      if (typeof value == 'string' && value.substr(0, 2) == '_:')
-        this[key] = data[key];
-      return value;
-    });
-    return data;
+  public async run() {
+    await this.loadConfig();
+    await this.loadServices();
+    await this.start();
   }
 
-  private async loadService(Module: Service) {
-    const config = await this.getModuleConfig(Module.name, 'Service');
-    const instance = new Module(config);
-    this.services.set(Module.name, instance);
+  public async start() {
+    for (const [name, service] of this.services) {
+      const options = (this.config.Service || {})[name] || {};
+      service.start(this.config.Bus, options);
+    }
   }
 
 };

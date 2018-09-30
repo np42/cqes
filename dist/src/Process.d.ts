@@ -1,7 +1,10 @@
-import { Service, IService } from './Service';
-export default class Process extends Service {
+declare type Service = any;
+export declare class Process {
     static nameOf(path: string): string;
+    name: string;
+    private config;
     private argv;
+    private logger;
     private loading;
     private services;
     rootpath: string;
@@ -11,7 +14,7 @@ export default class Process extends Service {
     constructor();
     private loadConstant;
     setConfig(config: any): void;
-    registerService(Module: IService): void;
+    registerService(Module: Service): void;
     run(): Promise<void>;
     private nextTick;
     private getConfigFileList;
@@ -22,3 +25,4 @@ export default class Process extends Service {
     private resolve;
     private loadService;
 }
+export {};

@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const AMQPBus_1 = require("./AMQPBus");
-const PREFIX = 'Command-';
+const PREFIX = '~Command-';
 class AMQPCommandBus extends AMQPBus_1.AMQPBus {
     constructor(url) {
         super(url);

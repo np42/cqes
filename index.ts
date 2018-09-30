@@ -1,41 +1,35 @@
-import _Logger from './src/Logger'
-import * as P from './src/Process'
-import * as S from './src/Service'
-import * as V from './src/ValueObject'
-import * as B from './src/Entity'
-import * as AR from './src/AggregateRoot'
-import * as C from './src/Command'
-import * as Q from './src/Query'
-import * as E from './src/Event'
-import * as A from './src/State'
-import * as F from './src/Fx'
-import * as M from './src/Mx'
-import * as L from './src/Lx'
+export { Logger }  from './src/Logger'
 
-export const Process       = P.default
-export const Service       = S.Service
-export const ValueObject   = V.ValueObject
-export const Entity        = B.Entity
-export const AggregateRoot = AR.AggregateRoot
-export const Logger        = _Logger
+export { Process
+       }          from './src/Process'
 
-export const InCommand   = C.InCommand
-export const OutCommand  = C.OutCommand
-export const CommandData = C.CommandData
+export { Aggregator
+       , Aggregate
+       , Entity
+       , Value
+       }          from './src/Aggregate'
 
-export const InQuery     = Q.InQuery
-export const OutQuery    = Q.OutQuery
+export { InEvent
+       , OutEvent
+       , EventData
+       }          from './src/Event'
 
-export const InReply     = Q.InReply
-export const OutReply    = Q.OutReply
+export { InCommand
+       , OutCommand
+       , CommandData
+       }          from './src/Command'
 
-export const InEvent     = E.InEvent
-export const OutEvent    = E.OutEvent
-export const EventData   = E.EventData
+export { InQuery
+       , OutQuery
+       , InReply
+       , OutReply
+       }          from './src/Query'
 
-export const State       = A.State
-export const StateData   = A.StateData
+export { State
+       , StateData
+       }          from './src/State'
 
-export const Fx          = F
-export const Mx          = M
-export const Lx          = L
+export { Fx } from './src/Fx'
+export { Mx } from './src/Mx'
+//export { Lx } from './src/Lx'
+export { Qx } from './src/Qx'

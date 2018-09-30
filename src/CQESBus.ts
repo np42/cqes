@@ -8,14 +8,14 @@ import { AMQPQueryBus   as xQueryBus }   from './AMQPQueryBus';
 import { ESBus          as xEventBus }   from './ESBus';
 import { ESBus          as xStateBus }   from './ESBus';
 
-interface Options {
+export interface Options {
   Commands: string,
   Queries:  string,
   Events:   string,
   States:   string
 }
 
-export class CQESBus {
+export class Bus {
 
   public C:        CommandBus;
   public Q:        QueryBus;

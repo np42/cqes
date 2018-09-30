@@ -150,5 +150,5 @@ class Logger {
         });
     }
 }
-exports.default = Logger;
+exports.Logger = Logger;
 //# sourceMappingURL=Logger.js.map

@@ -2,13 +2,13 @@ import { CommandBus } from './CommandBus';
 import { QueryBus } from './QueryBus';
 import { EventBus } from './EventBus';
 import { StateBus } from './StateBus';
-interface Options {
+export interface Options {
     Commands: string;
     Queries: string;
     Events: string;
     States: string;
 }
-export declare class CQESBus {
+export declare class Bus {
     C: CommandBus;
     Q: QueryBus;
     E: EventBus;
@@ -16,4 +16,3 @@ export declare class CQESBus {
     constructor(config: Options);
     stop(): void;
 }
-export {};

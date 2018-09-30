@@ -5,7 +5,7 @@ type optionName = 'withColor' | 'alertFrequency';
 
 const globalOptions = <Map<optionName, any>>new Map();
 
-export default class Logger {
+export class Logger {
 
   static setOption(key: optionName, data: any) {
     globalOptions.set(key, data);

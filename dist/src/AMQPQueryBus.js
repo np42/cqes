@@ -15,7 +15,7 @@ const uuid = require("uuid");
 class AMQPQueryBus extends AMQPBus_1.AMQPBus {
     constructor(url) {
         super(url);
-        this.id = '~RPC-' + uuid.v1();
+        this.id = '~Reply-' + uuid.v1();
         this.pending = new Map();
         this.queue = null;
         this.gcInterval = null;
@@ -53,7 +53,7 @@ class AMQPQueryBus extends AMQPBus_1.AMQPBus {
                 channel.ack(message);
             })
         };
-        return this.consume(view, handler, options);
+        return this.consume('~Query-' + view, handler, options);
     }
     query(request, timeout = 30) {
         if (this.queue == null)

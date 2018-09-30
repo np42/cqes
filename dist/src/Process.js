@@ -11,7 +11,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const os_1 = require("os");
 const fs_1 = require("fs");
 const path_1 = require("path");
-const Service_1 = require("./Service");
+const Logger_1 = require("./Logger");
 const yaml = require('js-yaml');
 const extendify = require('extendify');
 const CLArgs = require('command-line-args');
@@ -23,7 +23,7 @@ var ActionTypes;
 })(ActionTypes || (ActionTypes = {}));
 ;
 ;
-class Process extends Service_1.Service {
+class Process {
     static nameOf(path) {
         try {
             return path.split('/').pop().replace(/^(.+?)\.[a-z]+$/, '$1');
@@ -33,10 +33,10 @@ class Process extends Service_1.Service {
         }
     }
     constructor() {
-        super({});
         this.name = Process.nameOf(process.env.pm_exec_path || process.argv[1]);
         this.argv = CLArgs({ name: 'rootpath' }, { partial: true });
         this.rootpath = this.argv.rootpath || process.cwd();
+        this.logger = new Logger_1.Logger(this.name);
         this.loading = [];
         this.services = new Map();
         this.loadConstant();
@@ -159,6 +159,6 @@ class Process extends Service_1.Service {
         });
     }
 }
-exports.default = Process;
+exports.Process = Process;
 ;
 //# sourceMappingURL=Process.js.map

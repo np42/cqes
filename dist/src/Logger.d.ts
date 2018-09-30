@@ -1,5 +1,5 @@
 declare type optionName = 'withColor' | 'alertFrequency';
-export default class Logger {
+export declare class Logger {
     static setOption(key: optionName, data: any): void;
     private name;
     private color;

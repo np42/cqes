@@ -21,7 +21,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   constructor(url: string) {
     super(url);
-    this.id         = '~RPC-' + uuid.v1();
+    this.id         = '~Reply-' + uuid.v1();
     this.pending    = new Map();
     this.queue      = null;
     this.gcInterval = null;
@@ -64,7 +64,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
           channel.ack(message);
         }
       };
-    return this.consume(view, handler, options);
+    return this.consume('~Query-' + view, handler, options);
   }
 
   public query(request: OutQuery<any>, timeout = 30) {

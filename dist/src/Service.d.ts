@@ -36,9 +36,9 @@ export declare class Service {
     protected listen<S extends StateData, C extends CommandData>(topic: string, state: State<S>, types: TypesSet, applicant?: Applicant): Promise<Fx<any, any>>;
     protected publish(events: Array<OutEvent<any>>): Promise<void>;
     protected rehydrate<D extends StateData>(stream: string, StateDataClass: new (_: any) => D, process?: string): Fx<{}, any>;
-    protected subscribe<D extends StateData>(stream: string, state: State<D>): Fx<any, import("./EventBus").Subscription>;
-    protected last(stream: string, count: number): Promise<import("./Event").InEvent<any>[]>;
-    protected watch<D extends StateData>(pstream: string, StateDataClass: new (_: any) => D, automates: AutomateCollection): Fx<any, import("./EventBus").Subscription>;
+    protected subscribe<D extends StateData>(stream: string, state: State<D>): any;
+    protected last(stream: string, count: number): any;
+    protected watch<D extends StateData>(pstream: string, StateDataClass: new (_: any) => D, automates: AutomateCollection): any;
     protected query(view: string, method: string, data: any): Promise<any>;
     protected serve<D extends StateData>(view: string, state: State<D>, handlers: any): Fx<any, any>;
 }

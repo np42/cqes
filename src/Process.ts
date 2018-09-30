@@ -2,7 +2,7 @@ import { hostname } from 'os';
 import { readFile } from 'fs';
 import { join }     from 'path';
 
-import { Service, IService } from './Service';
+import { Logger }   from './Logger';
 
 const yaml       = require('js-yaml');
 const extendify  = require('extendify');
@@ -14,16 +14,21 @@ enum ActionTypes
 , RegisterService
 };
 
+type Service = any;
+
 interface Task { type: ActionTypes, payload: any };
 
-export default class Process extends Service {
+export class Process {
 
   public static nameOf(path: string) {
     try { return path.split('/').pop().replace(/^(.+?)\.[a-z]+$/, '$1'); }
     catch (e) { return 'BhivProcess'; }
   }
 
+  public  name:         string;
+  private config:       any;
   private argv:         any;
+  private logger:       Logger;
   private loading:      Array<Task>;
   private services:     Map<string, Service>;
 
@@ -33,10 +38,10 @@ export default class Process extends Service {
   public  launcher:     string;
 
   constructor() {
-    super({});
     this.name         = Process.nameOf(process.env.pm_exec_path || process.argv[1]);
     this.argv         = CLArgs({ name: 'rootpath' }, { partial: true });
     this.rootpath     = this.argv.rootpath || process.cwd();
+    this.logger       = new Logger(this.name);
     this.loading      = [];
     this.services     = new Map();
     this.loadConstant();
@@ -62,7 +67,7 @@ export default class Process extends Service {
     this.loading.push({ type: ActionTypes.SetConfig, payload: config });
   }
 
-  public registerService(Module: IService) {
+  public registerService(Module: Service) {
     this.loading.push({ type: ActionTypes.RegisterService, payload: Module });
   }
 

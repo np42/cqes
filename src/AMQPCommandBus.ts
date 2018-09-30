@@ -2,7 +2,7 @@ import { CommandBus, Handler }   from './CommandBus'
 import { InCommand, OutCommand } from './Command'
 import { AMQPBus }               from './AMQPBus'
 
-const PREFIX = 'Command-'
+const PREFIX = '~Command-'
 
 export class AMQPCommandBus extends AMQPBus implements CommandBus {
 

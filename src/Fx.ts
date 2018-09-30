@@ -278,7 +278,7 @@ export class Fx<N, B> {
             this.pending.push({ action, resolve });
             return this.failWith(error);
           });
-        } if (error) {
+        } else if (error) {
           this.pending.push({ action, resolve });
           return this.failWith(error);
         } else {

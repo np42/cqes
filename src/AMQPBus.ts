@@ -61,9 +61,11 @@ export class AMQPBus {
           channel.reject(rawMessage, true);
         }
       }, options);
-      fx.on('aborted', () => {
+      fx.on('aborted', async () => {
         active = false;
-        channel.cancel(subscription.consumerTag);
+        console.log('AMQP Bus channel aborted', queue, subscription.consumerTag);
+        await channel.cancel(subscription.consumerTag);
+        await channel.nackAll();
       });
       return subscription;
     }, { name: 'AMQP.Consumer.' + queue }).open();

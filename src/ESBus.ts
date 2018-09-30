@@ -19,7 +19,7 @@ type ESSubscription = ES.EventStoreSubscription;
 
 type SubscriptionNode = Node<ESConnection, ESSubscription>;
 type EventHandler     = (event: InEvent<any>) => Promise<void>;
-type CommandHandler   = (command: InCommand<any>) => Promise<void>;
+type CommandHandler   = (command: InCommand<any>, event: InEvent<any>) => Promise<void>;
 
 type FxConnection     = Fx<any, ESConnection>;
 type FxSubscription   = Fx<SubscriptionNode, ESSubscription>;
@@ -119,10 +119,11 @@ export class ESBus implements EventBus, StateBus {
     const fxHandler = <FxCommandHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.connection.pipe(async (connection, fx) => {
       return connection.connectToPersistentSubscription(stream, group, (sub, data) => {
-        if (data.event != null) {
+        if (data.event != null && data.event.eventType[0] != '$') {
           const replier = (method: string) => sub[method](data);
           const command = new ESInCommand(data.event, replier);
-          fxHandler.do((handler: CommandHandler) => handler(command));
+          const event = new ESInEvent(data.event, data.event);
+          fxHandler.do((handler: CommandHandler) => handler(command, event));
         } else {
           sub.acknowledge(data);
         }

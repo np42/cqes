@@ -94,19 +94,11 @@ export class Process {
       return this.logger.log('No service for "%s" to load', this.argv.group);
     for (let i = 0; i < group.services.length; i += 1) {
       const service = String(group.services[i]);
-      if (service[0] == '$') {
-        const nodeName = service.substr(1);
-        this.logger.log('Loading Native Service: %s', nodeName);
-        const path = join(__dirname, '../srv', nodeName, nodeName + '.js');
-        const node = require(path).default;
-        this.services.set(service, node);
-      } else {
-        const nodeName = service;
-        this.logger.log('Loading Custom Service: %s', nodeName);
-        const path = join(this.rootpath, 'dist/src', nodeName, nodeName + '.js');
-        const node = require(path).default;
-        this.services.set(service, node);
-      }
+      const nodeName = service;
+      this.logger.log('Loading Custom Service: %s', nodeName);
+      const path = join(this.rootpath, 'dist/src', nodeName, nodeName + '.js');
+      const node = require(path).default;
+      this.services.set(service, node);
     }
   }
 

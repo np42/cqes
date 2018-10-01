@@ -4,7 +4,12 @@ export { Process
        }          from './src/Process'
 
 export { Aggregator
-       , Aggregate
+       }          from './src/Aggregator'
+
+export { Repository
+       }          from './src/Repository'
+
+export { Aggregate
        , Entity
        , Value
        }          from './src/Aggregate'

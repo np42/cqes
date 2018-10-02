@@ -1,3 +1,9 @@
 export class EventHandler {
 
+  constructor(
+
+  ) {
+
+  }
+
 }

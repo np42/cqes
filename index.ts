@@ -3,11 +3,17 @@ export { Logger }  from './src/Logger'
 export { Process
        }          from './src/Process'
 
-export { Aggregator
-       }          from './src/Aggregator'
+export { StateHandler
+       }          from './src/StateHandler'
 
-export { Repository
-       }          from './src/Repository'
+export { CommandHandler
+       }          from './src/CommandHandler'
+
+export { EventHandler
+       }          from './src/EventHandler'
+
+export { QueryHandler
+       }          from './src/QueryHandler'
 
 export { Aggregate
        , Entity

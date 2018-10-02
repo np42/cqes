@@ -16,17 +16,30 @@ class Event<D extends EventData> {
     this.number = -2;
   }
 
+  get category() {
+    const offset = this.stream.indexOf('-');
+    return offset >= 0 ? this.stream.substr(0, offset) : this.stream;
+  }
+
   get entityId() {
     return this.stream.substr(this.stream.indexOf('-') + 1);
   }
 
 }
 
+export type Replier = (action: 'ack' | 'nack', reason?: string | Error) => void;
+
 export class InEvent<D extends EventData> extends Event<D> {
   public createdAt: Date;
-  constructor(stream: string, type: string, data?: D, meta?: any) {
+  public ack: () => void;
+  public cancel: (reason?: string | Error) => void;
+  constructor(stream: string, type: string, data?: D, meta?: any, replier?: Replier) {
     super(stream, type, data, meta);
     this.createdAt = new Date();
+    if (replier != null) {
+      this.ack = () => replier('ack');
+      this.cancel = (reason?: string | Error) => replier('nack', reason);
+    }
   }
 }
 

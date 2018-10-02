@@ -1,18 +1,18 @@
-import { Fx }                    from './Fx';
+import { Fx }                           from './Fx';
 
-import { EventBus, Handler }     from './EventBus';
-import { InEvent, OutEvent }     from './Event';
-import { InCommand }             from './Command';
-import { ESInEvent }             from './ESEvent';
-import { ESInCommand }           from './ESCommand';
+import { EventBus, Handler, Predicate } from './EventBus';
+import { InEvent, OutEvent }            from './Event';
+import { InCommand }                    from './Command';
+import { ESInEvent }                    from './ESEvent';
+import { ESInCommand }                  from './ESCommand';
 
-import { StateBus }              from './StateBus';
-import { State, StateData }      from './State';
-import { ESInState, ESOutState } from './ESState';
+import { StateBus }                     from './StateBus';
+import { State, StateData }             from './State';
+import { ESInState, ESOutState }        from './ESState';
 
-import * as ES                   from 'node-eventstore-client';
-import * as URL                  from 'url';
-import * as uuid                 from 'uuid';
+import * as ES                          from 'node-eventstore-client';
+import * as URL                         from 'url';
+import * as uuid                        from 'uuid';
 
 type ESConnection   = ES.EventStoreNodeConnection;
 
@@ -72,7 +72,11 @@ export class ESBus implements EventBus, StateBus {
     });
   }
 
-  public subscribe(stream: string, from: number, handler: Handler<InEvent<any>>) {
+  public subscribe(stream: string, handler: Handler<InEvent<any>>) {
+    return this.subscribeFrom(stream, null, handler);
+  }
+
+  public subscribeFrom(stream: string, from: number, handler: Handler<InEvent<any>>) {
     const state = { from };
     const fxHandler = <FxEventHandler>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return this.connection.pipe(async (connection, fx) => {
@@ -134,32 +138,15 @@ export class ESBus implements EventBus, StateBus {
     }, { name: 'ES.Consumer.' + topic }).open();
   }
 
-  //-- State
-  public restore<D extends StateData>(
-    StateDataClass: new (_: any) => D, process?: string
-  ): Promise<State<D>> {
-    if (process == null) process = StateDataClass.name;
-    return new Promise(resolve => {
-      return this.last(process, 1, event => new ESInState(StateDataClass, event)).then(result => {
-        if (result.length == 0) return resolve(null);
-        else return resolve(result[0]);
-      });
-    });
-  }
-
-  public save<D extends StateData>(state: State<D>) {
-    const process = state.process;
-    const event = new ESOutState(state);
-    return this.publish(process, -2, [event]);
-  }
-
   //-- helpers
-  public last(stream: string, count: number, wrapper?: (event: any) => any): Promise<any> {
+  public last(stream: string, predicate: Predicate, wrapper?: (event: any) => any): Promise<any> {
+    /*
     return this.connection.do(async connection => {
       if (wrapper == null) wrapper = event => new ESInEvent(event);
       return (await connection.readStreamEventsBackward(stream, -1, count, true, this.credentials))
         .events.map(data => wrapper(data.event)).reverse();
     });
+    */
   }
 
   public tweak(stream: string, version: number, metadata: Object) {

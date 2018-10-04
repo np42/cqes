@@ -2,26 +2,19 @@ import { Logger }             from './Logger';
 import { EventBus }           from './EventBus';
 import { InEvent, EventData } from './Event';
 import { Entity }             from './Aggregate';
+import { Storage }            from './Storage';
 
-type EntityClass<T> = { new(data?: any): T };
-type Typer          = { [event: string]: EntityClass<EventData> };
-type Reducer<T>     = { [event: string]: (state: T, event: InEvent<any>) => T };
-type Streams        = { [stream: string]: any };
-type Categories<T>  = { [category: string]: Category<T> };
-type Handler<T>     = (state: T, event: InEvent<any>) => boolean;
+export type EntityClass<T> = { new(data?: any): T };
+export type Typer          = { [event: string]: EntityClass<EventData> };
+export type Reducer<T>     = { [event: string]: (state: T, event: InEvent<any>) => T };
+export type Streams        = { [stream: string]: any };
+export type Categories<T>  = { [category: string]: Category<T> };
+export type Handler<T>     = (state: T, event: InEvent<any>) => boolean;
 
-interface Category<T> {
+export interface Category<T> {
   typer: Typer;
   reducer?: Reducer<T>;
   group?: (event: InEvent<any>) => string;
-}
-
-interface Storage<T> {
-  get: (key: string) => { number: number, date: number, data: T };
-  set: (key: string, data: T) => void;
-  fetch?: (key: string) => Promise<T>;
-  list?:  () => { [key: string]: { number: number, date: number, data: T } };
-  clear?: (list: { [key: string]: number }) => void;
 }
 
 export class StateHandler <E extends Entity> {
@@ -34,8 +27,8 @@ export class StateHandler <E extends Entity> {
   private handler:    Handler<E>;
 
   constructor(
-    bus: EventBus, streams: Array<string>, categories: Categories<E>, Entity: EntityClass<E>,
-    storage?: Storage<E>, handler?: Handler<E>
+    bus: EventBus, streams: Array<string>, categories: Categories<E>,
+    Entity: EntityClass<E>, storage?: Storage<E>, handler?: Handler<E>
   ) {
     this.logger  = new Logger(Entity.name, 'gray');
     this.bus     = bus;
@@ -54,11 +47,15 @@ export class StateHandler <E extends Entity> {
         this.logger.log( '%cyan %green [ %yellow ] %s@%s', '<<', 'Event'
                        , event.type, event.number, event.stream
                        );
+        /* Typing */
         const type = event.type;
         const category = this.categories[event.category];
         const isSnapshot = type == 'Snapshot';
         if (type in category.typer) event.data = new category.typer[type](event.data);
         else if (isSnapshot) event.data.data = new this.Entity(event.data.data);
+        /* -- */
+
+        /* Getting previous version */
         const key = category.group(event);
         let stored = null;
         if (event.number == 0) {
@@ -66,18 +63,28 @@ export class StateHandler <E extends Entity> {
         } else if (isSnapshot) {
           stored = event.data;
         } else {
-          if (this.storage != null) stored = this.storage.get(key);
-          if (stored == null) stored = await this.rehydrate(key);
+          if (this.storage != null) stored = this.storage.get(key, event.number - 1);
+          if (stored == null) stored = await this.rehydrate(key, event.number);
           if (stored == null) stored = { number: -1, date: null, data: new this.Entity() };
         }
+        /* -- */
+
+        /* Apply event */
         if (type in category.reducer) stored.data = category.reducer[type](stored.data, event);
         stored.number = event.number;
         stored.date   = Date.now();
+        /* -- */
+
+        /* Store state */
         this.storage.set(key, stored);
+        /* -- */
+
+        /* Delegate to notifier */
         if (!isSnapshot && this.handler != null)
           if (this.handler(stored.data, event))
             return ;
         event.ack();
+        /* -- */
       });
     }
   }

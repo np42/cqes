@@ -1,9 +1,9 @@
 import { Entity, EntityClass } from './Aggregate';
 
 export interface Options<E> {
-  size: number;
-  onGc: (key: string, number: number, data: E, longevity?: number) => void
-  fetch: (key: string) => Promise<{ number: number, data: E }>;
+  size:    number;
+  onGc:    (key: string, number: number, data: E, longevity?: number) => void
+  onFetch: (key: string) => Promise<{ number: number, data: E }>;
 }
 
 export enum Status { Atlered, Released }
@@ -15,25 +15,27 @@ export interface Item<T> {
   data:   T;
 }
 
-export class Buffer <E extends Entity> {
+export class Buffer <E> {
 
-  private map:  Map<string, Item<E>>;
-  public fetch: (key: string) => Promise<{ number: number, data: E }>;
-  public onGc:  (key: string, number: number, data: E, longevity?: number) => void;
+  private Item:   { new(date?: any): E };
+  private map:    Map<string, Item<E>>;
+  public onFetch: (key: string) => Promise<{ number: number, data: E }>;
+  public onGc:    (key: string, number: number, data: E, longevity?: number) => void;
 
-  constructor(Entity: EntityClass, options?: Options) {
+  constructor(Item: { new(date?: any): E }, options?: Options) {
     if (options == null) options = {};
     this.map  = new Map();
     this.list = new Set();
     this.size = options.size > 0 ? options.size : 1000;
-    if (options.fetch) this.fetch = options.fetch;
+    this.Item = Item;
+    if (options.onFetch) this.onFetch = options.onFetch;
     if (options.onGc)  this.onGc  = options.onGc;
   }
 
-  public get(key: string, number?: number): Item<E> {
+  public async get(key: string, number?: number): Promise<Item<E>> {
     const item = this.map.get(key);
-    if (item == null) return null;
-    if (number != null && item.number != number) return null;
+    if (item == null || (number != null && item.number != number))
+      return this.fetch();
     this.map.delete(key);
     this.map.set(key, item);
     return item;
@@ -69,6 +71,11 @@ export class Buffer <E extends Entity> {
       if (item.number == list[key])
         item.status = Status.Released;
     }
+  }
+
+  public async fetch(key: string):  {
+    const data = this.onFetch ? await this.onFetch(key) : null;
+    return new this.Item(data);
   }
 
 }

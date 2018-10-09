@@ -15,12 +15,12 @@ export interface Item<T> {
   data:   T;
 }
 
-export class Buffer <E> {
+export class Buffer<E> {
 
-  private Item:   { new(date?: any): E };
-  private map:    Map<string, Item<E>>;
-  public onFetch: (key: string) => Promise<{ number: number, data: E }>;
-  public onGc:    (key: string, number: number, data: E, longevity?: number) => void;
+  protected Item:    { new(date?: any): E };
+  protected map:     Map<string, Item<E>>;
+  protected onFetch: (key: string) => Promise<{ number: number, data: E }>;
+  protected onGc:    (key: string, number: number, data: E, longevity?: number) => void;
 
   constructor(Item: { new(date?: any): E }, options?: Options) {
     if (options == null) options = {};
@@ -29,13 +29,12 @@ export class Buffer <E> {
     this.size = options.size > 0 ? options.size : 1000;
     this.Item = Item;
     if (options.onFetch) this.onFetch = options.onFetch;
-    if (options.onGc)  this.onGc  = options.onGc;
+    if (options.onGc)    this.onGc    = options.onGc;
   }
 
-  public async get(key: string, number?: number): Promise<Item<E>> {
-    const item = this.map.get(key);
-    if (item == null || (number != null && item.number != number))
-      return this.fetch();
+  public async get(key: string): Promise<Item<E>> {
+    let item = this.map.get(key);
+    item = this.fetch(key, item);
     this.map.delete(key);
     this.map.set(key, item);
     return item;

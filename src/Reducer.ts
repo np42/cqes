@@ -2,37 +2,34 @@ import { Logger }             from './Logger';
 import { EventBus }           from './EventBus';
 import { InEvent, EventData } from './Event';
 import { Entity }             from './Aggregate';
-import { Storage }            from './Storage';
+import { Buffer }             from './Buffer';
 
-export type EntityClass<T> = { new(data?: any): T };
-export type Typer          = { [event: string]: EntityClass<EventData> };
+export type Class<T>       = { new(data?: any): T };
+export type Typers         = { [event: string]: Class<EventData> };
 export type Reducer<T>     = { [event: string]: (state: T, event: InEvent<any>) => T };
-export type Streams        = { [stream: string]: any };
 export type Categories<T>  = { [category: string]: Category<T> };
 export type Handler<T>     = (state: T, event: InEvent<any>) => boolean;
 
 export interface Category<T> {
-  typer: Typer;
-  reducer?: Reducer<T>;
-  group?: (event: InEvent<any>) => string;
+  typers:  Typers;
+  reducer: Reducer<T>;
+  group?:  (event: InEvent<any>) => string;
 }
 
-export class StateHandler <E extends Entity> {
+export class Reducer <E extends Entity> {
   private logger:     Logger;
-  private bus:        EventBus;
-  private streams:    Streams;
+  private stream:     any;
   private categories: Categories<E>;
-  private Entity:     EntityClass<E>;
-  private storage:    Storage<E>;
+  private Entity:     Class<E>;
+  private buffer:     Buffer<E>;
   private handler:    Handler<E>;
 
   constructor(
-    bus: EventBus, streams: Array<string>, categories: Categories<E>,
-    Entity: EntityClass<E>, storage?: Storage<E>, handler?: Handler<E>
+    Entity: Class<E>, categories: Categories<E>,
+    options?: { stream?: string, buffer?: Buffer<E>, handler?: Handler<E> }
   ) {
+    if (options == null) options = {};
     this.logger  = new Logger(Entity.name, 'gray');
-    this.bus     = bus;
-    this.streams = streams.reduce((map, stream) => { map[stream] = null; return map; }, {});
     this.Entity  = Entity;
     this.storage = storage;
     this.handler = handler;

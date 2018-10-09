@@ -28,7 +28,6 @@
   "devDependencies": {
     "@types/amqplib": "^0.5.8",
     "@types/core-js": "^2.5.0",
-    "@types/express": "^4.16.0",
     "@types/node": "^8.10.30",
     "@types/uuid": "^3.4.4",
     "@types/websocket": "0.0.40"

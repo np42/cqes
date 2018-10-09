@@ -1,25 +1,28 @@
 import { Logger }             from './Logger';
-import { Entity }             from './Aggregate';
-import * as StateHandler      from './Statehandler';
 
-export class Service <E extends Entity>  {
+export enum Kind { Command = 'red', Query = 'blue', Event = 'green', State = 'grey' };
 
-  private logger: Logger;
-  private bus:    CQESBus;
-  private store:  Store<E>;
+export type Subscriptions { [name: string]: any };
 
-  constructor(Entity: EntityClass<E>) {
-    this.logger  = new Logger(Entity.name, 'yellow');
-    this.store   = new Store(Entity);
+export class Service  {
 
-    this.state   = new StateHandler(Entity);
-    this.event   = new EventHandler(Entity);
-    this.command = new CommandHandler(Entity);
-    this.query   = new QueryHandler(Entity);
+  protected logger:        Logger;
+  protected bus:           CQESBus;
+  protected subscriptions: Subscriptions;
+
+  constructor(kind: Kind, name: string) {
+    this.logger = new Logger(name, kind);
   }
 
-  connect(config: any) {
+  // --
+
+  public async start(config: any) {
     this.bus = new CQES(config);
+    return true;
+  }
+
+  public async stop() {
+    return false;
   }
 
 }

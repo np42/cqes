@@ -8,9 +8,13 @@ export interface Options<E> {
 
 export enum Status { Atlered, Released }
 
-export interface Item<T> {
-  status: Status;
+export interface Pointer {
+  key:    string;
   number: number;
+}
+
+export interface Item<T> extends Pointer {
+  status: Status;
   date:   number;
   data:   T;
 }
@@ -42,7 +46,7 @@ export class Buffer<E> {
 
   public set(key: string, number: number, data: E): void {
     const now = Date.now();
-    const item = { status: Status.Altered, number, date: now, data };
+    const item = { key, status: Status.Altered, number, date: now, data };
     if (this.map.has(key)) {
       this.map.delete(key);
     } else if (this.map.size >= this.size) {
@@ -55,24 +59,24 @@ export class Buffer<E> {
     this.map.set(key, item);
   }
 
-  public list(): { [key: string]: Item<E> } {
-    const result = {};
+  public list(filter?: item<T> => boolean): Array<Item<E>> {
+    const result = [];
     for (const [key, item] of this.map) {
       if (item.status == Status.Released) continue ;
-      result[key] = item;
+      if (!filter || filter(item)) result[key] = item;
     }
     return result;
   }
 
-  public release(list: { [key: string]: number }): void {
-    for (const key in list) {
-      const item = this.map.get(key);
+  public release(list: Array<Pointer>): void {
+    for (const pointer of list) {
+      const item = this.map.get(pointer.key);
       if (item.number == list[key])
         item.status = Status.Released;
     }
   }
 
-  public async fetch(key: string):  {
+  public async fetch(key: string) {
     const data = this.onFetch ? await this.onFetch(key) : null;
     return new this.Item(data);
   }

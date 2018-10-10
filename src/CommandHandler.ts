@@ -69,10 +69,10 @@ export class CommandHandler<T extends Entity> extends Service {
 
   protected async handleCommand(command: InCommand<any>) {
     // Type command
-    // Retrieve from buffer state
-    // if translator exists then execute
-    // if manager exists then execute
-    // dispatch events
+    // Retrieve state from buffer
+    // If translator exists then execute
+    // If manager exists then execute
+    // Dispatch events
     // > OK: acknowledge command
     //       dispatch commands
     // > KO: try this workflow again

@@ -1,43 +1,39 @@
-class Command<D extends CommandData> {
-  public topic:     string;
+export class Command {
+  public key:       string;
+  public order:     string;
   public createdAt: Date;
-  public name:      string;
-  public data:      D;
+  public data:      any;
   public meta:      any;
 
-  constructor(topic: string, name: string, data?: D, meta?: Object) {
-    this.topic     = topic;
+  constructor(key: string, order: string, data?: any, meta?: any) {
+    this.key       = key;
+    this.order     = order;
     this.createdAt = new Date();
-    this.name      = name;
-    if (!(data instanceof Object)) data = <any>{};
-    this.data      = data;
-    if (!(meta instanceof Object)) meta = <any>{};
-    this.meta      = meta;
+    this.data      = data instanceof Object ? data : {};
+    this.meta      = meta instanceof Object ? meta : {};
   }
 }
 
 export type CommandReplier = (action: string, reason?: any) => void;
 
-export class InCommand<D extends CommandData> extends Command<D> {
+export class InCommand extends Command {
   protected reply:    CommandReplier;
   public    pulledAt: Date;
-  constructor(reply: CommandReplier, topic: string, name: string, data?: D, meta?: Object) {
-    super(topic, name, data, meta);
+  constructor(reply: CommandReplier, key: string, order: string, data?: any, meta?: any) {
+    super(key, order, data, meta);
     this.pulledAt  = new Date();
-    if (reply == null) reply = (action: string, reason?: any) => void(0);
+    if (reply == null) reply = (action: string, reason?: string) => void(0);
     Object.defineProperty(this, 'reply', { value: reply });
   }
-  ack()                { this.reply('ack'); }
-  cancel(reason?: any) { this.reply('cancel', reason); }
+  ack(reason?: string)    { this.reply('ack', reason); }
+  cancel(reason?: string) { this.reply('cancel', reason); }
 }
 
-export class OutCommand<D extends CommandData> extends Command<D> {
-  constructor(topic: string, instance: D, meta?: any) {
-    super(topic, instance.constructor.name, instance, meta);
+export class OutCommand extends Command {
+  constructor(key: string, order: string, data: any, meta?: any) {
+    super(key, order, data, meta);
   }
   serialize() {
     return new Buffer(JSON.stringify(this));
   }
 }
-
-export class CommandData { CommandDataConstraint: Symbol; }

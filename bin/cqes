@@ -2,4 +2,4 @@
 
 THIS="$(dirname "$(realpath "$0")")"
 
-node "$THIS/../server.js" $@
+node "$THIS/../process.js" $@

@@ -1,46 +1,20 @@
-export { Logger }  from './src/Logger'
+export { Logger }       from './src/Logger'
 
-export { Process
-       }          from './src/Process'
+export { Process }      from './src/Process'
 
-export { StateHandler
-       }          from './src/StateHandler'
+export { Service }      from './src/Service'
 
-export { CommandHandler
-       }          from './src/CommandHandler'
+export { Aggregator }   from './src/Aggregator'
 
-export { EventHandler
-       }          from './src/EventHandler'
+export { Event }        from './src/Event'
 
-export { QueryHandler
-       }          from './src/QueryHandler'
+export { Command }      from './src/Command'
 
-export { Aggregate
-       , Entity
-       , Value
-       }          from './src/Aggregate'
+export { Query, Reply } from './src/Query'
 
-export { InEvent
-       , OutEvent
-       , EventData
-       }          from './src/Event'
+export { State }        from './src/State'
 
-export { InCommand
-       , OutCommand
-       , CommandData
-       }          from './src/Command'
-
-export { InQuery
-       , OutQuery
-       , InReply
-       , OutReply
-       }          from './src/Query'
-
-export { State
-       , StateData
-       }          from './src/State'
-
-export { Fx } from './src/Fx'
-export { Mx } from './src/Mx'
-//export { Lx } from './src/Lx'
-export { Qx } from './src/Qx'
+export { Fx }           from './src/Fx'
+export { Mx }           from './src/Mx'
+//export { Lx }           from './src/Lx'
+export { Qx }           from './src/Qx'

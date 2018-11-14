@@ -1,50 +1,31 @@
-import { CQESBus }      from './CQESBus'
-import { Aggregate }    from './Aggregate'
-import { State }        from './State'
-import { OutEvent }     from './Event'
+import { Logger }  from './Logger';
+import { State }   from './State';
+import { Command } from './Command';
+import { Event }   from './Event';
 
-type Options              = { Bus: any };
-type ManagerAggregate<A>  = new (): Aggregate<A>;
-type CommandTyper         = new (data: any): State<any>;
-type CommandExecutor<A>   = (Aggregate<A>, InCommand<any>) => Array<OutEvent<any>>;
-type CommandTranslator    = (InCommand<any>) => Array<OutCommand<any>>;
-type CommandHandler<A>    = { type: 'Handler', handler: CommandExecutor<A> }
-                          | { type: 'Translator', translator: CommandTranslator };
+export type Config   = { name: string };
+export type Handler  = (state: State, command: Command) => Promise<Array<Event> | Event>;
+export type Handlers = { [name: string]: Handler };
 
-export class Manager<A> {
-  private bus:         CQESBus;
-  private aggregate:   Aggregate<A>;
-  private handlers:    Map<string, CommandHandler<A>>;
-  public  commands:    Map<string, CommandTyper>;
+export class Manager {
 
-  constructor(config: Options, AggregateClass: ManagerAggregate) {
-    this.bus         = new CQESBus(config.Bus);
-    this.commands    = new Map()
-    this.aggregate   = new AggregateClass();
-    this.handlers    = new Map()
-    this.translators = new Map()
+  private logger:   Logger;
+  private handlers: Handlers;
+
+  constructor(config: Config, handlers: Handlers) {
+    this.logger   = new Logger(config.name + '.Manager', 'red');
+    this.handlers = handlers;
   }
 
-  init() {
-    this.listen(this.name);
-  }
-
-  // register command typer
-  watch(name: string, typer: CommandTyper) {
-    this.commands.set(name, typer)
-    return this
-  }
-
-  // register command handler
-  handle(name: string, handler: CommandExecutor<A>) {
-    this.handlers.set(name, { type: 'Handler', handler })
-    return this
-  }
-
-  // register command translator
-  translate(name: string, translator: CommandTranslator) {
-    this.handlers.set(name, { type: 'Translator', translator });
-    return this;
+  public handle(state: State, command: Command): Promise<Array<Event>> {
+    const handlerAny   = this.handlers.get('any');
+    const handlerNamed = this.handlers.get('on' + order);
+    if (handlerNamed == null && handlerAny == null)
+      return this.logger.warn('Missing handler: ', order), null;
+    const result = (handlerNamed || handlerAny)(state, command);
+    if (result == null) return [];
+    if (result instanceof Array) return result;
+    return [result];
   }
 
 }

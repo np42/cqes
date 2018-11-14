@@ -1,11 +1,11 @@
-class Query<D> {
+export class Query {
   public view:      string;
   public createdAt: Date;
   public method:    string;
-  public data:      D;
+  public data:      any;
   public meta:      any;
 
-  constructor(view: string, method: string, data: D, meta?: Object) {
+  constructor(view: string, method: string, data: any, meta?: any) {
     this.view      = view;
     this.createdAt = new Date();
     this.method    = method;
@@ -16,10 +16,10 @@ class Query<D> {
 
 export type QueryReplier = (type: ReplyType, value: any) => void;
 
-export class InQuery<D> extends Query<D>{
+export class InQuery extends Query {
   private reply:    QueryReplier;
   public  pulledAt: Date;
-  constructor(reply: QueryReplier, view: string, method: string, data?: D, meta?: Object) {
+  constructor(reply: QueryReplier, view: string, method: string, data?: any, meta?: any) {
     super(view, method, data, meta);
     this.pulledAt  = new Date();
     Object.defineProperty(this, 'reply', { value: reply });
@@ -28,7 +28,7 @@ export class InQuery<D> extends Query<D>{
   reject(error: string) { this.reply(ReplyType.Rejected, error); }
 }
 
-export class OutQuery<D> extends Query<D> {
+export class OutQuery extends Query {
   serialize() {
     return new Buffer(JSON.stringify(this));
   }
@@ -36,26 +36,26 @@ export class OutQuery<D> extends Query<D> {
 
 export enum ReplyType { Resolved = 'resolve', Rejected = 'reject' }
 
-class Reply<D> {
+export class Reply {
   public type:  ReplyType;
   public error: string;
-  public data:  D;
-  constructor(error: string, data?: D) {
+  public data:  any;
+  constructor(error: string, data?: any) {
     this.type = error != null ? ReplyType.Rejected : ReplyType.Resolved;
     this.error = error;
     this.data = data;
   }
 }
 
-export class InReply<D> extends Reply<D> {
+export class InReply extends Reply {
   public  pulledAt: Date;
-  constructor(error: string, data?: D) {
+  constructor(error: string, data?: any) {
     super(error, data);
     this.pulledAt  = new Date();
   }
 }
 
-export class OutReply<D> extends Reply<D> {
+export class OutReply extends Reply {
   serialize() {
     return new Buffer(JSON.stringify(this));
   }

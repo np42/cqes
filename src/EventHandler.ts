@@ -9,12 +9,12 @@ export type Typers         = { [name: string]: Class<EventData> };
 export type Automates<T>   = { [name: string]: Automate<T> | string };
 export type Automate<T>    = { pattern: Pattern, action: Reaction<T> };
 export type Pattern        = any;
-export type Reaction<T>    = (state: T, Event<EventData>) => Array<Command<CommandData>>;
+export type Reaction<T>    = (state: T, event: Event<EventData>) => Array<Command<CommandData>>;
 export type Projections<T> = { [name: string]: Projection<T> };
-export type Projection<T>  = (state: T, Event<EventData>) => ProjectionResponse;
+export type Projection<T>  = (state: T, event: Event<EventData>) => ProjectionResponse;
 type ProjectionResponse    = Array<Event<EventData>>
                            | { events: Array<Event<EventData>>, call: () => void }
-                           | async () => Array<Event<EventData>>;
+                           | (() => Promise<Array<Event<EventData>>>);
 
 export interface Options {
   bufferSize?: number;

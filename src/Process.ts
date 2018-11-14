@@ -1,12 +1,28 @@
-import { hostname } from 'os';
-import { readFile } from 'fs';
-import { join }     from 'path';
+import { hostname }   from 'os';
+import { readFile }   from 'fs';
+import { join }       from 'path';
 
-import { Logger }   from './Logger';
+import { Logger }     from './Logger';
+import { Service }    from './Service';
+import { Aggregator } from './Aggregator';
+import { Gateway }    from './Gateway';
 
 const yaml       = require('js-yaml');
 const extendify  = require('extendify');
 const CLArgs     = require('command-line-args');
+
+const extend = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
+
+const defaultService = { mode: 'typescript', name: 'World' };
+
+const safeRequire = (path: string) => {
+  try {
+    return require(path);
+  } catch (e) {
+    console.log('|---------------->', e);
+    return {};
+  }
+}
 
 export class Process {
 
@@ -55,7 +71,6 @@ export class Process {
   }
 
   private async getConfig(directory: string): Promise<any> {
-    const extend = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
     const files = this.getConfigFileList();
     let config = {};
     for (const file of files) {
@@ -79,7 +94,7 @@ export class Process {
   }
 
   private async loadConfig(): Promise<void> {
-    const directory = join(this.rootpath, 'config');
+    const directory = join(this.rootpath, 'cfg');
     this.config = await this.getConfig(directory) || {};
   }
 
@@ -93,14 +108,57 @@ export class Process {
     if (group.services == null)
       return this.logger.log('No service for "%s" to load', this.argv.group);
     for (let i = 0; i < group.services.length; i += 1) {
-      const service = String(group.services[i]);
-      const nodeName = service;
-      this.logger.log('Loading Custom Service: %s', nodeName);
-      const path = join(this.rootpath, 'dist/src', nodeName, nodeName + '.js');
-      const node = require(path).default;
-      this.services.set(service, node);
+      const config = extend(defaultService, group.services[i], this.config.Service);
+      const name = config.name;
+      this.logger.log('Loading Custom Service: %s', name);
+      switch (config.mode) {
+      case 'typescript': {
+        const service = this.createTypescriptService(config);
+        this.services.set(name, service);
+      } break ;
+      case 'reason': {
+        const service = this.createReasonService(config);
+        this.services.set(name, service);
+      }
+      }
     }
   }
+
+  private createTypescriptService(config: any) {
+    this.logger.error('TODO Typescript service construction');
+    process.exit();
+  }
+
+  private createReasonService(config: any) {
+    const name = config.name;
+    const path = type => join(this.rootpath, config.rootpath, name, name + '_' + type + '.bs.js');
+    const typer: Service.Typer = [ 'Command', 'Event', 'Query', 'State' ].reduce
+    ( (set, kind) => { set[kind] = safeRequire(path(kind)); return set }
+    , {}
+    );
+    switch (config.type) {
+    case 'Aggregator': {
+      const typer: Aggregator.Facets = [ 'Manager', 'Factory', 'Respository', 'Reactor' ].reduce
+      ( (set, facet) => { set[facet] = safeRequire(path(facet)); return set }
+      , {}
+      );
+      const aggregator = new Aggregator(config, facets);
+      const service = new Service(config, typer, aggregator);
+      return service;
+    }
+    case 'Gateway': {
+      const typer: Gateway.Facets = [ 'Gateway' ].reduce
+      ( (set, facet) => { set[facet] = safeRequire(path(facet)); return set }
+      , {}
+      );
+      const gateway = new Gateway(config, facets);
+      const service = new Service(config, typer, gateway);
+      return service;
+    }
+    }
+  }
+
+  /*******************************************/
 
   public async run() {
     await this.loadConfig();
@@ -111,7 +169,7 @@ export class Process {
   public async start() {
     for (const [name, service] of this.services) {
       const options = (this.config.Service || {})[name] || {};
-      service.start(this.config.Bus, options);
+      service.start(this.config.Broker, options);
     }
   }
 

@@ -1,14 +1,18 @@
 import { Logger }  from './Logger';
 import { Command } from './Command';
 
-export type Config = { name: string };
+export interface Config {
+  name: string;
+};
 
 export class Filter {
 
-  constructor(config: Config, facet: any) {
+  private logger: Logger;
+
+  constructor(config: Config) {
     this.logger = new Logger(config.name + '.Filter', 'yellow');
   }
 
-  public async assert(command: Command<any>) {}
+  public async assert(command: Command) {}
 
 }

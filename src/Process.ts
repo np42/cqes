@@ -15,15 +15,6 @@ const extend = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
 
 const defaultService = { mode: 'typescript', name: 'World' };
 
-const safeRequire = (path: string) => {
-  try {
-    return require(path);
-  } catch (e) {
-    console.log('|---------------->', e);
-    return {};
-  }
-}
-
 export class Process {
 
   private config:       any;
@@ -131,29 +122,32 @@ export class Process {
 
   private createReasonService(config: any) {
     const name = config.name;
-    const path = type => join(this.rootpath, config.rootpath, name, name + '_' + type + '.bs.js');
-    const typer: Service.Typer = [ 'Command', 'Event', 'Query', 'State' ].reduce
-    ( (set, kind) => { set[kind] = safeRequire(path(kind)); return set }
-    , {}
-    );
+    const path = (t: string) => join(this.rootpath, config.rootpath, name, name + '_' + t + '.bs.js');
+
+    const Command = safeRequire(path('Command'));
+    const Query   = safeRequire(path('Query'));
+    const Event   = safeRequire(path('Event'));
+    const State   = safeRequire(path('State'));
+    const typers  = extend(config, { typers: { Command, Query, Event, State } });
+
     switch (config.type) {
     case 'Aggregator': {
-      const typer: Aggregator.Facets = [ 'Manager', 'Factory', 'Respository', 'Reactor' ].reduce
-      ( (set, facet) => { set[facet] = safeRequire(path(facet)); return set }
-      , {}
-      );
-      const aggregator = new Aggregator(config, facets);
-      const service = new Service(config, typer, aggregator);
+      const Filter        = safeRequire(path('Filter'));
+      const Manager       = safeRequire(path('Manager'));
+      const Factory       = safeRequire(path('Factory'));
+      const Repository    = safeRequire(path('Repository'));
+      const Reactor       = safeRequire(path('Reactor'));
+      Manager.handlers    = objectFilter(Manager,    k => /^on([A-Z]|$)/.test(k));
+      Factory.handlers    = objectFilter(Factory,    k => /^on([A-Z]|$)/.test(k));
+      Repository.handlers = objectFilter(Repository, k => /^query([A-Z]|$)/.test(k));
+      Reactor.handlers    = objectFilter(Reactor,    k => /^on([A-Z]|$)/.test(k));
+      const facets        = extend(config, { Filter, Manager, Factory, Repository, Reactor });
+      const aggregator    = new Aggregator(facets);
+      const service       = new Service(typers, aggregator);
       return service;
     }
     case 'Gateway': {
-      const typer: Gateway.Facets = [ 'Gateway' ].reduce
-      ( (set, facet) => { set[facet] = safeRequire(path(facet)); return set }
-      , {}
-      );
-      const gateway = new Gateway(config, facets);
-      const service = new Service(config, typer, gateway);
-      return service;
+      return null;
     }
     }
   }
@@ -174,3 +168,20 @@ export class Process {
   }
 
 };
+
+const safeRequire = (path: string) => {
+  try {
+    return require(path);
+  } catch (e) {
+    console.log('|---------------->', e);
+    return {};
+  }
+}
+
+const objectFilter = (obj: any, test: (key: string) => boolean) => {
+  const result = {};
+  for (const key in obj)
+    if (test(key))
+      result[key] = obj[key];
+  return result;
+}

@@ -1,6 +1,6 @@
 export class Event {
-  public name:   string;
-  public data:   any;
+  public name: string;
+  public data: any;
 
   constructor(name: string, data?: any) {
     this.name = name;

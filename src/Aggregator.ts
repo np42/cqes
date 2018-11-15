@@ -1,46 +1,53 @@
-import * as Service         from './Service';
+import * as Service     from './Service';
 
-import { State }            from './State';
-import { Command }          from './Command';
-import { Event }            from './Event';
-import { Query }            from './Query';
+import { Logger }       from './Logger';
 
-import * as Facet           from './Facet';
+import { Command }      from './Command';
+import { Query, Reply } from './Query';
+import { Event }        from './Event';
+import { State }        from './State';
 
-import { Filter }           from './Filter';
-import { Manager }          from './Manager';
-import { Repository, Link } from './Repository';
-import { Factory }          from './Factory';
-import { Reactor }          from './Reactor';
+import * as Filter      from './Filter';
+import * as Manager     from './Manager';
+import * as Repository  from './Repository';
+import * as Factory     from './Factory';
+import * as Reactor     from './Reactor';
 
-export type Result = { events: Array<Event>, commands: Array<Command> };
+export interface Config {
+  name:        string;
+  Filter?:     Filter.Config;
+  Manager?:    Manager.Config;
+  Factory?:    Factory.Config;
+  Repository?: Repository.Config;
+  Reactor?:    Reactor.Config;
+};
 
-export type Config = { name: string };
+export class Aggregator implements Service.Handler {
+  private logger:     Logger;
+  private filter:     Filter.Filter;
+  private manager:    Manager.Manager;
+  private repository: Repository.Repository;
+  private factory:    Factory.Factory;
+  private reactor:    Reactor.Reactor;
 
-export interface Facets {
-  Manager?:    Facet.Manager;
-  Factory?:    Facet.Factory;
-  Repository?: Facet.Respository;
-  Reactor?:    Facet.Reactor;
-}
-
-export class Aggregator extends Service.Handler {
-  private filter:     Filter;
-  private manager:    Manager;
-  private repository: Repository;
-  private factory:    Factory;
-  private reactor:    Reactor;
-
-  constructor(config: Config, facets: Facets, link: Link) {
-    super(config);
-    this.filter     = new Filter(config,     facets.Filter);
-    this.manager    = new Manager(config,    facets.Manager);
-    this.repository = new Repository(config, facets.Repository, link);
-    this.factory    = new Factory(config,    facets.Factory);
-    this.reactor    = new Reactor(config,    facets.Reactor);
+  constructor(config: Config) {
+    this.logger     = new Logger(config.name + '.Aggregator', 'grey');
+    this.filter     = new Filter.Filter(config.Filter);
+    this.manager    = new Manager.Manager(config.Manager);
+    this.repository = new Repository.Repository(config.Repository);
+    this.factory    = new Factory.Factory(config.Factory);
+    this.reactor    = new Reactor.Reactor(config.Reactor);
   }
 
-  public async handleCommand(command: Command): Promise<Result> {
+  public start(): Promise<boolean> {
+    return this.repository.start();
+  }
+
+  public stop(): Promise<void> {
+    return this.repository.stop();
+  }
+
+  public async handleCommand(command: Command): Promise<Service.Result> {
     await this.filter.assert(command);
     const key = command.key;
     let tryCount = 10;
@@ -52,7 +59,7 @@ export class Aggregator extends Service.Handler {
         const newState = this.repository.update(key, state.version, (state, events) => {
           return this.factory.apply(state, events);
         }, events);
-        const commands = [];
+        const commands: Array<Command> = [];
         for (let i = 0; i < events.length; i += 1) {
           const result = this.reactor.handle(newState, events[i]);
           Array.prototype.push.apply(commands, result);

@@ -4,25 +4,25 @@ import { State }  from './State';
 
 export type Handler = (state: State, event: Event) => State;
 
+export type Handlers = { [name: string]: Handler };
+
+export interface Config {
+  name: string;
+  handlers: Handlers;
+}
+
 export class Factory {
 
   private logger: Logger;
-  private handlers: Map<string, Handler>;
+  private handlers: Handlers;
 
-  constructor() {
-    this.logger = new Logger('Factory', 'green');
-    this.handlers = new Map();
+  constructor(config: Config) {
+    this.logger = new Logger(config.name + '.Factory', 'green');
+    this.handlers = config.handlers;
   }
-
-  public when(type: string, handler: Handler) {
-    this.handlers.set(type, handler);
-    return this;
-  }
-
-  /******************************/
 
   public apply(state: State, events: Array<Event>) {
-    const handlerAny = this.handlers.get('any');
+    const handlerAny = this.handlers.on;
     for (let i = 0; i < events.length; i += 1) {
       const event = events[i];
       let version = state.version;
@@ -33,7 +33,7 @@ export class Factory {
           version = state.version = version + 1;
         }
       }
-      const handlerNamed = this.handlers.get('on' + event.name);
+      const handlerNamed = this.handlers['on' + event.name];
       if (handlerNamed != null) {
         const result = handlerNamed(state, event);
         if (result != null) {

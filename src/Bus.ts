@@ -4,9 +4,9 @@ import { QueryBus }   from './QueryBus';
 import { AMQPCommandBus as xCommandBus } from './AMQPCommandBus';
 import { AMQPQueryBus   as xQueryBus }   from './AMQPQueryBus';
 
-export interface Options {
-  Commands: string,
-  Queries:  string,
+export interface Config {
+  Command: string;
+  Query:   string;
 }
 
 export class Bus {
@@ -14,16 +14,23 @@ export class Bus {
   public command: CommandBus;
   public query:   QueryBus;
 
-  constructor(config: Options) {
-    this.command = new xCommandBus(config.Commands);
-    this.query   = new xQueryBus(config.Queries);
+  constructor(config: Config) {
+    this.command = new xCommandBus(config.Command);
+    this.query   = new xQueryBus(config.Query);
   }
 
-  async start() {
-    return true;
+  public async start() {
+    if (await this.query.start()) {
+      if (await this.command.start()) return true;
+      await this.query.stop();
+      return false;
+    }
+    return false;
   }
 
-  async stop() {
+  public async stop() {
+    await this.command.stop();
+    await this.query.stop();
   }
 
 }

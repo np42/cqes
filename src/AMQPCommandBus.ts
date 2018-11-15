@@ -2,7 +2,7 @@ import { CommandBus, Handler }   from './CommandBus'
 import { InCommand, OutCommand } from './Command'
 import { AMQPBus }               from './AMQPBus'
 
-const PREFIX = '~Command-'
+const PREFIX = 'Command-'
 
 export class AMQPCommandBus extends AMQPBus implements CommandBus {
 
@@ -10,14 +10,14 @@ export class AMQPCommandBus extends AMQPBus implements CommandBus {
     super(url)
   }
 
-  public listen(topic: string, handler: Handler<InCommand<any>>) {
+  public listen(topic: string, handler: Handler<InCommand>) {
     const options = { channel: { prefetch: 10 } }
     return this.consume(PREFIX + topic, handler, options)
   }
 
-  public command(request: OutCommand<any>) {
+  public request(request: OutCommand) {
     const options = { persistent: true }
-    return this.publish(PREFIX + request.topic, request.serialize(), options)
+    return this.publish(PREFIX + request.key, request.serialize(), options)
   }
 
 }

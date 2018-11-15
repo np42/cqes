@@ -4,6 +4,8 @@ import { InQuery, OutQuery }                         from './Query';
 export type Handler<T> = CommandHandler<T>;
 
 export interface QueryBus {
-  serve(view: string, handler: Handler<InQuery<any>>): FxSubscription;
-  query(request: OutQuery<any>, timeout?: number): Promise<any>;
+  start(): Promise<boolean>;
+  stop(): Promise<void>;
+  serve(view: string, handler: Handler<InQuery>): FxSubscription;
+  query(request: OutQuery, timeout?: number): Promise<any>;
 }

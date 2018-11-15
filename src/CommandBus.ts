@@ -10,6 +10,8 @@ export type MessageHandler<T> = (message: T) => Promise<void>;
 export type Handler<T>        = MessageHandler<T> | FxMessageHandler<T>;
 
 export interface CommandBus {
-  listen(topic: string, handler: Handler<InCommand<any>>): FxSubscription;
-  command(request: OutCommand<any>): Promise<any>;
+  start(): Promise<boolean>;
+  stop():  Promise<void>;
+  listen(topic: string, handler: Handler<InCommand>): FxSubscription;
+  request(request: OutCommand): Promise<boolean>;
 }

@@ -1,4 +1,4 @@
-import { Bus }          from './Bus';
+import * as Bus         from './Bus';
 
 import { Command }      from './Command';
 import { Query, Reply } from './Query';
@@ -30,13 +30,13 @@ export interface Handler {
 }
 
 export interface Config {
-  name: string;
-  bus: any;
+  name:   string;
+  bus:    Bus.Config;
   typers: Typers;
 }
 
 export class Service {
-  private bus:     Bus;
+  private bus:     Bus.Bus;
   private command: Typer<Command, Command>;
   private query:   Typer<Query, Reply>;
   private event:   Typer<Event, Event>;
@@ -44,7 +44,7 @@ export class Service {
   private handler: Handler;
 
   constructor(config: Config, handler: Handler) {
-    this.bus     = new Bus(config.bus);
+    this.bus     = new Bus.Bus(config.bus);
     this.command = config.typers.Command || new IdentityTyper();
     this.query   = config.typers.Query   || new IdentityTyper();
     this.event   = config.typers.Event   || new IdentityTyper();

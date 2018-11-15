@@ -6,17 +6,21 @@ import * as amqp                                     from 'amqplib';
 type FxConnection = Fx<any, amqp.Connection>;
 type FxChannel = Fx<amqp.Connection, amqp.Channel>;
 
-//export type Options = { channel: ChannelOptions, queue: QueueOptions, reply: any, Message: Serializable };
-//export type ChannelOptions = { prefetch: number };
-//export type QueueOptions = { durable: boolean, exclusive: boolean };
-
 export class AMQPBus {
 
+  private url:        string;
   private connection: FxConnection;
-  private channels: Map<string, FxChannel>;
+  private channels:   Map<string, FxChannel>;
 
   constructor(url: string) {
-    const name  = 'AMQP.Connection';
+    this.url      = url;
+    this.channels = new Map();
+  }
+
+  public start() {
+    if (this.connection != null) return Promise.resolve(true);
+    const name = 'AMQP.Connection';
+    const url = this.url;
     this.connection =
       new Fx((_: any, fx: FxConnection): Promise<amqp.Connection> => <any>amqp.connect(url), { name })
       .and(async (connection, fx) => {
@@ -24,10 +28,15 @@ export class AMQPBus {
         connection.on('close', () => fx.failWith(new Error('AMQP: Connection close')));
         return connection;
       });
-    this.channels = new Map();
+    return Promise.resolve(true);
   }
 
-  getChannel(queue: string, options: any) {
+  public stop() {
+    if (this.connection == null) return Promise.resolve();
+    this.connection = null;
+  }
+
+  private getChannel(queue: string, options: any) {
     const channel = this.channels.get(queue);
     if (channel != null) return channel;
     this.channels.set(queue, this.connection.pipe(async connection => {
@@ -38,7 +47,7 @@ export class AMQPBus {
     return this.channels.get(queue);
   }
 
-  consume(queue: string, handler: Handler<any>, options: any) {
+  protected consume(queue: string, handler: Handler<any>, options: any) {
     if (options == null)                 options = {};
     if (options.noAck == null)           options.noAck = false;
     if (options.Message == null)         options.Message = AMQPInCommand;
@@ -69,7 +78,7 @@ export class AMQPBus {
     }, { name: 'AMQP.Consumer.' + queue }).open();
   }
 
-  publish(queue: string, message: Buffer, options: any) {
+  protected publish(queue: string, message: Buffer, options: any) {
     if (options == null)         options = {};
     if (options.queue == null)   options.queue = queue;
     if (options.channel == null) options.channel = {};

@@ -2,7 +2,7 @@ import { CommandReplier }              from './Command';
 import { InQuery, ReplyType, InReply } from './Query';
 import { Message }                     from 'amqplib';
 
-export class AMQPInQuery<D> extends InQuery<D> {
+export class AMQPInQuery extends InQuery {
   constructor(message: Message, reply: CommandReplier) {
     const payload = <any>{};
     try { Object.assign(payload, JSON.parse(message.content.toString())) }
@@ -17,7 +17,7 @@ export class AMQPInQuery<D> extends InQuery<D> {
   }
 }
 
-export class AMQPInReply<D> extends InReply<D> {
+export class AMQPInReply extends InReply {
   public id: string;
   constructor(message: Message) {
     const payload = <any>{};

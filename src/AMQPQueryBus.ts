@@ -16,12 +16,12 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   private id:         string;
   private pending:    Map<string, Session>;
-  private queue:      Fx<Channel, AMQPInReply<any>>;
+  private queue:      Fx<Channel, AMQPInReply>;
   private gcInterval: NodeJS.Timer;
 
   constructor(url: string) {
     super(url);
-    this.id         = '~Reply-' + uuid.v1();
+    this.id         = 'Reply-' + uuid.v1();
     this.pending    = new Map();
     this.queue      = null;
     this.gcInterval = null;
@@ -53,7 +53,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   //--
 
-  public serve(view: string, handler: Handler<InQuery<any>>) {
+  public serve(view: string, handler: Handler<InQuery>) {
     const options =
       { Message: AMQPInQuery
       , channel: { prefetech: 10 }
@@ -64,10 +64,10 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
           channel.ack(message);
         }
       };
-    return this.consume('~Query-' + view, handler, options);
+    return this.consume('Query-' + view, handler, options);
   }
 
-  public query(request: OutQuery<any>, timeout = 30) {
+  public query(request: OutQuery, timeout = 30) {
     if (this.queue == null) this.listenReply();
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
     const promise = new Promise((resolve, reject) => {

@@ -16,7 +16,7 @@ export class Bus {
 
   constructor(config: Options) {
     this.command = new xCommandBus(config.Commands);
-    this.query = new xQueryBus(config.Queries);
+    this.query   = new xQueryBus(config.Queries);
   }
 
   async start() {

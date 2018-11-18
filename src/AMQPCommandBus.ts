@@ -2,22 +2,25 @@ import { CommandBus, Handler }   from './CommandBus'
 import { InCommand, OutCommand } from './Command'
 import { AMQPBus }               from './AMQPBus'
 
-const PREFIX = 'Command-'
+export interface Config {
+  name: string;
+  url: string;
+};
 
 export class AMQPCommandBus extends AMQPBus implements CommandBus {
 
-  constructor(url: string) {
-    super(url)
+  constructor(config: Config) {
+    super(config)
   }
 
   public listen(topic: string, handler: Handler<InCommand>) {
     const options = { channel: { prefetch: 10 } }
-    return this.consume(PREFIX + topic, handler, options)
+    return this.consume(topic + '.Command', handler, options)
   }
 
   public request(request: OutCommand) {
     const options = { persistent: true }
-    return this.publish(PREFIX + request.key, request.serialize(), options)
+    return this.publish(request.key + '.Command', request.serialize(), options)
   }
 
 }

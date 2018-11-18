@@ -1,24 +1,17 @@
 import * as Bus         from './Bus';
 
-import { Command }      from './Command';
-import { Query, Reply } from './Query';
-import { Event }        from './Event';
-import { State }        from './State';
-
-export interface Typer<P, R> {
-  from: (input: P) => any;
-  to:   (output: any) => R;
-}
+import { Translator }                     from './Translator';
+import { Command, InCommand, OutCommand } from './Command';
+import { Query, InQuery }                 from './Query';
+import { Reply }                          from './Reply';
 
 export interface Typers {
-  Command?: Typer<Command, Command>;
-  Query?:   Typer<Query, Reply>;
-  Event?:   Typer<Event, Event>;
-  State?:   Typer<State, State>;
+  Command?: Translator<Command, Command>;
+  Query?:   Translator<Query, Reply>;
 }
 
 export interface Result {
-  events: Array<Event>;
+  reply:    Reply;
   commands: Array<Command>;
 };
 
@@ -31,30 +24,45 @@ export interface Handler {
 
 export interface Config {
   name:   string;
-  bus:    Bus.Config;
+  Bus:    Bus.Config;
   typers: Typers;
 }
 
 export class Service {
+  private name:    string;
   private bus:     Bus.Bus;
-  private command: Typer<Command, Command>;
-  private query:   Typer<Query, Reply>;
-  private event:   Typer<Event, Event>;
-  private state:   Typer<State, State>;
+  private command: Translator<Command, Command>;
+  private query:   Translator<Query, Reply>;
   private handler: Handler;
 
   constructor(config: Config, handler: Handler) {
-    this.bus     = new Bus.Bus(config.bus);
-    this.command = config.typers.Command || new IdentityTyper();
-    this.query   = config.typers.Query   || new IdentityTyper();
-    this.event   = config.typers.Event   || new IdentityTyper();
-    this.state   = config.typers.State   || new IdentityTyper();
+    this.name    = config.name;
+    this.bus     = new Bus.Bus(config.Bus);
+    this.command = new Translator(config.typers.Command);
+    this.query   = new Translator(config.typers.Query);
     this.handler = handler;
   }
 
   public async start() {
     if (await this.handler.start()) {
-      this.bus.start();
+      await this.bus.start();
+      this.bus.command.listen(this.name, async (command: InCommand) => {
+        const xCommand = <Command>this.command.decode(command);
+        const result = await this.handler.handleCommand(xCommand);
+        result.commands.forEach((xCommand: Command) => {
+          const command = this.command.encode(xCommand);
+          const outCommand = new OutCommand(command.key, command.order, command.data, command.meta);
+          this.bus.command.request(outCommand);
+        });
+        command.ack();
+        debugger;
+      });
+      this.bus.query.serve(this.name, async (query: InQuery) => {
+        debugger;
+        const xQuery = <Query>this.query.decode(query);
+        const reply = await this.handler.handleQuery(query);
+        console.log(reply);
+      });
       return true;
     } else {
       return false;
@@ -66,9 +74,4 @@ export class Service {
     await this.handler.stop()
   }
 
-}
-
-class IdentityTyper implements Typer<any, any> {
-  from(value: any) { return value };
-  to(value: any)   { return value };
 }

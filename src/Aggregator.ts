@@ -3,13 +3,15 @@ import * as Service     from './Service';
 import { Logger }       from './Logger';
 
 import { Command }      from './Command';
-import { Query, Reply } from './Query';
-import { Event }        from './Event';
+import { Query }        from './Query';
+import { Reply }        from './Reply';
 import { State }        from './State';
 
 import * as Filter      from './Filter';
 import * as Manager     from './Manager';
+import * as Buffer      from './Buffer';
 import * as Repository  from './Repository';
+import * as Responder   from './Responder';
 import * as Factory     from './Factory';
 import * as Reactor     from './Reactor';
 
@@ -18,7 +20,9 @@ export interface Config {
   Filter?:     Filter.Config;
   Manager?:    Manager.Config;
   Factory?:    Factory.Config;
+  Buffer?:     Buffer.Config;
   Repository?: Repository.Config;
+  Responder?:  Responder.Config;
   Reactor?:    Reactor.Config;
 };
 
@@ -26,8 +30,10 @@ export class Aggregator implements Service.Handler {
   private logger:     Logger;
   private filter:     Filter.Filter;
   private manager:    Manager.Manager;
+  private buffer:     Buffer.Buffer;
   private repository: Repository.Repository;
   private factory:    Factory.Factory;
+  private responder:  Responder.Responder;
   private reactor:    Reactor.Reactor;
 
   constructor(config: Config) {
@@ -35,7 +41,10 @@ export class Aggregator implements Service.Handler {
     this.filter     = new Filter.Filter(config.Filter);
     this.manager    = new Manager.Manager(config.Manager);
     this.repository = new Repository.Repository(config.Repository);
+    config.Buffer.repository = this.repository;
+    this.buffer     = new Buffer.Buffer(config.Buffer);
     this.factory    = new Factory.Factory(config.Factory);
+    this.responder  = new Responder.Responder(config.Responder);
     this.reactor    = new Reactor.Reactor(config.Reactor);
   }
 
@@ -52,19 +61,15 @@ export class Aggregator implements Service.Handler {
     const key = command.key;
     let tryCount = 10;
     while (--tryCount >= 0) {
-      const state  = await this.repository.get(key);
+      const state  = await this.buffer.get(key);
       const events = await this.manager.handle(state, command);
-      if (events.length == 0) return { events: [], commands: [] };
       try {
-        const newState = this.repository.update(key, state.version, (state, events) => {
+        const newState = this.buffer.update(key, state.version, state => {
           return this.factory.apply(state, events);
-        }, events);
-        const commands: Array<Command> = [];
-        for (let i = 0; i < events.length; i += 1) {
-          const result = this.reactor.handle(newState, events[i]);
-          Array.prototype.push.apply(commands, result);
-        }
-        return { events, commands };
+        });
+        const reply   = this.responder.produce(command, newState, events);
+        const commands = this.reactor.produce(newState, events);
+        return { reply, commands };
       } catch (e) {
         if (tryCount >= 0) continue ;
         this.logger.warn('Discarding command %s:', e);

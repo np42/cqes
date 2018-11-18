@@ -6,11 +6,17 @@ export { Service }      from './src/Service'
 
 export { Aggregator }   from './src/Aggregator'
 
+export { Gateway }      from './src/Gateway'
+
+export { Repository }   from './src/Repository'
+
 export { Event }        from './src/Event'
 
 export { Command }      from './src/Command'
 
-export { Query, Reply } from './src/Query'
+export { Query }        from './src/Query'
+
+export { Reply }        from './src/Reply'
 
 export { State }        from './src/State'
 

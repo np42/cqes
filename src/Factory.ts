@@ -9,6 +9,7 @@ export type Handlers = { [name: string]: Handler };
 export interface Config {
   name: string;
   handlers: Handlers;
+  apply?: (state: State, events: any) => State;
 }
 
 export class Factory {
@@ -17,10 +18,13 @@ export class Factory {
   private handlers: Handlers;
 
   constructor(config: Config) {
-    this.logger = new Logger(config.name + '.Factory', 'green');
+    this.logger   = new Logger(config.name + '.Factory', 'green');
     this.handlers = config.handlers;
+    if (config.apply != null)
+      this.apply  = config.apply;
   }
 
+  // @override
   public apply(state: State, events: Array<Event>) {
     const handlerAny = this.handlers.on;
     for (let i = 0; i < events.length; i += 1) {

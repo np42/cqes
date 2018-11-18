@@ -8,13 +8,13 @@
   , "preserveConstEnums": true
   , "allowUnreachableCode": true
   , "suppressImplicitAnyIndexErrors": true
-  //, "declaration": true
+  , "declaration": true
   //, "noUnusedLocals": true
   , "strictFunctionTypes": false
   , "allowSyntheticDefaultImports": true
   , "outDir": "dist"
   , "sourceMap": true
   }
-, "include": [ "index.ts", "server.ts", "srv" ]
+, "include": [ "index.ts", "process.ts" ]
 , "exclude": [ "node_modules", "**/*.spec.ts" ]
 }

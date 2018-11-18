@@ -1,10 +1,15 @@
 import { CommandBus } from './CommandBus';
 import { QueryBus }   from './QueryBus';
 
-import { AMQPCommandBus as xCommandBus } from './AMQPCommandBus';
-import { AMQPQueryBus   as xQueryBus }   from './AMQPQueryBus';
+import { AMQPCommandBus as xCommandBus
+       , Config as CommandBusConfig
+       }              from './AMQPCommandBus';
+import { AMQPQueryBus as xQueryBus
+       , Config as QueryBusConfig
+       }              from './AMQPQueryBus';
 
 export interface Config {
+  name:    string;
   Command: string;
   Query:   string;
 }
@@ -15,8 +20,8 @@ export class Bus {
   public query:   QueryBus;
 
   constructor(config: Config) {
-    this.command = new xCommandBus(config.Command);
-    this.query   = new xQueryBus(config.Query);
+    this.command = new xCommandBus({ name: config.name, url: config.Command });
+    this.query   = new xQueryBus({ name: config.name, url: config.Query });
   }
 
   public async start() {

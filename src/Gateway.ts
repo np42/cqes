@@ -3,9 +3,10 @@ import * as Service     from './Service';
 import { Logger }       from './Logger';
 
 import { Command }      from './Command';
-import { Query, Reply } from './Query';
+import { Query }        from './Query';
 import { Event }        from './Event';
 import { State }        from './State';
+import { Reply }        from './Reply';
 
 export interface Config {
   name: string;
@@ -16,8 +17,7 @@ export class Gateway implements Service.Handler {
   private logger: Logger;
 
   constructor(config: Config) {
-    this.logger = new Logger(config.name + '.Gateway', 'red.bold');
-
+    this.logger = new Logger(config.name + '.Gateway', 'red');
   }
 
   public start(): Promise<boolean> {

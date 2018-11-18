@@ -1,6 +1,7 @@
-import { CommandReplier }              from './Command';
-import { InQuery, ReplyType, InReply } from './Query';
-import { Message }                     from 'amqplib';
+import { CommandReplier }  from './Command';
+import { InQuery }         from './Query';
+import { Status, InReply } from './Reply';
+import { Message }         from 'amqplib';
 
 export class AMQPInQuery extends InQuery {
   constructor(message: Message, reply: CommandReplier) {
@@ -23,9 +24,9 @@ export class AMQPInReply extends InReply {
     const payload = <any>{};
     try { Object.assign(payload, JSON.parse(message.content.toString())) }
     catch (e) { /* Fail silently */ }
-    switch (payload.type) {
-    case ReplyType.Resolved: super(null, payload.data); break ;
-    case ReplyType.Rejected: super(payload.error); break ;
+    switch (payload.status) {
+    case Status.Resolved: super(null, payload.data); break ;
+    case Status.Rejected: super(payload.data); break ;
     }
     this.id = message.properties.correlationId;
   }

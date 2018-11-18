@@ -13,32 +13,33 @@ const CLArgs     = require('command-line-args');
 
 const extend = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
 
-const defaultService = { mode: 'typescript', name: 'World' };
+const SERVICE_DEFAULT = { mode: 'typescript', name: 'World', bus: 'default' };
+const AMQP_DEFAULT = 'amqp://guest:guest@localhost/';
 
 export class Process {
 
-  private config:       any;
-  private argv:         any;
-  private logger:       Logger;
-  private services:     Map<string, any>;
+  private config:      any;
+  private argv:        any;
+  private logger:      Logger;
+  private services:    Map<string, any>;
 
-  public  rootpath:     string;
-  public  environment:  string;
-  public  hostname:     string;
-  public  launcher:     string;
+  public  rootpath:    string;
+  public  environment: string;
+  public  hostname:    string;
+  public  launcher:    string;
 
   constructor() {
-    this.argv         = CLArgs( [ { name: 'root', type: String }
-                                , { name: 'group', type: String, defaultOption: true }
-                                ]
-                              , { partial: true }
-                              );
-    this.rootpath     = this.argv.root || process.cwd();
-    this.logger       = new Logger(this.argv.group || 'Process');
-    this.services     = new Map();
+    this.argv     = CLArgs( [ { name: 'root', type: String }
+                            , { name: 'group', type: String, defaultOption: true }
+                            ]
+                          , { partial: true }
+                          );
+    this.rootpath = this.argv.root || process.cwd();
+    this.logger   = new Logger(this.argv.group || 'Process');
+    this.services = new Map();
     this.loadConstant();
-    process.on('uncaughtException', (error: any) => this.logger.error('exception', error.stack || error));
-    process.on('unhandledRejection', (error: any) => this.logger.error('reject', error.stack || error));
+    process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
+    process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
   }
 
   private loadConstant() {
@@ -99,56 +100,71 @@ export class Process {
     if (group.services == null)
       return this.logger.log('No service for "%s" to load', this.argv.group);
     for (let i = 0; i < group.services.length; i += 1) {
-      const config = extend(defaultService, group.services[i], this.config.Service);
+      const config = extend(SERVICE_DEFAULT, group.services[i], this.config.Service);
+      const configBus = this.getBusConfig(this.config.Bus);
+      config.Bus = configBus[config.bus] || configBus.default;
       const name = config.name;
-      this.logger.log('Loading Custom Service: %s', name);
-      switch (config.mode) {
-      case 'typescript': {
-        const service = this.createTypescriptService(config);
-        this.services.set(name, service);
-      } break ;
-      case 'reason': {
-        const service = this.createReasonService(config);
-        this.services.set(name, service);
-      }
-      }
+      this.logger.log('Loading Custom Service: %cyan', name);
+      const service = this.createService(config);
+      this.services.set(name, service);
     }
   }
 
-  private createTypescriptService(config: any) {
-    this.logger.error('TODO Typescript service construction');
-    process.exit();
+  private getBusConfig(config: any) {
+    if (config == null)
+      return { default: { Command: AMQP_DEFAULT, Query: AMQP_DEFAULT } };
+    else if (typeof config.default === 'string')
+      return { default: { Command: config.default, Query: config.default } };
+    if (config.default == null)
+      config.default = { Command: AMQP_DEFAULT, Query: AMQP_DEFAULT };
+    return config;
   }
 
-  private createReasonService(config: any) {
+  private createService(config: any) {
     const name = config.name;
-    const path = (t: string) => join(this.rootpath, config.rootpath, name, name + '_' + t + '.bs.js');
+    const path = (t: string) => join(this.rootpath, config.rootpath, name, name + '_' + t + '.js');
+    const load = (t: string) => extend({ name }, config[t], this.safeRequire(path(t)));
 
-    const Command = safeRequire(path('Command'));
-    const Query   = safeRequire(path('Query'));
-    const Event   = safeRequire(path('Event'));
-    const State   = safeRequire(path('State'));
-    const typers  = extend(config, { typers: { Command, Query, Event, State } });
+    const Command = load('Command');
+    const Query   = load('Query');
+    const typers  = extend(config, { typers: { Command, Query } });
 
     switch (config.type) {
     case 'Aggregator': {
-      const Filter        = safeRequire(path('Filter'));
-      const Manager       = safeRequire(path('Manager'));
-      const Factory       = safeRequire(path('Factory'));
-      const Repository    = safeRequire(path('Repository'));
-      const Reactor       = safeRequire(path('Reactor'));
-      Manager.handlers    = objectFilter(Manager,    k => /^on([A-Z]|$)/.test(k));
-      Factory.handlers    = objectFilter(Factory,    k => /^on([A-Z]|$)/.test(k));
-      Repository.handlers = objectFilter(Repository, k => /^query([A-Z]|$)/.test(k));
-      Reactor.handlers    = objectFilter(Reactor,    k => /^on([A-Z]|$)/.test(k));
-      const facets        = extend(config, { Filter, Manager, Factory, Repository, Reactor });
-      const aggregator    = new Aggregator(facets);
-      const service       = new Service(typers, aggregator);
+      const State           = load('State');
+      const Filter          = load('Filter');
+      const Manager         = load('Manager');
+      Manager.handlers      = objectFilter(Manager, k => /^on([A-Z]|$)/.test(k));
+      const Factory         = load('Factory');
+      Factory.handlers      = objectFilter(Factory, k => /^on([A-Z]|$)/.test(k));
+      const Repository      = load('Repository');
+      const Buffer          = load('Buffer');
+      Buffer.translator     = State;
+      const Responder       = load('Responder');
+      Responder.handlers    = objectFilter(Responder, k => /^on([A-Z]|$)/.test(k));
+      const Reactor         = load('Reactor');
+      Reactor.handlers      = objectFilter(Reactor, k => /^on([A-Z]|$)/.test(k));
+      const facets          = { Filter, Manager, Factory, Buffer, Repository, Reactor, Responder };
+      const aggregator      = new Aggregator(extend(config, facets));
+      const service         = new Service(typers, aggregator);
       return service;
     }
     case 'Gateway': {
       return null;
     }
+    }
+  }
+
+  private safeRequire(path: string) {
+    try {
+      const module = require(path);
+      this.logger.log('%green: %s', 'loading', path);
+      if (module.default != null) return module.default;
+      return module;
+    } catch (e) {
+      if (e.code != 'MODULE_NOT_FOUND') throw e;
+      //this.logger.log('%red: %s', 'fail', path);
+      return {};
     }
   }
 
@@ -168,15 +184,6 @@ export class Process {
   }
 
 };
-
-const safeRequire = (path: string) => {
-  try {
-    return require(path);
-  } catch (e) {
-    console.log('|---------------->', e);
-    return {};
-  }
-}
 
 const objectFilter = (obj: any, test: (key: string) => boolean) => {
   const result = {};

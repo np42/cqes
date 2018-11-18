@@ -1,3 +1,3 @@
-import { Process } from './src/Process'
+import { Process } from './src/Process';
 
 new Process().run();

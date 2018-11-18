@@ -28,7 +28,7 @@ export class Gateway implements Service.Handler {
     return Promise.resolve();
   }
 
-  public async handleCommand(command: Command): Promise<Service.Result> {
+  public async handleCommand(command: Command): Promise<Reply> {
     return null;
   }
 

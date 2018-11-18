@@ -9,11 +9,11 @@ export interface Config {
   name:        string;
   size?:       number;
   ttl?:        number;
-  translator:  Translator<State, State>;
+  translator:  Translator<State>;
   repository?: Repository;
 };
 
-export interface CachingMap<K, V> {
+interface CachingMap<K, V> {
   set(key: K, value: V, options?: { ttl?: number }): void;
   get(key: K): V;
 }
@@ -25,7 +25,7 @@ export class Buffer {
   private logger:     Logger;
   private buffer:     CachingMap<string, State>;
   private ttl:        number;
-  private translator: Translator<State, State>;
+  private translator: Translator<State>;
   private repository: Repository;
 
   constructor(config: Config) {
@@ -52,7 +52,6 @@ export class Buffer {
 
   public update(key: string, expectedVersion: number, reducer: Reducer) {
     const state = this.buffer.get(key);
-    if (state == null) throw new Error('State must exists'); // fecthed just before
     if (state.version != expectedVersion) throw new Error('State has changed');
     const xState = reducer(state);
     this.buffer.set(key, xState, { ttl: this.ttl });

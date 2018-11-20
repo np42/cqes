@@ -122,34 +122,38 @@ export class Process {
 
   private createService(config: any) {
     const name = config.name;
-    const load = (part: string) => {
+    const load = (part: string, props: Array<string>) => {
       const path = join(this.rootpath, config.rootpath, name, name + '_' + part + '.js');
       const module = this.safeRequire(path, part);
-      return extend({ name, path }, config[part], module);
+      const result = (props || []).reduce((result, name) => {
+        if (typeof module[name] == 'function')
+          result[name] = module[name].bind(module);
+        else
+          result[name] = module[name];
+        return result;
+      }, {});
+      return extend({ name, path }, config[part], result);
     };
+    const srvcIface = ['init', 'start', 'stop'];
 
-    const Command   = load('Command');
-    const Query     = load('Query');
-    const Reply     = load('Reply');
-    const Bus       = load('Bus');
-    const Debouncer = load('Debouncer');
-    const Throttler = load('Throttler');
+    const Command   = load('Command', ['from', 'to']);
+    const Query     = load('Query', ['from', 'to']);
+    const Reply     = load('Reply', ['from', 'to']);
+    const Bus       = load('Bus', [...srvcIface, 'listen', 'serve', 'request', 'query']);
+    const Debouncer = load('Debouncer', ['satisfy']);
+    const Throttler = load('Throttler', ['satisfy']);
     const srvcCfg   = extend({ name }, { Command, Query, Reply, Bus, Debouncer, Throttler });
 
     switch (config.type) {
     case 'Aggregator': {
-      const State        = load('State');
-      const Manager      = load('Manager');
-      Manager.handlers   = objectFilter(Manager, k => /^on([A-Z]|$)/.test(k));
-      const Factory      = load('Factory');
-      Factory.handlers   = objectFilter(Factory, k => /^on([A-Z]|$)/.test(k));
-      const Repository   = load('Repository');
-      const Buffer       = load('Buffer');
+      const State        = load('State', ['from', 'to']);
+      const Manager      = load('Manager', ['empty', 'handle']);
+      const Factory      = load('Factory', ['apply']);
+      const Repository   = load('Repository', [...srvcIface, 'save', 'load', 'resolve']);
+      const Buffer       = load('Buffer', ['get', 'update']);
       Buffer.translator  = State;
-      const Responder    = load('Responder');
-      Responder.handlers = objectFilter(Responder, k => /^on([A-Z]|$)/.test(k));
-      const Reactor      = load('Reactor');
-      Reactor.handlers   = objectFilter(Reactor, k => /^on([A-Z]|$)/.test(k));
+      const Responder    = load('Responder', ['resolve']);
+      const Reactor      = load('Reactor', ['produce']);
       const facets       = { Debouncer, Manager, Factory, Buffer, Repository, Reactor, Responder };
       const aggregator   = new Aggregator(extend(config, facets));
       srvcCfg.Handler    = aggregator;
@@ -157,7 +161,10 @@ export class Process {
       return service;
     }
     case 'Gateway': {
-      return null;
+      const gateway      = load('Gateway', [...srvcIface, 'handleCommand', 'handleQuery']);
+      srvcCfg.Handler    = gateway;
+      const service      = new Service(srvcCfg);
+      return service;
     }
     }
   }
@@ -171,7 +178,7 @@ export class Process {
       return module;
     } catch (e) {
       if (e.code != 'MODULE_NOT_FOUND') throw e;
-      //this.logger.log('%red: %s', 'fail', path);
+      this.logger.log('%red: %s', 'fail', path);
       return {};
     }
   }
@@ -192,11 +199,3 @@ export class Process {
   }
 
 };
-
-const objectFilter = (obj: any, test: (key: string) => boolean) => {
-  const result = {};
-  for (const key in obj)
-    if (test(key))
-      result[key] = obj[key];
-  return result;
-}

@@ -1,47 +1,50 @@
 import { Logger }  from './Logger';
 import { State }   from './State';
 import { Command } from './Command';
+import { Query }   from './Query';
 import { Event }   from './Event';
+import { Reply }   from './Reply';
 
-export type Handler = (state: State, command: Command) => Promise<any>;
+interface Bus {
+  query(query: Query, timeout?: number): Promise<Reply>;
+}
 
-export type Handlers = { [name: string]: Handler };
+export type Handler = (state: State, command: Command, bus: Bus) => Promise<any>;
 
 export interface Config {
-  name:      string;
-  handlers:  Handlers;
-  handle?:   Handler;
-  empty?:    () => any;
+  name:    string;
+  empty?:  () => any;
+  handle?: Handler;
 };
 
 export class Manager {
 
   private logger:   Logger;
-  private handlers: Handlers;
+  private config:   Config;
 
   constructor(config: Config) {
-    this.logger   = new Logger(config.name + '.Manager', 'red');
-    this.handlers = config.handlers;
-    if (config.handle != null)
-      this.handle = config.handle;
-    if (config.empty != null)
-      this.empty = config.empty;
+    this.logger = new Logger(config.name + '.Manager', 'red');
+    this.config = config;
   }
 
   private empty(): Array<Event> {
-    return [];
+    if (this.config.empty != null) {
+      return this.config.empty();
+    } else {
+      return [];
+    }
   }
 
-  public async handle(state: State, command: Command): Promise<Array<Event>> {
-    const handlerAny   = this.handlers.on;
-    const handlerNamed = this.handlers['on' + command.order];
-    if (handlerNamed == null && handlerAny == null) {
-      this.logger.warn('Missing handler: ', command.order);
-      return this.empty();
+  public async handle(state: State, command: Command, bus: Bus): Promise<Array<Event>> {
+    if (this.config.handle != null) {
+      this.logger.log('Handle %s [%s] > %s', command.key, state.status, command.order);
+      const limitedBus = { query: (query: Query) => {
+        this.logger.log('Query %s:%s', query.view, query.method);
+        return bus.query(query);
+      } };
+      return this.config.handle(state, command, limitedBus);
     } else {
-      const result = await (handlerNamed || handlerAny)(state, command);
-      if (result == null) return this.empty();
-      return result;
+      return this.empty();
     }
   }
 

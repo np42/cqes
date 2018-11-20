@@ -30,8 +30,7 @@ export class Debouncer {
 
   public async satisfy(command: InCommand, handler: () => Promise<Reply>): Promise<void> {
     const reply = await handler();
-    debugger;
-    //command.ack(reply);
+    command.ack();
   }
 
 }

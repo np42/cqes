@@ -4,9 +4,10 @@
   "description": "CQRS / Event Sourcing Framework",
   "main": "dist/index.js",
   "scripts": {
-    "postinstall": "tsc",
-    "watch": "nodemon -e ts -x 'tsc || echo'",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "postinstall": "tsc"
+  },
+  "bin": {
+    "cqes": "bin/cqes"
   },
   "repository": {
     "type": "git",
@@ -25,6 +26,9 @@
     "url": "https://github.com/apiculteur/cqes/issues"
   },
   "homepage": "https://github.com/apiculteur/cqes#readme",
+  "peerDependencies": {
+    "bs-platform": "^4.0.7"
+  },
   "devDependencies": {
     "@types/amqplib": "^0.5.8",
     "@types/core-js": "^2.5.0",

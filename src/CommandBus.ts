@@ -1,5 +1,6 @@
 import { Fx }                    from './Fx';
 import { InCommand, OutCommand } from './Command';
+import { Reply }                 from './Reply';
 
 export interface Subscription { stop: () => void };
 
@@ -13,5 +14,5 @@ export interface CommandBus {
   start(): Promise<boolean>;
   stop():  Promise<void>;
   listen(topic: string, handler: Handler<InCommand>): void;
-  request(request: OutCommand): Promise<boolean>;
+  request(request: OutCommand): Promise<Reply>;
 }

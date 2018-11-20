@@ -24,3 +24,6 @@ export { Fx }           from './src/Fx'
 export { Mx }           from './src/Mx'
 //export { Lx }           from './src/Lx'
 export { Qx }           from './src/Qx'
+
+
+export { Config as GatewayConfig } from './src/Gateway';

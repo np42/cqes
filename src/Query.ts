@@ -14,6 +14,7 @@ export class Query {
     this.data      = data;
     this.meta      = meta || null;
   }
+
 }
 
 export type QueryReplier = (type: Status, value: any) => void;

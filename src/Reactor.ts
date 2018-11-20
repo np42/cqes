@@ -4,50 +4,36 @@ import { Command } from './Command';
 import { State }   from './State';
 import { Event }   from './Event';
 
-export type Handler  = (state: any, event: any) => Command | Array<Command>;
-
-export type Handlers = { [name: string]: Handler };
+interface Bus {
+  request(request: Command): void;
+}
 
 export interface Config {
-  name: string;
-  handlers: Handlers;
-  produce?: (state: State, events: any) => Array<Command>;
+  name:     string;
+  produce?: (state: State, events: any, bus: Bus) => void;
 };
 
 
-export interface Reactor {
-  produce(state: State, events: any): Array<Command>;
-}
-
 export class Reactor {
 
-  private logger:   Logger;
-  private handlers: Handlers;
+  private logger: Logger;
+  private config: Config;
 
   constructor(config: Config) {
-    this.logger   = new Logger(config.name + '.Reactor', 'magenta');
-    this.handlers = config.handlers;
-    if (config.produce != null)
-      this.produce = config.produce;
+    this.logger = new Logger(config.name + '.Reactor', 'magenta');
+    this.config = config;
   }
 
-  public produce(state: State, events: Array<Event>) {
-    return events.reduce((commands, event) => {
-      return commands.concat(this.produceOne(state, event));
-    }, []);
-  }
-
-  private produceOne(state: State, event: Event) {
-    return ['on', 'on' + event.name].reduce((commands, name) => {
-      const handler = this.handlers[name];
-      if (handler != null) {
-        const result = handler(state, event);
-        if (result == null) return commands;
-        if (result instanceof Array) Array.prototype.push.apply(commands, result);
-        else commands.push(result);
-      }
-      return commands;
-    }, []);
+  public produce(state: State, events: Array<Event>, bus: Bus) {
+    if (this.config.produce != null) {
+      const limitedBus = { request: (request: Command) => {
+        this.logger.log('Produce %s > %s:%s', state.status, request.key, request.order);
+        bus.request(request);
+      } };
+      return this.config.produce(state, events, limitedBus);
+    } else {
+      return null;
+    }
   }
 
 }

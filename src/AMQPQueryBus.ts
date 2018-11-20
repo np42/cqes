@@ -2,7 +2,7 @@ import { Fx }                       from './Fx';
 import { Handler }                  from './CommandBus';
 import { QueryBus }                 from './QueryBus';
 import { InQuery, OutQuery }        from './Query';
-import { Status, OutReply }         from './Reply';
+import { Reply, Status, OutReply }  from './Reply';
 import { AMQPBus }                  from './AMQPBus';
 import { AMQPInQuery, AMQPInReply } from './AMQPQuery';
 import { Channel, Message }         from 'amqplib';
@@ -74,7 +74,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     return this.consume(view + '.Query', handler, options);
   }
 
-  public query(request: OutQuery, timeout = 30) {
+  public query(request: OutQuery, timeout = 30): Promise<Reply> {
     if (!this.connected) this.listenReply();
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
     const promise = new Promise((resolve, reject) => {
@@ -83,7 +83,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
       this.pending.set(options.correlationId, session);
       this.publish(request.view, request.serialize(), options);
     });
-    return promise;
+    return <any>promise;
   }
 
 }

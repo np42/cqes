@@ -7,13 +7,6 @@ import * as Bus                           from './Bus';
 import * as Debouncer                     from './Debouncer';
 import * as Throttler                     from './Throttler';
 
-export interface Handler {
-  start: () => Promise<boolean>;
-  stop:  () => Promise<void>;
-  handleCommand: (command: Command) => Promise<Reply>;
-  handleQuery:   (query: Query) => Promise<Reply>;
-}
-
 export interface Config {
   name:       string;
   Bus:        Bus.Config;
@@ -23,6 +16,14 @@ export interface Config {
   Query?:     Translator<Query>;
   Reply?:     Translator<Reply>;
   Handler:    Handler;
+}
+
+export interface Handler {
+  init?:         (config: Config) => void;
+  start:         () => Promise<boolean>;
+  stop:          () => Promise<void>;
+  handleCommand: (command: Command, bus: Bus.Bus) => Promise<Reply>;
+  handleQuery:   (query: Query, bus: Bus.Bus) => Promise<Reply>;
 }
 
 export class Service {
@@ -50,19 +51,19 @@ export class Service {
     if (await this.handler.start()) {
       await this.bus.start();
 
-      this.bus.command.listen(this.name, async (command: InCommand) => {
+      this.bus.listen(this.name, async (command: InCommand) => {
         this.debouncer.satisfy(command, async () => {
           const xCommand = <Command>this.command.decode(command);
-          const xReply   = await this.handler.handleCommand(xCommand);
+          const xReply   = await this.handler.handleCommand(xCommand, this.bus);
           return <Reply>this.reply.encode(xReply);
         });
       });
 
-      this.bus.query.serve(this.name, async (query: InQuery) => {
+      this.bus.serve(this.name, async (query: InQuery) => {
         this.throttler.satisfy(query, async () => {
           debugger;
           const xQuery = <Query>this.query.decode(query);
-          const xReply = await this.handler.handleQuery(query);
+          const xReply = await this.handler.handleQuery(query, this.bus);
           return <Reply>this.reply.encode(xReply);
         });
       });

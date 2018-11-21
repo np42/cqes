@@ -1,6 +1,5 @@
 import { Logger }       from './Logger';
 import { State }        from './State';
-import { Translator }   from './Translator';
 import { Repository }   from './Repository';
 
 const CachingMap = require('caching-map');
@@ -9,7 +8,6 @@ export interface Config {
   name:        string;
   size?:       number;
   ttl?:        number;
-  translator:  Translator<State>;
   repository?: Repository;
 };
 
@@ -25,14 +23,12 @@ export class Buffer {
   private logger:     Logger;
   private buffer:     CachingMap<string, State>;
   private ttl:        number;
-  private translator: Translator<State>;
   private repository: Repository;
 
   constructor(config: Config) {
     this.logger     = new Logger(config.name + '.Buffer', 'blue');
     this.buffer     = new CachingMap(config.size > 0 ? config.size : null);
     this.ttl        = config.ttl > 0 ? config.ttl : null;
-    this.translator = new Translator(config.translator);
     this.repository = config.repository;
   }
 
@@ -42,22 +38,20 @@ export class Buffer {
       return state;
     } else if (this.repository != null) {
       const state = await this.repository.load(key);
-      const xState = <State>this.translator.decode(state);
-      this.buffer.set(key, xState);
-      return xState;
+      this.buffer.set(key, state);
+      return state;
     } else {
-      return <State>this.translator.decode(new State());
+      return new State();
     }
   }
 
   public update(key: string, expectedVersion: number, reducer: Reducer) {
-    const state = this.buffer.get(key);
-    if (state.version != expectedVersion) throw new Error('State has changed');
-    const xState = reducer(state);
-    this.buffer.set(key, xState, { ttl: this.ttl });
-    const newState = <State>this.translator.encode(xState);
+    const xState = this.buffer.get(key);
+    if (xState.version != expectedVersion) throw new Error('State has changed');
+    const newState = reducer(xState);
+    this.buffer.set(key, newState, { ttl: this.ttl });
     this.repository.save(key, newState);
-    return xState;
+    return newState;
   }
 
 }

@@ -27,6 +27,7 @@ export interface Config {
 
 export class Aggregator implements Service.Handler {
   private logger:     Logger;
+  private config:     Config;
   private manager:    Manager.Manager;
   private buffer:     Buffer.Buffer;
   private repository: Repository.Repository;
@@ -35,14 +36,20 @@ export class Aggregator implements Service.Handler {
   private reactor:    Reactor.Reactor;
 
   constructor(config: Config) {
-    this.logger     = new Logger(config.name + '.Aggregator', 'grey');
-    this.manager    = new Manager.Manager(config.Manager);
-    this.repository = new Repository.Repository(config.Repository);
-    config.Buffer.repository = this.repository;
-    this.buffer     = new Buffer.Buffer(config.Buffer);
-    this.factory    = new Factory.Factory(config.Factory);
-    this.responder  = new Responder.Responder(config.Responder);
-    this.reactor    = new Reactor.Reactor(config.Reactor);
+    this.logger = new Logger(config.name + '.Aggregator', 'grey');
+    this.config = config;
+  }
+
+  public init(_: never, bus: Bus) {
+    this.config.Manager.bus = bus;
+    this.manager    = new Manager.Manager(this.config.Manager);
+    this.repository = new Repository.Repository(this.config.Repository);
+    this.config.Buffer.repository = this.repository;
+    this.buffer     = new Buffer.Buffer(this.config.Buffer);
+    this.factory    = new Factory.Factory(this.config.Factory);
+    this.responder  = new Responder.Responder(this.config.Responder);
+    this.config.Reactor.bus = bus;
+    this.reactor    = new Reactor.Reactor(this.config.Reactor);
   }
 
   public start(): Promise<boolean> {
@@ -53,19 +60,19 @@ export class Aggregator implements Service.Handler {
     return this.repository.stop();
   }
 
-  public async handleCommand(command: Command, bus: Bus): Promise<Reply> {
+  public async handleCommand(command: Command): Promise<Reply> {
     const key = command.key;
     let tryCount = 10;
     while (--tryCount >= 0) {
       /*/ console.log('Command Handled', tryCount, command); /**/
       const state  = await this.buffer.get(key);
-      const events = await this.manager.handle(state, command, bus);
+      const events = await this.manager.handle(state, command);
       try {
         const newState = this.buffer.update(key, state.version, state => {
           return this.factory.apply(state, events);
         });
         /*/ console.log('State updated', newState.version); /**/
-        this.reactor.produce(newState, events, bus);
+        this.reactor.produce(newState, events);
         return this.responder.resolve(command, newState, events);
       } catch (e) {
         if (tryCount >= 0) continue ;
@@ -75,7 +82,7 @@ export class Aggregator implements Service.Handler {
     }
   }
 
-  public async handleQuery(query: Query, bus: Bus): Promise<Reply> {
+  public async handleQuery(query: Query): Promise<Reply> {
     return null;
   }
 

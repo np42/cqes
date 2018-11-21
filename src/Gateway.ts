@@ -23,7 +23,7 @@ export class Gateway implements Service.Handler {
   private config: Config;
 
   constructor(config: Config) {
-    this.logger = new Logger(config.name + '.Gateway', 'red');
+    this.logger = new Logger(config.name + '.Gateway', 'yellow');
     this.config = config;
     if (config.init != null) config.init(config);
   }

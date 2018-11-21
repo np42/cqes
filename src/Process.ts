@@ -136,24 +136,32 @@ export class Process {
     };
     const srvcIface = ['init', 'start', 'stop'];
 
-    const Command   = load('Command', ['decode', 'encode']);
-    const Query     = load('Query', ['decode', 'encode']);
-    const Reply     = load('Reply', ['decode', 'encode']);
-    const Bus       = load('Bus', [...srvcIface, 'listen', 'serve', 'request', 'query']);
-    const Debouncer = load('Debouncer', ['satisfy']);
-    const Throttler = load('Throttler', ['satisfy']);
-    const srvcCfg   = extend({ name }, { Command, Query, Reply, Bus, Debouncer, Throttler });
+    const Bus         = load('Bus', [...srvcIface, 'listen', 'serve', 'request', 'query']);
+    const Reply       = load('Reply', ['decode', 'encode']);
+    const Command     = load('Command', ['decode', 'encode']);
+    const Query       = load('Query', ['decode', 'encode']);
+    const Debouncer   = load('Debouncer', ['satisfy']);
+    Debouncer.Command = Command;
+    Debouncer.Reply   = Reply;
+    const Throttler   = load('Throttler', ['satisfy']);
+    Throttler.Query   = Query;
+    Throttler.Reply   = Reply;
+    const srvcCfg     = extend({ name }, { Command, Query, Reply, Bus, Debouncer, Throttler });
 
     switch (config.type) {
     case 'Aggregator': {
       const State        = load('State', ['decode', 'encode']);
       const Manager      = load('Manager', ['empty', 'handle']);
+      Manager.Query      = Query;
+      Manager.Reply      = Reply;
       const Factory      = load('Factory', ['apply']);
       const Repository   = load('Repository', [...srvcIface, 'save', 'load', 'resolve']);
+      Repository.State   = State;
       const Buffer       = load('Buffer', ['get', 'update']);
-      Buffer.translator  = State;
       const Responder    = load('Responder', ['resolve']);
       const Reactor      = load('Reactor', ['produce']);
+      Reactor.Command    = Command;
+      Reactor.Reply      = Reply;
       const facets       = { Debouncer, Manager, Factory, Buffer, Repository, Reactor, Responder };
       const aggregator   = new Aggregator(extend(config, facets));
       srvcCfg.Handler    = aggregator;

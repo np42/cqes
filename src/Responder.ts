@@ -21,6 +21,7 @@ export class Responder {
   }
 
   public resolve(command: Command, state: State, events: Array<Event>) {
+    debugger;
     if (this.config.resolve != null) {
       const reply = this.config.resolve(command, state, events);
       this.logger.log("Resolve %s:%s > %s", command.key, command.order, JSON.stringify(reply));

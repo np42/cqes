@@ -1,6 +1,7 @@
 import { Logger }       from './Logger';
 import { Query }        from './Query';
 import { Reply }        from './Reply';
+import { Translator }   from './Translator';
 import { State }        from './State';
 
 export interface Config {
@@ -11,16 +12,19 @@ export interface Config {
   load?:    (key: string) => Promise<State>;
   save?:    (key: string, state: State) => Promise<void>;
   resolve?: (query: Query) => Promise<Reply>;
+  State?:   Translator<State>;
 };
 
 export class Repository {
 
   private logger: Logger;
   private config: Config;
+  private state:  Translator<State>;
 
   constructor(config: Config) {
     this.logger = new Logger(config.name + '.Repository', 'blue');
     this.config = config;
+    this.state  = new Translator(config.State);
     if (config.init != null) config.init(config);
   }
 
@@ -42,19 +46,22 @@ export class Repository {
     }
   }
 
-  public save(key: string, state: State): Promise<void> {
+  public save(key: string, xState: State): Promise<void> {
     if (this.config.save != null) {
-      this.logger.log('Saving %s@%s -> %s', state.version, key, state.status);
+      const state = <State>this.state.encode(xState);
+      this.logger.log('Saving %s@%s -> %s', xState.version, key, state.status);
       return this.config.save(key, state);
     } else {
       return Promise.resolve();
     }
   }
 
-  public load(key: string): Promise<State> {
+  public async load(key: string): Promise<State> {
     if (this.config.load != null) {
-      this.logger.log('Loading %s', key);
-      return this.config.load(key);
+      const state = await this.config.load(key);
+      this.logger.log('Loading %s : %s', key, state.status);
+      const xState = <State>this.state.decode(state);
+      return xState;
     } else {
       return Promise.resolve(new State());
     }

@@ -62,7 +62,6 @@ export class Aggregator implements Service.Handler {
       const events = await this.manager.handle(state, command, bus);
       try {
         const newState = this.buffer.update(key, state.version, state => {
-          if (state.version == 0) debugger;
           return this.factory.apply(state, events);
         });
         /*/ console.log('State updated', newState.version); /**/

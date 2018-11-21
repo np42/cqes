@@ -136,9 +136,9 @@ export class Process {
     };
     const srvcIface = ['init', 'start', 'stop'];
 
-    const Command   = load('Command', ['from', 'to']);
-    const Query     = load('Query', ['from', 'to']);
-    const Reply     = load('Reply', ['from', 'to']);
+    const Command   = load('Command', ['decode', 'encode']);
+    const Query     = load('Query', ['decode', 'encode']);
+    const Reply     = load('Reply', ['decode', 'encode']);
     const Bus       = load('Bus', [...srvcIface, 'listen', 'serve', 'request', 'query']);
     const Debouncer = load('Debouncer', ['satisfy']);
     const Throttler = load('Throttler', ['satisfy']);
@@ -146,7 +146,7 @@ export class Process {
 
     switch (config.type) {
     case 'Aggregator': {
-      const State        = load('State', ['from', 'to']);
+      const State        = load('State', ['decode', 'encode']);
       const Manager      = load('Manager', ['empty', 'handle']);
       const Factory      = load('Factory', ['apply']);
       const Repository   = load('Repository', [...srvcIface, 'save', 'load', 'resolve']);

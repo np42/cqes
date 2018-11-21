@@ -1,17 +1,19 @@
+import { AMQPBus, FxConnection }    from './AMQPBus';
 import { Fx }                       from './Fx';
-import { Handler }                  from './CommandBus';
-import { QueryBus }                 from './QueryBus';
-import { InQuery, OutQuery }        from './Query';
-import { Reply, Status, OutReply }  from './Reply';
-import { AMQPBus }                  from './AMQPBus';
-import { AMQPInQuery, AMQPInReply } from './AMQPQuery';
 import { Channel, Message }         from 'amqplib';
+import { QueryBus }                 from './QueryBus';
+import { Handler }                  from './CommandBus';
+import { InQuery, OutQuery }        from './Query';
+import { AMQPInQuery }              from './AMQPQuery';
+import { Reply, Status, OutReply }  from './Reply';
+import { AMQPInReply }              from './AMQPReply';
 import * as uuid                    from 'uuid';
 
-type Session = { expiresAt: number
-               , resolve: (value: any) => void
-               , reject: (error: any) => void
-               };
+interface Session {
+  expiresAt: number;
+  resolve: (value: any) => void;
+  reject: (error: any) => void;
+};
 
 export interface Config {
   name: string;
@@ -22,14 +24,14 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   private id:         string;
   private pending:    Map<string, Session>;
-  private connected:  boolean;
+  private response:   FxConnection;
   private gcInterval: NodeJS.Timer;
 
   constructor(config: Config) {
     super(config);
     this.id         = config.name + '.Reply.' + uuid.v1();
     this.pending    = new Map();
-    this.connected  = false;
+    this.response = null;
     this.gcInterval = null;
   }
 
@@ -47,15 +49,21 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     }
   }
 
-  private listenReply() {
+  public async start() {
+    super.start();
     this.gcInterval = setInterval(() => this.gc(), 1000);
-    this.consume(this.id, async reply => {
+    this.response = <any>await this.consume(this.id, async (reply: AMQPInReply) => {
       const session = this.pending.get(reply.id);
-      if (session == null) return ;
-      session[reply.type](reply);
+      if (session == null) return  /* FIXME: do not fail silently */;
+      session[reply.status](reply);
       this.pending.delete(reply.id);
-    }, { noAck: true, channel: { prefetch: 100 }, queue: { exclusive: true }, Message: AMQPInReply })
-    this.connected = true;
+    }, { noAck: true
+       , channel: { prefetch: 100 }
+       , queue: { exclusive: true, durable: false }
+       , Message: AMQPInReply
+       }
+    );
+    return true;
   }
 
   //--
@@ -63,7 +71,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
   public serve(view: string, handler: Handler<InQuery>) {
     const options =
       { Message: AMQPInQuery
-      , channel: { prefetech: 10 }
+      , channel: { prefetch: 10 }
       , reply: (channel: Channel) => (message: Message) => async (method: Status, content: any) => {
           const options = { correlationId: message.properties.correlationId };
           const reply = method == Status.Rejected ? new OutReply(content) : new OutReply(null, content);
@@ -75,13 +83,12 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
   }
 
   public query(request: OutQuery, timeout = 30): Promise<Reply> {
-    if (!this.connected) this.listenReply();
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
     const promise = new Promise((resolve, reject) => {
       const session = { expiresAt: Date.now() + (timeout * 1000), resolve, reject };
       (<any>options).expiration = String(timeout * 1000);
       this.pending.set(options.correlationId, session);
-      this.publish(request.view, request.serialize(), options);
+      this.publish(request.view + '.Query', request.serialize(), options);
     });
     return <any>promise;
   }

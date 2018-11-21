@@ -28,7 +28,7 @@ export class InQuery extends Query {
     Object.defineProperty(this, 'reply', { value: reply });
   }
   resolve(content: any) { this.reply(Status.Resolved, content); }
-  reject(error: string) { this.reply(Status.Rejected, error); }
+  reject(content: any)  { this.reply(Status.Rejected, content); }
 }
 
 export class OutQuery extends Query {

@@ -23,11 +23,8 @@ export class Factory {
     if (this.config.apply != null) {
       const newState = this.config.apply(state, events);
       const diff = newState.version - state.version;
-      if (state.version < newState.version) {
-        this.logger.log( 'State changed (+%s -> %s): %s -> %s'
-                       , diff, newState.version, state.status, newState.status
-                       );
-      }
+      if (state.version < newState.version)
+        this.logger.log('State changed +%s -> %s', diff, newState.version);
       return newState;
     } else {
       return state;

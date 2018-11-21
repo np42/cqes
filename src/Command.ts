@@ -1,3 +1,5 @@
+import { Status, Reply } from './Reply';
+
 export class Command {
   public key:       string;
   public order:     string;
@@ -25,7 +27,8 @@ export class InCommand extends Command {
     if (reply == null) reply = (action: string, reason?: string) => void(0);
     Object.defineProperty(this, 'reply', { value: reply });
   }
-  ack(reason?: string)    { this.reply('ack', reason); }
+  resolve(content: any)   { this.reply(Status.Resolved, content); }
+  reject(content: any)    { this.reply(Status.Rejected, content); }
   cancel(reason?: string) { this.reply('cancel', reason); }
 }
 

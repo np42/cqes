@@ -1,3 +1,4 @@
+import { Logger }                         from './Logger';
 import { Translator }                     from './Translator';
 import { Command, InCommand, OutCommand } from './Command';
 import { Query, InQuery }                 from './Query';
@@ -19,7 +20,7 @@ export interface Config {
 }
 
 export interface Handler {
-  init?:         (config: Config) => void;
+  init?:         (config: Config, bus: Bus.Bus) => void;
   start:         () => Promise<boolean>;
   stop:          () => Promise<void>;
   handleCommand: (command: Command, bus: Bus.Bus) => Promise<Reply>;
@@ -28,6 +29,7 @@ export interface Handler {
 
 export class Service {
   private name:      string;
+  private logger:    Logger;
   private bus:       Bus.Bus;
   private debouncer: Debouncer.Debouncer;
   private throttler: Throttler.Throttler;
@@ -38,6 +40,7 @@ export class Service {
 
   constructor(config: Config) {
     this.name      = config.name;
+    this.logger    = new Logger(this.name + '.Service', 'yellow');
     this.bus       = new Bus.Bus(config.Bus);
     this.command   = new Translator(config.Command);
     this.debouncer = new Debouncer.Debouncer(config.Debouncer);
@@ -45,12 +48,14 @@ export class Service {
     this.throttler = new Throttler.Throttler(config.Throttler);
     this.reply     = new Translator(config.Reply);
     this.handler   = config.Handler;
+    if (this.handler.init != null) this.handler.init(<any>config.Handler, this.bus);
   }
 
   public async start() {
     if (await this.handler.start()) {
       await this.bus.start();
 
+      this.logger.log('Listening %s.Command', this.name);
       this.bus.listen(this.name, async (command: InCommand) => {
         this.debouncer.satisfy(command, async () => {
           const xCommand = <Command>this.command.decode(command);
@@ -59,9 +64,9 @@ export class Service {
         });
       });
 
+      this.logger.log('Serving %s.Query', this.name);
       this.bus.serve(this.name, async (query: InQuery) => {
         this.throttler.satisfy(query, async () => {
-          debugger;
           const xQuery = <Query>this.query.decode(query);
           const xReply = await this.handler.handleQuery(query, this.bus);
           return <Reply>this.reply.encode(xReply);

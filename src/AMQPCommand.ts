@@ -19,3 +19,5 @@ export class AMQPInCommand extends InCommand {
   cancel(reason?: any) { this.reply('reject', reason); }
 
 }
+
+

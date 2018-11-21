@@ -37,7 +37,7 @@ export class Manager {
 
   public async handle(state: State, command: Command, bus: Bus): Promise<Array<Event>> {
     if (this.config.handle != null) {
-      this.logger.log('Handle %s [%s] > %s', command.key, state.status, command.order);
+      this.logger.log('Handle %s : %s', command.key, command.order);
       const limitedBus = { query: (query: Query) => {
         this.logger.log('Query %s:%s', query.view, query.method);
         return bus.query(query);

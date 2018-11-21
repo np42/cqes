@@ -28,6 +28,7 @@ export class Throttler {
   }
 
   public async satisfy(command: InQuery, handler: () => Promise<Reply>): Promise<void> {
+    this.logger.log('Receive Query %s->%s', command.view, command.method);
     const reply = await handler();
     debugger;
     //command.ack(reply);

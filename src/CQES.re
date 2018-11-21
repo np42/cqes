@@ -58,3 +58,30 @@ module State = {
   };
 
 };
+
+/* Reply */
+
+module Reply = {
+
+  [@bs.deriving jsConverter]
+  type status = [
+      | [@bs.as "resolve"] `Resolved
+      | [@bs.as "reject" ] `Rejected
+  ];
+
+  type cqesReply('data) = {
+    status: status,
+    data:   'data,
+  };
+
+  let toJs = (status, data) => {
+    "status": status |> statusToJs,
+    "data":   data |> js,
+  };
+
+  let formJs = reply => {
+    "status": reply##status |> statusFromJs,
+    "data": reply##data,
+  };
+
+}

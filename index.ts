@@ -2,6 +2,8 @@ export { Logger }       from './src/Logger'
 
 export { Process }      from './src/Process'
 
+export { Bus }          from './src/Bus'
+
 export { Service }      from './src/Service'
 
 export { Aggregator }   from './src/Aggregator'
@@ -16,7 +18,7 @@ export { Command }      from './src/Command'
 
 export { Query }        from './src/Query'
 
-export { Reply }        from './src/Reply'
+export { Reply, Status as ReplyStatus } from './src/Reply'
 
 export { State }        from './src/State'
 
@@ -25,5 +27,3 @@ export { Mx }           from './src/Mx'
 //export { Lx }           from './src/Lx'
 export { Qx }           from './src/Qx'
 
-
-export { Config as GatewayConfig } from './src/Gateway';

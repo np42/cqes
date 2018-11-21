@@ -29,8 +29,9 @@ export class Debouncer {
   }
 
   public async satisfy(command: InCommand, handler: () => Promise<Reply>): Promise<void> {
+    this.logger.log('Receive Command %s : %s', command.key, command.order);
     const reply = await handler();
-    command.ack();
+    command[reply.status](reply.data);
   }
 
 }

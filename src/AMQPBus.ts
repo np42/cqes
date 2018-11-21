@@ -3,7 +3,7 @@ import { Handler, FxMessageHandler, MessageHandler } from './CommandBus';
 import { AMQPInCommand }                             from './AMQPCommand';
 import * as amqp                                     from 'amqplib';
 
-type FxConnection = Fx<any, amqp.Connection>;
+export type FxConnection = Fx<any, amqp.Connection>;
 type FxChannel = Fx<amqp.Connection, amqp.Channel>;
 
 export interface Config {
@@ -69,28 +69,32 @@ export class AMQPBus {
     if (options.queue == null)           options.queue = {};
     if (options.queue.durable == null)   options.queue.durable = true;
     const fxHandler = <FxMessageHandler<any>>(handler instanceof Fx ? handler : Fx.create(handler)).open();
-    const consumer = () => {
-      return this.getChannel(queue, options.queue).pipe(async (channel, fx) => {
-        await channel.prefetch(options.channel.prefetch, false);
-        const replier = options.noAck ? null : options.reply(channel);
-        let active = true;
-        const subscription = await channel.consume(queue, rawMessage => {
-          if (active) {
-            const message = new options.Message(rawMessage, options.noAck ? null : replier(rawMessage));
-            fxHandler.do(async (handler: MessageHandler<any>) => handler(message));
-          } else {
-            channel.reject(rawMessage, true);
-          }
-        }, options);
-        fx.on('aborted', () => {
-          active = false;
-          channel.cancel(subscription.consumerTag);
-        });
-        return subscription;
-      }, { name: 'AMQP.Consumer.' + queue }).open();
-    };
-    this.consumers.add(consumer);
-    if (this.connection != null) consumer();
+    return new Promise((resolve, reject) => {
+      const consumer = () => {
+        const connection = this.getChannel(queue, options.queue).pipe(async (channel, fx) => {
+          await channel.prefetch(options.channel.prefetch, false);
+          const replier = options.noAck ? null : options.reply(channel);
+          let active = true;
+          const subscription = await channel.consume(queue, rawMessage => {
+            if (active) {
+              const message = new options.Message(rawMessage, options.noAck ? null : replier(rawMessage));
+              fxHandler.do(async (handler: MessageHandler<any>) => handler(message));
+            } else {
+              channel.reject(rawMessage, true);
+            }
+          }, options);
+          fx.on('aborted', () => {
+            active = false;
+            channel.cancel(subscription.consumerTag);
+          });
+          return subscription;
+        }, { name: 'AMQP.Consumer.' + queue }).open();
+        resolve(connection);
+        return connection;
+      };
+      this.consumers.add(consumer);
+      if (this.connection != null) consumer();
+    });
   }
 
   protected publish(queue: string, message: Buffer, options: any) {

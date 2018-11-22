@@ -186,7 +186,7 @@ export class Process {
       return module;
     } catch (e) {
       if (e.code != 'MODULE_NOT_FOUND') throw e;
-      this.logger.log('%red: %s', 'fail', path);
+      //this.logger.log('%red: %s', 'fail', path);
       return {};
     }
   }

@@ -2,8 +2,8 @@ import { Status, Reply } from './Reply';
 
 export class Query {
   public view:      string;
-  public createdAt: Date;
   public method:    string;
+  public createdAt: Date;
   public data:      any;
   public meta:      any;
 

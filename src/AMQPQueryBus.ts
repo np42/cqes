@@ -12,7 +12,6 @@ import * as uuid                    from 'uuid';
 interface Session {
   expiresAt: number;
   resolve: (value: any) => void;
-  reject: (error: any) => void;
 };
 
 export interface Config {
@@ -44,7 +43,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
       expired.push(key);
     }
     for (const key of expired) {
-      this.pending.get(key).reject(new Error('Timed out'));
+      this.pending.get(key).resolve(new Reply('Timed out'));
       this.pending.delete(key);
     }
   }
@@ -55,7 +54,7 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     this.response = <any>await this.consume(this.id, async (reply: AMQPInReply) => {
       const session = this.pending.get(reply.id);
       if (session == null) return  /* FIXME: do not fail silently */;
-      session[reply.status](reply);
+      session.resolve(reply);
       this.pending.delete(reply.id);
     }, { noAck: true
        , channel: { prefetch: 100 }
@@ -72,10 +71,11 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
     const options =
       { Message: AMQPInQuery
       , channel: { prefetch: 10 }
-      , reply: (channel: Channel) => (message: Message) => async (method: Status, content: any) => {
+      , reply: (channel: Channel) => (message: Message) => (method: Status, content: any) => {
+          debugger;
           const options = { correlationId: message.properties.correlationId };
           const reply = method == Status.Rejected ? new OutReply(content) : new OutReply(null, content);
-          await channel.sendToQueue(message.properties.replyTo, reply.serialize(), options);
+          channel.sendToQueue(message.properties.replyTo, reply.serialize(), options)
           channel.ack(message);
         }
       };
@@ -84,8 +84,8 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   public query(request: OutQuery, timeout = 30): Promise<Reply> {
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
-    const promise = new Promise((resolve, reject) => {
-      const session = { expiresAt: Date.now() + (timeout * 1000), resolve, reject };
+    const promise = new Promise(resolve => {
+      const session = { expiresAt: Date.now() + (timeout * 1000), resolve };
       (<any>options).expiration = String(timeout * 1000);
       this.pending.set(options.correlationId, session);
       this.publish(request.view + '.Query', request.serialize(), options);

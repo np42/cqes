@@ -82,8 +82,8 @@ export class Aggregator implements Service.Handler {
     }
   }
 
-  public async handleQuery(query: Query): Promise<Reply> {
-    return null;
+  public handleQuery(query: Query): Promise<Reply> {
+    return this.repository.resolve(query);
   }
 
 }

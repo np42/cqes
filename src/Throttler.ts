@@ -37,6 +37,7 @@ export class Throttler {
     this.logger.log('Receive Query %s->%s', query.view, query.method);
     const xQuery = <Query>this.query.decode(query);
     const xReply = await handler(query);
+    if (xReply == null) return query.reject(null);
     const reply = <Reply>this.reply.encode(xReply);
     query[reply.status](reply.data);
   }

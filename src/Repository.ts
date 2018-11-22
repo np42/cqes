@@ -70,6 +70,7 @@ export class Repository {
   public resolve(query: Query): Promise<Reply> {
     if (this.config.resolve != null) {
       this.logger.log('Resolving %s->%s', query.view, query.method);
+      return this.config.resolve(query);
     } else {
       return Promise.resolve(new Reply(null, null));
     }

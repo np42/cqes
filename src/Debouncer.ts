@@ -38,6 +38,7 @@ export class Debouncer {
     this.logger.log('Receive Command %s : %s', command.key, command.order);
     const xCommand = <Command>this.command.decode(command);
     const xReply   = await handler(xCommand);
+    if (xReply == null) return command.reject(null);
     const reply    = <Reply>this.reply.encode(xReply);
     command[reply.status](reply.data);
   }

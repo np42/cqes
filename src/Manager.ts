@@ -40,8 +40,7 @@ export class Manager {
     this.reply  = new Translator(config.Reply);
     this.requester = async (view: string, method: string, data: any, meta?: any) => {
       this.logger.log('Query %s:%s', view, method);
-      const xQuery = new Query(view, method, data, meta);
-      const query  = this.query.encode(xQuery);
+      const query  = new Query(view, method, data, meta);
       const reply  = await this.bus.query(query);
       const xReply = this.reply.decode(reply);
       return xReply;

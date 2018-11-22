@@ -39,10 +39,9 @@ export class Reactor {
     this.reply   = new Translator(config.Reply);
     this.requester = async (key: string, order: string, data: any, meta?: any) => {
       this.logger.log('Produce %s : %s', key, order);
-      const xCommand = new Command(key, order, data, meta);
-      const command  = this.command.encode(xCommand);
-      const reply    = await this.bus.request(command);
-      const xReply   = this.reply.decode(reply);
+      const command = new Command(key, order, data, meta);
+      const reply   = await this.bus.request(command);
+      const xReply  = this.reply.decode(reply);
       return reply;
     };
   }

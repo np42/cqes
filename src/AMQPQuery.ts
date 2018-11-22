@@ -9,7 +9,7 @@ export class AMQPInQuery extends InQuery {
     try { Object.assign(payload, JSON.parse(message.content.toString())) }
     catch (e) { /* Fail silently */ }
     super( reply
-         , message.fields.routingKey
+         , payload.view   // Source of bug ?! message.fields.routingKey
          , payload.method || 'Dummy'
          , payload.data   || {}
          , payload.meta   || {}

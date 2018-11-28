@@ -1,5 +1,4 @@
 import { Logger }                         from './Logger';
-import { Translator }                     from './Translator';
 import { Command, InCommand, OutCommand } from './Command';
 import { Query, InQuery }                 from './Query';
 import { Reply }                          from './Reply';
@@ -21,7 +20,7 @@ export interface Handler {
   start:          () => Promise<boolean>;
   stop:           () => Promise<void>;
   handleCommand?: (command: Command) => Promise<Reply>;
-  handleQuery?:    (query: Query) => Promise<Reply>;
+  handleQuery?:   (query: Query) => Promise<Reply>;
 }
 
 export class Service {

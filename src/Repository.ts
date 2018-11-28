@@ -1,7 +1,7 @@
 import { Logger }       from './Logger';
 import { Query }        from './Query';
+import { Event }        from './Event';
 import { Reply }        from './Reply';
-import { Translator }   from './Translator';
 import { State }        from './State';
 
 export interface Config {
@@ -10,21 +10,18 @@ export interface Config {
   start?:   () => Promise<boolean>;
   stop?:    () => Promise<void>;
   load?:    (key: string) => Promise<State>;
-  save?:    (key: string, state: State) => Promise<void>;
+  save?:    (key: string, events: Array<Event>, state: State) => Promise<void>;
   resolve?: (query: Query) => Promise<Reply>;
-  State?:   Translator<State>;
 };
 
 export class Repository {
 
   private logger: Logger;
   private config: Config;
-  private state:  Translator<State>;
 
   constructor(config: Config) {
     this.logger = new Logger(config.name + '.Repository', 'blue');
     this.config = config;
-    this.state  = new Translator(config.State);
     if (config.init != null) config.init(config);
   }
 
@@ -46,11 +43,10 @@ export class Repository {
     }
   }
 
-  public save(key: string, xState: State): Promise<void> {
+  public save(key: string, events: Array<Event>, state: State): Promise<void> {
     if (this.config.save != null) {
-      const state = <State>this.state.encode(xState);
-      this.logger.log('Saving %s@%s -> %s', xState.version, key, state.status);
-      return this.config.save(key, state);
+      this.logger.log('Saving %s@%s -> %s', state.version, key, state.status);
+      return this.config.save(key, events, state);
     } else {
       return Promise.resolve();
     }
@@ -60,8 +56,7 @@ export class Repository {
     if (this.config.load != null) {
       const state = await this.config.load(key);
       this.logger.log('Loading %s : %s', key, state.status);
-      const xState = <State>this.state.decode(state);
-      return xState;
+      return state;
     } else {
       return Promise.resolve(new State());
     }
@@ -69,7 +64,7 @@ export class Repository {
 
   public resolve(query: Query): Promise<Reply> {
     if (this.config.resolve != null) {
-      this.logger.log('Resolving %s->%s', query.view, query.method);
+      this.logger.log('Resolving %s -> %s', query.view, query.method);
       return this.config.resolve(query);
     } else {
       return Promise.resolve(new Reply(null, null));

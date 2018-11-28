@@ -4,6 +4,7 @@ import { Logger }       from './Logger';
 
 import { Command }      from './Command';
 import { Query }        from './Query';
+import { Event }        from './Event';
 import { Reply }        from './Reply';
 import { State }        from './State';
 import { Bus }          from './Bus';
@@ -64,14 +65,13 @@ export class Aggregator implements Service.Handler {
     const key = command.key;
     let tryCount = 10;
     while (--tryCount >= 0) {
-      /*/ console.log('Command Handled', tryCount, command); /**/
       const state  = await this.buffer.get(key);
       const events = await this.manager.handle(state, command);
       try {
         const newState = this.buffer.update(key, state.version, state => {
           return this.factory.apply(state, events);
         });
-        /*/ console.log('State updated', newState.version); /**/
+        this.repository.save(key, events, newState);
         this.reactor.produce(newState, events);
         return this.responder.resolve(command, newState, events);
       } catch (e) {

@@ -1,5 +1,4 @@
 import { Logger }     from './Logger';
-import { Translator } from './Translator';
 import { State }      from './State';
 import { Command }    from './Command';
 import { Query }      from './Query';
@@ -19,8 +18,6 @@ export interface Config {
   bus:     Bus;
   empty?:  () => any;
   handle?: (state: State, command: Command, querier: Querier) => Promise<any>;
-  Query?:  Translator<Query>;
-  Reply?:  Translator<Reply>;
 };
 
 export class Manager {
@@ -28,22 +25,17 @@ export class Manager {
   private logger:    Logger;
   private config:    Config;
   private bus:       Bus;
-  private query:     Translator<Query>;
-  private reply:     Translator<Reply>;
   private querier:   Querier;
 
   constructor(config: Config) {
     this.logger  = new Logger(config.name + '.Manager', 'red');
     this.config  = config;
     this.bus     = config.bus;
-    this.query   = new Translator(config.Query);
-    this.reply   = new Translator(config.Reply);
     this.querier = async (view: string, method: string, data: any, meta?: any) => {
       this.logger.log('Query %s:%s', view, method);
       const query  = new Query(view, method, data, meta);
       const reply  = await this.bus.query(query);
-      const xReply = this.reply.decode(reply);
-      return xReply;
+      return reply;
     };
   }
 

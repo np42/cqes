@@ -50,7 +50,6 @@ export class Buffer {
     if (xState.version != expectedVersion) throw new Error('State has changed');
     const newState = reducer(xState);
     this.buffer.set(key, newState, { ttl: this.ttl });
-    this.repository.save(key, newState);
     return newState;
   }
 

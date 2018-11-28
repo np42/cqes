@@ -10,7 +10,7 @@ interface Bus {
   query(query: Query, timeout?: number): Promise<Reply>;
 }
 
-interface Requester {
+interface Querier {
   (view: string, method: string, data: any, meta?: any): Promise<Reply>;
 }
 
@@ -18,7 +18,7 @@ export interface Config {
   name:    string;
   bus:     Bus;
   empty?:  () => any;
-  handle?: (state: State, command: Command, requester: Requester) => Promise<any>;
+  handle?: (state: State, command: Command, querier: Querier) => Promise<any>;
   Query?:  Translator<Query>;
   Reply?:  Translator<Reply>;
 };
@@ -30,15 +30,15 @@ export class Manager {
   private bus:       Bus;
   private query:     Translator<Query>;
   private reply:     Translator<Reply>;
-  private requester: Requester;
+  private querier:   Querier;
 
   constructor(config: Config) {
-    this.logger = new Logger(config.name + '.Manager', 'red');
-    this.config = config;
-    this.bus    = config.bus;
-    this.query  = new Translator(config.Query);
-    this.reply  = new Translator(config.Reply);
-    this.requester = async (view: string, method: string, data: any, meta?: any) => {
+    this.logger  = new Logger(config.name + '.Manager', 'red');
+    this.config  = config;
+    this.bus     = config.bus;
+    this.query   = new Translator(config.Query);
+    this.reply   = new Translator(config.Reply);
+    this.querier = async (view: string, method: string, data: any, meta?: any) => {
       this.logger.log('Query %s:%s', view, method);
       const query  = new Query(view, method, data, meta);
       const reply  = await this.bus.query(query);
@@ -58,7 +58,7 @@ export class Manager {
   public async handle(state: State, command: Command): Promise<Array<Event>> {
     if (this.config.handle != null) {
       this.logger.log('Handle %s : %s', command.key, command.order);
-      return this.config.handle(state, command, this.requester);
+      return this.config.handle(state, command, this.querier);
     } else {
       return this.empty();
     }

@@ -3,13 +3,16 @@ export enum Status { Resolved = 'resolve', Rejected = 'reject' }
 export class Reply {
   public status: Status;
   public data:   any;
-  constructor(error: string, data?: any) {
+  public meta:   any;
+  constructor(error: string, data?: any, meta?: any) {
     if (error != null) {
       this.status = Status.Rejected;
-      this.data = error;
+      this.data   = error;
+      this.meta   = meta;
     } else {
       this.status = Status.Resolved;
-      this.data = data;
+      this.data   = data;
+      this.meta   = meta;
     }
   }
 }

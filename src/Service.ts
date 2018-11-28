@@ -17,11 +17,11 @@ export interface Config {
 }
 
 export interface Handler {
-  init?:         (config: Config, bus: Bus.Bus) => void;
-  start:         () => Promise<boolean>;
-  stop:          () => Promise<void>;
-  handleCommand: (command: Command) => Promise<Reply>;
-  handleQuery:   (query: Query) => Promise<Reply>;
+  init?:          (config: Config, bus: Bus.Bus) => void;
+  start:          () => Promise<boolean>;
+  stop:           () => Promise<void>;
+  handleCommand?: (command: Command) => Promise<Reply>;
+  handleQuery?:    (query: Query) => Promise<Reply>;
 }
 
 export class Service {
@@ -40,25 +40,31 @@ export class Service {
     this.debouncer = new Debouncer.Debouncer(config.Debouncer);
     this.handler   = config.Handler;
     if (this.handler.init != null) this.handler.init(<any>config.Handler, this.bus);
+    if (this.handler.start == null) this.logger.error('Missing .start method');
+    if (this.handler.stop == null)  this.logger.error('Missing .stop method');
   }
 
   public async start() {
     if (await this.handler.start()) {
       await this.bus.start();
 
-      this.logger.log('Listening %s.Command', this.name);
-      this.bus.listen(this.name, async (command: InCommand) => {
-        this.debouncer.satisfy(command, command => {
-          return this.handler.handleCommand(command);
+      if (typeof this.handler.handleCommand == 'function') {
+        this.logger.log('Listening %s.Command', this.name);
+        this.bus.listen(this.name, async (command: InCommand) => {
+          this.debouncer.satisfy(command, command => {
+            return this.handler.handleCommand(command);
+          });
         });
-      });
+      }
 
-      this.logger.log('Serving %s.Query', this.name);
-      this.bus.serve(this.name, async (query: InQuery) => {
-        this.throttler.satisfy(query, query => {
-          return this.handler.handleQuery(query);
+      if (typeof this.handler.handleQuery == 'function') {
+        this.logger.log('Serving %s.Query', this.name);
+        this.bus.serve(this.name, async (query: InQuery) => {
+          this.throttler.satisfy(query, query => {
+            return this.handler.handleQuery(query);
+          });
         });
-      });
+      }
 
       return true;
     } else {

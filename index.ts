@@ -16,6 +16,10 @@ export { Event }        from './src/Event'
 
 export { Command }      from './src/Command'
 
+export interface CommandEmitter {
+  (key: string, order: string, data: any, meta?: any): Promise<void>;
+}
+
 export { Query }        from './src/Query'
 
 export { Reply, Status as ReplyStatus } from './src/Reply'

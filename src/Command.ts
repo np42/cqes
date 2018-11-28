@@ -14,6 +14,11 @@ export class Command {
     this.data      = data instanceof Object ? data : {};
     this.meta      = meta instanceof Object ? meta : {};
   }
+
+  get id() {
+    const offset = this.key.indexOf('-');
+    return offset > 0 ? this.key.substr(offset + 1) : this.key;
+  }
 }
 
 export type CommandReplier = (action: string, reason?: any) => void;

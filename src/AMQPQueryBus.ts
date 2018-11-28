@@ -72,7 +72,6 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
       { Message: AMQPInQuery
       , channel: { prefetch: 10 }
       , reply: (channel: Channel) => (message: Message) => (method: Status, content: any) => {
-          debugger;
           const options = { correlationId: message.properties.correlationId };
           const reply = method == Status.Rejected ? new OutReply(content) : new OutReply(null, content);
           channel.sendToQueue(message.properties.replyTo, reply.serialize(), options)
@@ -84,11 +83,13 @@ export class AMQPQueryBus extends AMQPBus implements QueryBus {
 
   public query(request: OutQuery, timeout = 30): Promise<Reply> {
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
+    const offset  = request.view.indexOf('-');
+    const topic   = offset > 0 ? request.view.substr(0, offset) : request.view;
     const promise = new Promise(resolve => {
       const session = { expiresAt: Date.now() + (timeout * 1000), resolve };
       (<any>options).expiration = String(timeout * 1000);
       this.pending.set(options.correlationId, session);
-      this.publish(request.view + '.Query', request.serialize(), options);
+      this.publish(topic + '.Query', request.serialize(), options);
     });
     return <any>promise;
   }

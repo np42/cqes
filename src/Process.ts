@@ -13,7 +13,7 @@ const CLArgs     = require('command-line-args');
 
 const extend = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
 
-const SERVICE_DEFAULT = { mode: 'typescript', name: 'World', bus: 'default' };
+const SERVICE_DEFAULT = { name: 'World', bus: 'default', rootpath: 'dist' };
 const AMQP_DEFAULT = 'amqp://guest:guest@localhost/';
 
 export class Process {
@@ -30,12 +30,13 @@ export class Process {
 
   constructor() {
     this.argv     = CLArgs( [ { name: 'root', type: String }
-                            , { name: 'group', type: String, defaultOption: true }
+                            , { name: 'groups', type: String, multiple: true, defaultOption: true }
+                            , { name: 'dryRun', type: Boolean, defaultOption: false }
                             ]
                           , { partial: true }
                           );
     this.rootpath = this.argv.root || process.cwd();
-    this.logger   = new Logger(this.argv.group || 'Process');
+    this.logger   = new Logger('CQES');
     this.services = new Map();
     this.loadConstant();
     process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
@@ -70,6 +71,7 @@ export class Process {
       const part = await (async () => new Promise((resolve, reject) => {
         return readFile(filepath, (err, content) => {
           if (err) return resolve({});
+          this.logger.log('Loading config file: %s', filepath);
           try {
             const config = yaml.safeLoad(content.toString());
             return resolve(config);
@@ -86,27 +88,36 @@ export class Process {
   }
 
   private async loadConfig(): Promise<void> {
-    const directory = join(this.rootpath, 'cfg');
+    const directory = join(this.rootpath, this.argv.config || 'config');
     this.config = await this.getConfig(directory) || {};
   }
 
-  private async loadServices() {
+  private async loadGroup(group: string) {
     if (this.config.Process == null)
-      return this.logger.log('No .Process property');
-    const process = this.config.Process;
-    if (process[this.argv.group] == null)
-      return this.logger.log('Process group "%s" not found', this.argv.group);
-    const group = process[this.argv.group];
-    if (group.services == null)
-      return this.logger.log('No service for "%s" to load', this.argv.group);
-    for (let i = 0; i < group.services.length; i += 1) {
-      const config = extend(SERVICE_DEFAULT, group.services[i], this.config.Service);
+      return this.logger.log('%s No .Process property', group);
+    const processMap = this.config.Process;
+    const process = processMap[group];
+    if (process == null)
+      return this.logger.log('Process group "%s" not found', group);
+    for (const name in process) {
+      const serviceConfig = process[name];
+      const serviceName = serviceConfig.service || name;
+      const project = this.config.Project || {};
+      const serviceTemplate = this.config.Service[serviceName];
+      const config = extend(SERVICE_DEFAULT, project, serviceTemplate, serviceConfig);
       const configBus = this.getBusConfig(this.config.Bus);
-      config.Bus = configBus[config.bus] || configBus.default;
-      const name = config.name;
-      this.logger.log('Loading Custom Service: %cyan', name);
-      const service = this.createService(config);
-      this.services.set(name, service);
+      config.name    = name;
+      config.service = serviceName;
+      config.Bus     = configBus[config.bus] || configBus.default;
+      this.logger.log('%s Loading Custom Service: %cyan', group, name);
+      if (config.type == 'Gateway' || config.type == 'Aggregator') {
+        if (!this.argv.dryRun) {
+          const service = this.createService(group, config);
+          this.services.set(name, service);
+        }
+      } else {
+        this.logger.error('%s Bad process type for: %s', group, name);
+      }
     }
   }
 
@@ -120,11 +131,11 @@ export class Process {
     return config;
   }
 
-  private createService(config: any) {
-    const name = config.name;
+  private createService(group: string, config: any) {
+    const name = config.service;
     const load = (part: string, props: Array<string>) => {
       const path = join(this.rootpath, config.rootpath, name, name + '_' + part + '.js');
-      const module = this.safeRequire(path, part);
+      const module = this.safeRequire(group, path, part);
       const result = (props || []).reduce((result, name) => {
         if (typeof module[name] == 'function')
           result[name] = module[name].bind(module);
@@ -132,7 +143,7 @@ export class Process {
           result[name] = module[name];
         return result;
       }, {});
-      return extend({ name, path }, config[part], result);
+      return extend({ name: config.name, path }, config[part], result);
     };
     const srvcIface = ['init', 'start', 'stop'];
 
@@ -146,7 +157,9 @@ export class Process {
     const Throttler   = load('Throttler', ['satisfy']);
     Throttler.Query   = Query;
     Throttler.Reply   = Reply;
-    const srvcCfg     = extend({ name }, { Command, Query, Reply, Bus, Debouncer, Throttler });
+    const srvcCfg     = extend( { name: config.name }
+                              , { Command, Query, Reply, Bus, Debouncer, Throttler }
+                              );
 
     switch (config.type) {
     case 'Aggregator': {
@@ -177,16 +190,17 @@ export class Process {
     }
   }
 
-  private safeRequire(path: string, name: string) {
+  private safeRequire(group: string, path: string, name: string) {
     try {
       const module = require(path);
-      this.logger.log('%green: %s', 'loading', path);
+      delete require.cache[path];
+      this.logger.log('%s %green: %s', group, 'loading', path);
       if (module[name] != null) return module[name];
       if (module.default != null) return module.default;
       return module;
     } catch (e) {
       if (e.code != 'MODULE_NOT_FOUND') throw e;
-      //this.logger.log('%red: %s', 'fail', path);
+      //this.logger.log('%s %red: %s', group, 'fail', path);
       return {};
     }
   }
@@ -195,14 +209,15 @@ export class Process {
 
   public async run() {
     await this.loadConfig();
-    await this.loadServices();
+    for (const group of this.argv.groups)
+      await this.loadGroup(group);
     await this.start();
   }
 
   public async start() {
     for (const [name, service] of this.services) {
       const options = (this.config.Service || {})[name] || {};
-      service.start(this.config.Broker, options);
+      service.start();
     }
   }
 

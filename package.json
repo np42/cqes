@@ -32,7 +32,7 @@
   "devDependencies": {
     "@types/amqplib": "^0.5.8",
     "@types/core-js": "^2.5.0",
-    "@types/node": "^8.10.30",
+    "@types/node": "^8.10.37",
     "@types/uuid": "^3.4.4"
   },
   "dependencies": {

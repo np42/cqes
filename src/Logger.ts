@@ -145,6 +145,11 @@ export class Logger {
           const arg = args.shift();
           const str = JSON.stringify(arg, function (key: string, value: any) {
             if (this[key] instanceof Buffer) return '<Buffer>';
+            if (typeof value == 'string' && value.length > 256)
+              return [ value.substr(0, 200)
+                     , '<... ' + (value.length - 220) + ' chars ...>'
+                     , value.substr(value.length - 20)
+                     ].join('');
             return value;
           });
           return fmt == 'j' ? colors.grey(str) : str;

@@ -5,13 +5,13 @@ import { Reply }        from './Reply';
 import { State }        from './State';
 
 export interface Config {
-  name:     string;
-  init?:    (config: any) => void;
-  start?:   () => Promise<boolean>;
-  stop?:    () => Promise<void>;
-  load?:    (key: string) => Promise<State>;
-  save?:    (key: string, events: Array<Event>, state: State) => Promise<void>;
-  resolve?: (query: Query) => Promise<Reply>;
+  name:         string;
+  init?:        (config: any) => void;
+  start?:       () => Promise<boolean>;
+  stop?:        () => Promise<void>;
+  load?:        (key: string) => Promise<State>;
+  save?:        (state: State, events: Array<Event>) => Promise<void>;
+  handleQuery?: (query: Query) => Promise<Reply>;
 };
 
 export class Repository {
@@ -43,10 +43,10 @@ export class Repository {
     }
   }
 
-  public save(key: string, events: Array<Event>, state: State): Promise<void> {
+  public save(state: State, events: Array<Event>): Promise<void> {
     if (this.config.save != null) {
-      this.logger.log('Saving %s@%s -> %s', state.version, key, state.status);
-      return this.config.save(key, events, state);
+      this.logger.log('Saving %s@%s -> %s', state.version, state.key, state.status);
+      return this.config.save(state, events);
     } else {
       return Promise.resolve();
     }
@@ -58,14 +58,14 @@ export class Repository {
       this.logger.log('Loading %s : %s', key, state.status);
       return state;
     } else {
-      return Promise.resolve(new State());
+      return Promise.resolve(new State(key));
     }
   }
 
-  public resolve(query: Query): Promise<Reply> {
-    if (this.config.resolve != null) {
+  public handleQuery(query: Query): Promise<Reply> {
+    if (this.config.handleQuery != null) {
       this.logger.log('Resolving %s -> %s', query.view, query.method);
-      return this.config.resolve(query);
+      return this.config.handleQuery(query);
     } else {
       return Promise.resolve(new Reply(null, null));
     }

@@ -15,6 +15,10 @@ export class Reply {
       this.meta   = meta;
     }
   }
+  assert() {
+    if (this.status == Status.Rejected) throw this.data;
+    return this.data;
+  }
 }
 
 export class InReply extends Reply {

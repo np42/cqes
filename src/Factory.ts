@@ -21,7 +21,7 @@ export class Factory {
 
   public apply(state: State, events: Array<Event>) {
     if (this.config.apply != null) {
-      const newState = this.config.apply(state, events);
+      const newState = this.config.apply(state, events) || state;
       const diff = newState.version - state.version;
       if (state.version < newState.version)
         this.logger.log('State changed +%s -> %s', diff, newState.version);

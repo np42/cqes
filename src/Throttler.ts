@@ -28,9 +28,15 @@ export class Throttler {
 
   public async satisfy(query: InQuery, handler: (query: Query) => Promise<Reply>): Promise<void> {
     this.logger.log('Receive Query %s -> %s', query.view, query.method);
-    const reply = await handler(query);
-    if (reply == null) return query.reject(null);
-    query[reply.status](reply.data);
+    try {
+      const reply = await handler(query);
+      if (reply instanceof Reply) return query[reply.status](reply.data);
+      this.logger.warn('Expecting a Reply got: %j', reply);
+      return query.reject(null);
+    } catch (e) {
+      this.logger.error(e);
+      return query.reject(e);
+    }
   }
 
 }

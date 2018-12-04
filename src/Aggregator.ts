@@ -44,10 +44,11 @@ export class Aggregator implements Service.Handler {
   public init(_: never, bus: Bus) {
     this.config.Manager.bus = bus;
     this.manager    = new Manager.Manager(this.config.Manager);
+    this.factory    = new Factory.Factory(this.config.Factory);
     this.repository = new Repository.Repository(this.config.Repository);
     this.config.Buffer.repository = this.repository;
+    this.config.Buffer.factory    = this.factory;
     this.buffer     = new Buffer.Buffer(this.config.Buffer);
-    this.factory    = new Factory.Factory(this.config.Factory);
     this.responder  = new Responder.Responder(this.config.Responder);
     this.config.Reactor.bus = bus;
     this.reactor    = new Reactor.Reactor(this.config.Reactor);
@@ -65,25 +66,24 @@ export class Aggregator implements Service.Handler {
     const key = command.key;
     let tryCount = 10;
     while (--tryCount >= 0) {
+      this.logger.log('Handle Command [%s] %s : %s', tryCount, command.key, command.order);
       const state  = await this.buffer.get(key);
       const events = await this.manager.handle(state, command);
       try {
-        const newState = this.buffer.update(key, state.version, state => {
-          return this.factory.apply(state, events);
-        });
-        this.repository.save(key, events, newState);
+        const newState = this.buffer.update(key, state.version, events);
+        this.repository.save(newState, events);
         this.reactor.produce(newState, events);
         return this.responder.resolve(command, newState, events);
       } catch (e) {
-        if (tryCount >= 0) continue ;
-        this.logger.warn('Discarding command %s:', e);
+        if (tryCount > 0) continue ;
+        this.logger.warn('Discarding command %s: %s', command.key, String(e));
         throw e;
       }
     }
   }
 
   public handleQuery(query: Query): Promise<Reply> {
-    return this.repository.resolve(query);
+    return this.repository.handleQuery(query);
   }
 
 }

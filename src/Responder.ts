@@ -22,9 +22,18 @@ export class Responder {
 
   public resolve(command: Command, state: State, events: Array<Event>) {
     if (this.config.resolve != null) {
-      const reply = this.config.resolve(command, state, events);
-      this.logger.log("Resolve %s:%s > %s", command.key, command.order, JSON.stringify(reply));
-      return reply;
+      try {
+        const result = this.config.resolve(command, state, events);
+        if (result instanceof Reply) {
+          this.logger.log("Resolve %s:%s > %s", command.key, command.order, JSON.stringify(result.data));
+          return result;
+        } else {
+          this.logger.log("Resolve %s:%s > %s", command.key, command.order, JSON.stringify(result));
+          return new Reply(null, result);
+        }
+      } catch (e) {
+        return new Reply(String(e));
+      }
     } else {
       return new Reply(null, null);
     }

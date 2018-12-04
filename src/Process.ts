@@ -1,18 +1,17 @@
-import { hostname }   from 'os';
-import { readFile }   from 'fs';
-import { join }       from 'path';
+import { hostname }      from 'os';
+import { readFile }      from 'fs';
+import { join, dirname } from 'path';
+import * as merge        from 'deepmerge';
 
-import { Logger }     from './Logger';
-import { Service }    from './Service';
-import { Aggregator } from './Aggregator';
-import { Gateway }    from './Gateway';
+import { Logger }        from './Logger';
+import { Service }       from './Service';
+import { Aggregator }    from './Aggregator';
+import { Gateway }       from './Gateway';
 
 const yaml       = require('js-yaml');
-const extendify  = require('extendify');
 const CLArgs     = require('command-line-args');
 
-const extend = extendify({ inPlace: false, isDeep: true, arrays: 'replace' });
-
+const MERGE_OPTIONS = { arrayMerge: (l: any, r: any, o: any) => r };
 const SERVICE_DEFAULT = { name: 'World', bus: 'default', rootpath: 'dist' };
 const AMQP_DEFAULT = 'amqp://guest:guest@localhost/';
 
@@ -55,6 +54,23 @@ export class Process {
     this.environment = environ;
   }
 
+  private async loadConfig(): Promise<void> {
+    const directory = join(this.rootpath, this.argv.config || 'config');
+    this.config = await this.getConfig(directory) || {};
+  }
+
+  private async getConfig(directory: string): Promise<any> {
+    const files = this.getConfigFileList();
+    let config = {};
+    for (const file of files) {
+      const filepath = join(directory, file);
+      const part = await this.configReadYaml(filepath);
+      const layer = await this.configInflate(part, dirname(filepath));
+      config = merge(config, layer, MERGE_OPTIONS);
+    }
+    return config;
+  }
+
   private  getConfigFileList(): Array<string> {
     const list = ['config.yml'];
     list.push('config-env-' + this.environment + '.yml');
@@ -63,34 +79,52 @@ export class Process {
     return list;
   }
 
-  private async getConfig(directory: string): Promise<any> {
-    const files = this.getConfigFileList();
-    let config = {};
-    for (const file of files) {
-      const filepath = join(directory, file);
-      const part = await (async () => new Promise((resolve, reject) => {
-        return readFile(filepath, (err, content) => {
-          if (err) return resolve({});
-          this.logger.log('Loading config file: %s', filepath);
-          try {
-            const config = yaml.safeLoad(content.toString());
-            return resolve(config);
-          } catch (e) {
-            this.logger.error('Failed when loading:', filepath);
-            this.logger.error(e);
-            return resolve({});
-          }
-        });
-      }))();
-      config = extend(config, part);
+  private async configInflate(object: any, cwd: string): Promise<any> {
+    if (object && typeof object == 'object') {
+      if (object instanceof Array) {
+        const result = [];
+        for (const item of object)
+          result.push(await this.configInflate(item, cwd));
+        return result;
+      } else {
+        if ('$import' in object) {
+          return await this.configImport(object.$import, cwd);
+        } else {
+          const result = <any>{};
+          for (const key in object)
+            result[key] = await this.configInflate(object[key], cwd);
+          return result;
+        }
+      }
+    } else {
+      return object;
     }
-    return config;
   }
 
-  private async loadConfig(): Promise<void> {
-    const directory = join(this.rootpath, this.argv.config || 'config');
-    this.config = await this.getConfig(directory) || {};
+  private async configImport(filename: string, cwd: string): Promise<any> {
+    const filepath = join(cwd, filename);
+    const content = await this.configReadYaml(filepath);
+    return this.configInflate(content, dirname(filepath));
   }
+
+  private configReadYaml(filepath: string) {
+    return new Promise((resolve, reject) => {
+      return readFile(filepath, (err, content) => {
+        if (err) return resolve({});
+        this.logger.log('Loading config file: %s', filepath);
+        try {
+          const config = yaml.safeLoad(content.toString());
+          return resolve(config);
+        } catch (e) {
+          this.logger.error('Failed when loading:', filepath);
+          this.logger.error(e);
+          return resolve({});
+        }
+      });
+    });
+  }
+
+  /******************************/
 
   private async loadGroup(group: string) {
     if (this.config.Process == null)
@@ -104,7 +138,9 @@ export class Process {
       const serviceName = serviceConfig.service || name;
       const project = this.config.Project || {};
       const serviceTemplate = this.config.Service[serviceName];
-      const config = extend(SERVICE_DEFAULT, project, serviceTemplate, serviceConfig);
+      const config = <any>merge.all( [SERVICE_DEFAULT, project, serviceTemplate, serviceConfig]
+                                   , MERGE_OPTIONS
+                                   );
       const configBus = this.getBusConfig(this.config.Bus);
       config.name    = name;
       config.service = serviceName;
@@ -143,25 +179,25 @@ export class Process {
           result[name] = module[name];
         return result;
       }, {});
-      return extend({ name: config.name, path }, config[part], result);
+      return merge.all([{ name: config.name, path }, config[part] || {}, result], MERGE_OPTIONS);
     };
     const srvcIface = ['init', 'start', 'stop'];
 
     const Bus         = load('Bus', [...srvcIface, 'listen', 'serve', 'request', 'query']);
     const Debouncer   = load('Debouncer', ['satisfy']);
     const Throttler   = load('Throttler', ['satisfy']);
-    const srvcCfg     = extend({ name: config.name }, { Bus, Debouncer, Throttler });
+    const srvcCfg     = <any>merge({ name: config.name }, { Bus, Debouncer, Throttler }, MERGE_OPTIONS);
 
     switch (config.type) {
     case 'Aggregator': {
       const Manager      = load('Manager', ['empty', 'handle']);
       const Factory      = load('Factory', ['apply']);
-      const Repository   = load('Repository', [...srvcIface, 'save', 'load', 'resolve']);
+      const Repository   = load('Repository', [...srvcIface, 'handleQuery', 'save', 'load']);
       const Buffer       = load('Buffer', ['get', 'update']);
       const Responder    = load('Responder', ['resolve']);
       const Reactor      = load('Reactor', ['produce']);
       const facets       = { Debouncer, Manager, Factory, Buffer, Repository, Reactor, Responder };
-      const aggregator   = new Aggregator(extend(config, facets));
+      const aggregator   = new Aggregator(<any>merge(config, facets, MERGE_OPTIONS));
       srvcCfg.Handler    = aggregator;
       const service      = new Service(srvcCfg);
       return service;
@@ -185,7 +221,8 @@ export class Process {
       return module;
     } catch (e) {
       if (e.code != 'MODULE_NOT_FOUND') throw e;
-      //this.logger.log('%s %red: %s', group, 'fail', path);
+      if (!~e.toString().indexOf(path)) throw e;
+      //this.logger.log('%s %red: %s', group, 'fail', path, e);
       return {};
     }
   }

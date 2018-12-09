@@ -1,9 +1,6 @@
 import * as Component    from './Component';
 
-import { Bus }           from './Bus';
 import { Service }       from './Service';
-import { Aggregator }    from './Aggregator';
-import { Gateway }       from './Gateway';
 
 import { hostname }      from 'os';
 import { readFile }      from 'fs';
@@ -14,7 +11,7 @@ const yaml       = require('js-yaml');
 const CLArgs     = require('command-line-args');
 
 const MERGE_OPTIONS   = { arrayMerge: (l: any, r: any, o: any) => r };
-const SERVICE_DEFAULT = { name: 'World', bus: 'default', rootpath: 'dist' };
+const SERVICE_DEFAULT = { name: 'World', rootpath: 'dist' };
 const AMQP_DEFAULT    = 'amqp://guest:guest@localhost/';
 
 export class Process extends Component.Component {
@@ -28,14 +25,15 @@ export class Process extends Component.Component {
   constructor() {
     process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
     process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
-    const props     = CLArgs( [ { name: 'root', type: String }
-                            , { name: 'groups', type: String, multiple: true, defaultOption: true }
-                            , { name: 'dryRun', type: Boolean, defaultOption: false }
-                            ]
-                          , { partial: true }
-                          );
-    super({ type: 'Process', ...props }, {});
-    this.rootpath = props.root || process.cwd();
+    const argv = CLArgs( [ { name: 'root', type: String }
+                         , { name: 'groups', type: String, multiple: true, defaultOption: true }
+                         , { name: 'dryRun', type: Boolean, defaultOption: false }
+                         , { name: 'config', type: String, defaultOption: 'config' }
+                         ]
+                       , { partial: true }
+                       );
+    super({ name: 'CQES', type: 'Process', argv }, {});
+    this.rootpath = argv.root || process.cwd();
     this.services = new Map();
     this.loadConstant();
   }
@@ -132,17 +130,13 @@ export class Process extends Component.Component {
     if (process == null)
       return this.logger.log('Process group "%s" not found', group);
     for (const name in process) {
-      const serviceConfig = process[name];
-      const serviceName = serviceConfig.service || name;
-      const project = this.config.Project || {};
-      const serviceTemplate = this.config.Service[serviceName];
+      const serviceConfig   = process[name];
+      const serviceName     = serviceConfig.service || name;
+      const project         = this.config.Project || {};
+      const serviceTemplate = { name, ...this.config.Service[serviceName] };
       const config = <any>merge.all( [SERVICE_DEFAULT, project, serviceTemplate, serviceConfig]
                                    , MERGE_OPTIONS
                                    );
-      const configBus = this.getBusConfig(this.config.Bus);
-      config.name    = name;
-      config.service = serviceName;
-      config.Bus     = configBus[config.bus] || configBus.default;
       this.logger.log('%s Loading Custom Service: %cyan', group, name);
       if (config.type == 'Gateway' || config.type == 'Aggregator') {
         if (!this.props.argv.dryRun) {
@@ -155,24 +149,17 @@ export class Process extends Component.Component {
     }
   }
 
-  private getBusConfig(config: any) {
-    if (config == null)
-      return { default: { Command: AMQP_DEFAULT, Query: AMQP_DEFAULT } };
-    else if (typeof config.default === 'string')
-      return { default: { Command: config.default, Query: config.default } };
-    if (config.default == null)
-      config.default = { Command: AMQP_DEFAULT, Query: AMQP_DEFAULT };
-    return config;
-  }
-
   private createService(group: string, options: any) {
-    const name = options.service;
+    const name = options.name;
     const load = (part: string) => {
       const path = join(this.rootpath, options.rootpath, name, name + '_' + part + '.js');
-      return this.safeRequire(group, path, part);
+      const module = this.safeRequire(group, path, part);
+      if (module && typeof module != 'function')
+        this.logger.warn('%s.%s.%s is not a valid module', group, name, part);
+      return module;
     };
-    const props     = { name, type: 'Service', bus: this.bus, ...options };
-    const Service   = load('Service');
+    const props     = { name, type: 'Service', Bus: this.config.Bus, ...options };
+    const Bus       = load('Bus');
     const Debouncer = load('Debouncer');
     const Throttler = load('Throttler');
     switch (options.type) {
@@ -184,15 +171,15 @@ export class Process extends Component.Component {
       const Buffer     = load('Buffer');
       const Responder  = load('Responder');
       const Reactor    = load('Reactor');
-      const children   = { Debouncer, Throttler, Handler: Aggregator
+      const children   = { Bus, Debouncer, Throttler, Aggregator
                          , Manager, Factory, Repository, Buffer, Responder, Reactor
                          };
       const service    = new Service(props, children);
       return service;
     }
     case 'Gateway': {
-      const gateway  = load('Gateway');
-      const children = { Debouncer, Throttler, Handler: Gateway };
+      const Gateway  = load('Gateway');
+      const children = { Bus, Debouncer, Throttler, Gateway };
       const service  = new Service(props, children);
       return service;
     }
@@ -202,16 +189,15 @@ export class Process extends Component.Component {
   private safeRequire(group: string, path: string, name: string) {
     try {
       const module = require(path);
-      delete require.cache[path];
       this.logger.log('%s %green: %s', group, 'loading', path);
-      if (module[name] != null) return module[name];
+      if (module[name] != null)   return module[name];
       if (module.default != null) return module.default;
       return module;
     } catch (e) {
       if (e.code != 'MODULE_NOT_FOUND') throw e;
       if (!~e.toString().indexOf(path)) throw e;
       //this.logger.log('%s %red: %s', group, 'fail', path, e);
-      return {};
+      return null;
     }
   }
 
@@ -219,7 +205,6 @@ export class Process extends Component.Component {
 
   public async run() {
     await this.loadConfig();
-    this.bus = new Bus(this.config.Bus);
     for (const group of this.props.argv.groups)
       await this.loadGroup(group);
     return this.start();
@@ -230,7 +215,6 @@ export class Process extends Component.Component {
       const options = (this.config.Service || {})[name] || {};
       service.start();
     }
-    await this.bus.start();
   }
 
   public async stop() {
@@ -238,7 +222,6 @@ export class Process extends Component.Component {
       const options = (this.config.Service || {})[name] || {};
       service.stop();
     }
-    await this.bus.stop();
   }
 
 };

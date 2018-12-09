@@ -15,19 +15,30 @@ export class Responder extends Component.Component {
     super({ type: 'Responder', color: 'red', ...props }, children);
   }
 
-  public resolve(command: Command, state: State, events: Array<Event>) {
-    const method = 'resolve' + command.order;
-    if (method in this) {
-      let result = null;
-      try { result = this[method](command, state, events); }
+  public responde(command: Command, state: State, events: Array<Event>) {
+    let method = null;
+    let result = null;
+    const shortMethod = 'responde' + command.order;
+    if (shortMethod in this) {
+      try { result = this[shortMethod](command, state, events); }
       catch (e) { return new Reply(String(e)); }
-      if (result instanceof Reply) {
-        this.logger.log("Resolved %s : %s => %j", command.key, command.order, result.data);
-        return result;
-      } else {
-        this.logger.log("Resolved %s : %s => %j", command.key, command.order, result);
-        return new Reply(null, result);
+      method = shortMethod;
+    } else {
+      for (const event of events) {
+        const longMethod = shortMethod + 'When' + event.name;
+        if (!(longMethod in this)) continue ;
+        try { result = this[longMethod](command, state, event); }
+        catch (e) { return new Reply(String(e)); }
+        method = longMethod;
+        break ;
       }
+    }
+    if (result instanceof Reply) {
+      this.logger.log("Resolved %s : %s with %s => %j", command.key, command.order, method, result.data);
+      return result;
+    } else if (result != null) {
+      this.logger.log("Resolved %s : %s with %s => %j", command.key, command.order, method, result);
+      return new Reply(null, result);
     } else {
       this.logger.log('No resolution for %s : %s', command.key, command.order);
       return new Reply(null, null);

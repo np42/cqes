@@ -16,7 +16,7 @@ export class Manager extends Component.Component {
     super({ type: 'Manager', color: 'red', ...props }, children);
   }
 
-  private empty(): Array<Event> {
+  public empty(): Array<Event> {
     return [];
   }
 

@@ -5,6 +5,8 @@ import * as Factory     from './Factory';
 
 import { State }        from './State';
 import { Event }        from './Event';
+import { Query }        from './Query';
+import { Reply }        from './Reply';
 
 const CachingMap = require('caching-map');
 
@@ -33,10 +35,10 @@ export class Buffer extends Component.Component {
 
   constructor(props: Props, children: Children) {
     super({ type: 'Buffer', color: 'blue', ...props }, children);
-    this.buffer = new CachingMap(props.size > 0 ? props.size : null);
-    this.ttl    = props.ttl > 0 ? props.ttl : null;
-    this.sprout('Repository', Repository);
-    this.sprout('Factory', Factory);
+    this.buffer     = new CachingMap(props.size > 0 ? props.size : null);
+    this.ttl        = props.ttl > 0 ? props.ttl : null;
+    this.repository = this.sprout('Repository', Repository);
+    this.factory    = this.sprout('Factory', Factory);
   }
 
   public async get(key: string): Promise<State> {
@@ -60,6 +62,22 @@ export class Buffer extends Component.Component {
     this.buffer.set(key, newState, { ttl: this.ttl });
     this.repository.save(newState, events);
     return newState;
+  }
+
+  //--
+
+  public resolve(query: Query): Promise<Reply> {
+    return this.repository.resolve(query);
+  }
+
+  //--
+
+  public start(): Promise<boolean> {
+    return this.repository.start();
+  }
+
+  public stop(): Promise<void> {
+    return this.repository.stop();
   }
 
 }

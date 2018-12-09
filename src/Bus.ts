@@ -14,21 +14,22 @@ import { Command, OutCommand, InCommand }        from './Command';
 import { Query, InQuery, OutQuery }              from './Query';
 import { Reply }                                 from './Reply';
 
-export interface Config {
-  name:    string;
-  Command: string;
-  Query:   string;
+export interface Props {
+  Command: CommandBusConfig;
+  Query: QueryBusConfig;
 }
+
+export interface Children {}
 
 export class Bus {
   public logger:     Logger;
   public commandBus: CommandBus;
   public queryBus:   QueryBus;
 
-  constructor(config: Config) {
-    this.logger     = new Logger('Bus.' + config.name, 'white');
-    this.commandBus = new xCommandBus({ name: config.name, url: config.Command });
-    this.queryBus   = new xQueryBus({ name: config.name, url: config.Query });
+  constructor(props: Props, children: Children) {
+    this.logger     = new Logger('Bus', 'white');
+    this.commandBus = new xCommandBus(props.Command);
+    this.queryBus   = new xQueryBus(props.Query);
   }
 
   public async start() {
@@ -46,7 +47,7 @@ export class Bus {
   }
 
   //--
-  public command(key: string, order: string, data?: any, meta?: any) {
+  public command(key: string, order: string, data?: any, meta?: any): Promise<Reply> {
     this.logger.log('Command %s : %s', key, order);
     const outCommand = new OutCommand(key, order, data, meta);
     return this.commandBus.request(outCommand);
@@ -57,7 +58,7 @@ export class Bus {
   }
 
   //--
-  public query(view: string, method?: string, data?: any, meta?: any) {
+  public query(view: string, method?: string, data?: any, meta?: any): Promise<Reply> {
     this.logger.log('Query %s -> %s', view, method);
     const outQuery = new OutQuery(view, method, data, meta);
     return this.queryBus.query(outQuery);

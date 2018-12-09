@@ -15,9 +15,9 @@ export class Reactor extends Component.Component {
     super({ type: 'Reactor', color: 'magenta', ...props }, children);
   }
 
-  public produce(state: State, events: Array<Event>) {
+  public on(state: State, events: Array<Event>) {
     return events.forEach(event => {
-      const method = 'produce' + event.name;
+      const method = 'on' + event.name;
       if (method in this) this[method](state, event);
     });
   }

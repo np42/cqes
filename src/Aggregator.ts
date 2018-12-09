@@ -33,28 +33,26 @@ export interface Children extends Component.Children {
 export class Aggregator extends Component.Component implements Service.Handler {
   public manager:    Manager.Manager;
   public buffer:     Buffer.Buffer;
-  public repository: Repository.Repository;
   public responder:  Responder.Responder;
   public reactor:    Reactor.Reactor;
 
   constructor(props: Props, children: Children) {
     super({ type: 'Aggregator', color: 'grey', ...props }, children);
-    this.sprout('Manager', Manager);
-    this.sprout('Repository', Repository);
-    this.sprout('Buffer', Buffer);
-    this.sprout('Responder', Responder);
-    this.sprout('Reactor', Reactor);
+    this.manager    = this.sprout('Manager', Manager);
+    this.buffer     = this.sprout('Buffer', Buffer);
+    this.responder  = this.sprout('Responder', Responder);
+    this.reactor    = this.sprout('Reactor', Reactor);
   }
 
   public start(): Promise<boolean> {
-    return this.repository.start();
+    return this.buffer.start();
   }
 
   public stop(): Promise<void> {
-    return this.repository.stop();
+    return this.buffer.stop();
   }
 
-  public async handleCommand(command: Command): Promise<Reply> {
+  public async handle(command: Command): Promise<Reply> {
     const key = command.key;
     let tryCount = 10;
     while (--tryCount >= 0) {
@@ -63,8 +61,8 @@ export class Aggregator extends Component.Component implements Service.Handler {
       const events = await this.manager.handle(state, command);
       try {
         const newState = this.buffer.update(key, state.version, events);
-        this.reactor.produce(newState, events);
-        return this.responder.resolve(command, newState, events);
+        this.reactor.on(newState, events);
+        return this.responder.responde(command, newState, events);
       } catch (e) {
         if (tryCount > 0) continue ;
         this.logger.warn('Discarding command %s: %s', command.key, String(e));
@@ -73,8 +71,8 @@ export class Aggregator extends Component.Component implements Service.Handler {
     }
   }
 
-  public handleQuery(query: Query): Promise<Reply> {
-    return this.buffer.repository.handleQuery(query);
+  public resolve(query: Query): Promise<Reply> {
+    return this.buffer.resolve(query);
   }
 
 }

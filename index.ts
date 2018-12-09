@@ -1,5 +1,4 @@
 import { Logger }        from './src/Logger';
-
 import * as Bus          from './src/Bus';
 import * as Component    from './src/Component';
 import * as Process      from './src/Process';

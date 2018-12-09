@@ -35,7 +35,7 @@ export class AMQPBus {
         connection.on('close', () => fx.failWith(new Error('AMQP: Connection close')));
         return connection;
       });
-    for (const [consumer] of this.consumers) consumer();
+    for (const [consumer] of this.consumers.entries()) consumer();
     return Promise.resolve(true);
   }
 

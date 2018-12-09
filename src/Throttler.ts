@@ -1,4 +1,5 @@
-import { Logger }         from './Logger';
+import * as Component     from './Component';
+
 import { Query, InQuery } from './Query';
 import { Reply }          from './Reply';
 
@@ -9,21 +10,20 @@ interface CachingMap<K, V> {
   get(key: K): V;
 }
 
-export interface Config {
-  name:   string;
+export interface Props extends Component.Props {
   ttl?:   number;
-};
+}
 
-export class Throttler {
+export interface Children extends Component.Children {}
 
-  private logger:  Logger;
+export class Throttler extends Component.Component {
   private running: CachingMap<string, Array<any>>;
   private ttl:     number;
 
-  constructor(config: Config) {
-    this.logger  = new Logger(config.name + '.Throttler', 'cyan');
+  constructor(props: Props, children: Children) {
+    super({ type: 'Throttler', color: 'cyan', ...props }, children);
     this.running = new CachingMap();
-    this.ttl     = config.ttl > 0 ? config.ttl : null;
+    this.ttl     = props.ttl > 0 ? props.ttl : null;
   }
 
   public async satisfy(query: InQuery, handler: (query: Query) => Promise<Reply>): Promise<void> {

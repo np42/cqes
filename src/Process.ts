@@ -1,45 +1,43 @@
+import * as Component    from './Component';
+
+import { Bus }           from './Bus';
+import { Service }       from './Service';
+import { Aggregator }    from './Aggregator';
+import { Gateway }       from './Gateway';
+
 import { hostname }      from 'os';
 import { readFile }      from 'fs';
 import { join, dirname } from 'path';
 import * as merge        from 'deepmerge';
 
-import { Logger }        from './Logger';
-import { Service }       from './Service';
-import { Aggregator }    from './Aggregator';
-import { Gateway }       from './Gateway';
-
 const yaml       = require('js-yaml');
 const CLArgs     = require('command-line-args');
 
-const MERGE_OPTIONS = { arrayMerge: (l: any, r: any, o: any) => r };
+const MERGE_OPTIONS   = { arrayMerge: (l: any, r: any, o: any) => r };
 const SERVICE_DEFAULT = { name: 'World', bus: 'default', rootpath: 'dist' };
-const AMQP_DEFAULT = 'amqp://guest:guest@localhost/';
+const AMQP_DEFAULT    = 'amqp://guest:guest@localhost/';
 
-export class Process {
-
-  private config:      any;
-  private argv:        any;
-  private logger:      Logger;
-  private services:    Map<string, any>;
-
-  public  rootpath:    string;
-  public  environment: string;
-  public  hostname:    string;
-  public  launcher:    string;
+export class Process extends Component.Component {
+  protected config:      any;
+  protected rootpath:    string;
+  protected environment: string;
+  protected hostname:    string;
+  protected launcher:    string;
+  public    services:    Map<string, Service>;
 
   constructor() {
-    this.argv     = CLArgs( [ { name: 'root', type: String }
+    process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
+    process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
+    const props     = CLArgs( [ { name: 'root', type: String }
                             , { name: 'groups', type: String, multiple: true, defaultOption: true }
                             , { name: 'dryRun', type: Boolean, defaultOption: false }
                             ]
                           , { partial: true }
                           );
-    this.rootpath = this.argv.root || process.cwd();
-    this.logger   = new Logger('CQES');
+    super({ type: 'Process', ...props }, {});
+    this.rootpath = props.root || process.cwd();
     this.services = new Map();
     this.loadConstant();
-    process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
-    process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
   }
 
   private loadConstant() {
@@ -55,7 +53,7 @@ export class Process {
   }
 
   private async loadConfig(): Promise<void> {
-    const directory = join(this.rootpath, this.argv.config || 'config');
+    const directory = join(this.rootpath, this.props.argv.config || 'config');
     this.config = await this.getConfig(directory) || {};
   }
 
@@ -147,7 +145,7 @@ export class Process {
       config.Bus     = configBus[config.bus] || configBus.default;
       this.logger.log('%s Loading Custom Service: %cyan', group, name);
       if (config.type == 'Gateway' || config.type == 'Aggregator') {
-        if (!this.argv.dryRun) {
+        if (!this.props.argv.dryRun) {
           const service = this.createService(group, config);
           this.services.set(name, service);
         }
@@ -167,45 +165,35 @@ export class Process {
     return config;
   }
 
-  private createService(group: string, config: any) {
-    const name = config.service;
-    const load = (part: string, props: Array<string>) => {
-      const path = join(this.rootpath, config.rootpath, name, name + '_' + part + '.js');
-      const module = this.safeRequire(group, path, part);
-      const result = (props || []).reduce((result, name) => {
-        if (typeof module[name] == 'function')
-          result[name] = module[name].bind(module);
-        else
-          result[name] = module[name];
-        return result;
-      }, {});
-      return merge.all([{ name: config.name, path }, config[part] || {}, result], MERGE_OPTIONS);
+  private createService(group: string, options: any) {
+    const name = options.service;
+    const load = (part: string) => {
+      const path = join(this.rootpath, options.rootpath, name, name + '_' + part + '.js');
+      return this.safeRequire(group, path, part);
     };
-    const srvcIface = ['init', 'start', 'stop'];
-
-    const Bus         = load('Bus', [...srvcIface, 'listen', 'serve', 'request', 'query']);
-    const Debouncer   = load('Debouncer', ['satisfy']);
-    const Throttler   = load('Throttler', ['satisfy']);
-    const srvcCfg     = <any>merge({ name: config.name }, { Bus, Debouncer, Throttler }, MERGE_OPTIONS);
-
-    switch (config.type) {
+    const props     = { name, type: 'Service', bus: this.bus, ...options };
+    const Service   = load('Service');
+    const Debouncer = load('Debouncer');
+    const Throttler = load('Throttler');
+    switch (options.type) {
     case 'Aggregator': {
-      const Manager      = load('Manager', ['empty', 'handle']);
-      const Factory      = load('Factory', ['apply']);
-      const Repository   = load('Repository', [...srvcIface, 'handleQuery', 'save', 'load']);
-      const Buffer       = load('Buffer', ['get', 'update']);
-      const Responder    = load('Responder', ['resolve']);
-      const Reactor      = load('Reactor', ['produce']);
-      const facets       = { Debouncer, Manager, Factory, Buffer, Repository, Reactor, Responder };
-      const aggregator   = new Aggregator(<any>merge(config, facets, MERGE_OPTIONS));
-      srvcCfg.Handler    = aggregator;
-      const service      = new Service(srvcCfg);
+      const Aggregator = load('Aggregator');
+      const Manager    = load('Manager');
+      const Factory    = load('Factory');
+      const Repository = load('Repository');
+      const Buffer     = load('Buffer');
+      const Responder  = load('Responder');
+      const Reactor    = load('Reactor');
+      const children   = { Debouncer, Throttler, Handler: Aggregator
+                         , Manager, Factory, Repository, Buffer, Responder, Reactor
+                         };
+      const service    = new Service(props, children);
       return service;
     }
     case 'Gateway': {
-      const gateway      = load('Gateway', [...srvcIface, 'handleCommand', 'handleQuery']);
-      srvcCfg.Handler    = gateway;
-      const service      = new Service(srvcCfg);
+      const gateway  = load('Gateway');
+      const children = { Debouncer, Throttler, Handler: Gateway };
+      const service  = new Service(props, children);
       return service;
     }
     }
@@ -231,9 +219,10 @@ export class Process {
 
   public async run() {
     await this.loadConfig();
-    for (const group of this.argv.groups)
+    this.bus = new Bus(this.config.Bus);
+    for (const group of this.props.argv.groups)
       await this.loadGroup(group);
-    await this.start();
+    return this.start();
   }
 
   public async start() {
@@ -241,6 +230,15 @@ export class Process {
       const options = (this.config.Service || {})[name] || {};
       service.start();
     }
+    await this.bus.start();
+  }
+
+  public async stop() {
+    for (const [name, service] of this.services) {
+      const options = (this.config.Service || {})[name] || {};
+      service.stop();
+    }
+    await this.bus.stop();
   }
 
 };

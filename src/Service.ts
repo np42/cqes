@@ -1,64 +1,60 @@
-import { Logger }                         from './Logger';
+import * as Component                     from './Component';
+
+import * as Debouncer                     from './Debouncer';
+import * as Throttler                     from './Throttler';
+
 import { Command, InCommand, OutCommand } from './Command';
 import { Query, InQuery }                 from './Query';
 import { Reply }                          from './Reply';
 
-import * as Bus                           from './Bus';
-import * as Debouncer                     from './Debouncer';
-import * as Throttler                     from './Throttler';
+export interface Props extends Component.Props {
+  Debouncer?: Debouncer.Props;
+  Throttler?: Throttler.Props;
+  Handler?:   Component.Props;
+}
 
-export interface Config {
-  name:       string;
-  Bus:        Bus.Config;
-  Debouncer?: Debouncer.Config;
-  Throttler?: Throttler.Config;
-  Handler:    Handler;
+export interface Children extends Component.Children {
+  Throttler: { new(props: Throttler.Props, children: Throttler.Children): Throttler.Throttler };
+  Debouncer: { new(props: Debouncer.Props, children: Debouncer.Children): Debouncer.Debouncer };
+  Handler:   { new(props: Component.Props, children: Component.Children): Handler };
 }
 
 export interface Handler {
-  init?:          (config: Config, bus: Bus.Bus) => void;
   start:          () => Promise<boolean>;
   stop:           () => Promise<void>;
   handleCommand?: (command: Command) => Promise<Reply>;
   handleQuery?:   (query: Query) => Promise<Reply>;
 }
 
-export class Service {
-  private name:      string;
-  private logger:    Logger;
-  private bus:       Bus.Bus;
-  private debouncer: Debouncer.Debouncer;
-  private throttler: Throttler.Throttler;
-  private handler:   Handler;
+export class Service extends Component.Component {
+  public debouncer: Debouncer.Debouncer;
+  public throttler: Throttler.Throttler;
+  public handler:   Handler;
 
-  constructor(config: Config) {
-    this.name      = config.name;
-    this.logger    = new Logger(this.name + '.Service', 'grey');
-    this.bus       = new Bus.Bus(config.Bus);
-    this.throttler = new Throttler.Throttler(config.Throttler);
-    this.debouncer = new Debouncer.Debouncer(config.Debouncer);
-    this.handler   = config.Handler;
-    if (this.handler.init != null) this.handler.init(<any>config.Handler, this.bus);
+  constructor(props: Props, children: Children) {
+    super(props, children);
+    this.debouncer = this.sprout('Debouncer', Debouncer);
+    this.throttler = this.sprout('Throttler', Throttler);
+    this.handler   = this.sprout('Handler', null);
     if (this.handler.start == null) this.logger.error('Missing .start method');
     if (this.handler.stop == null)  this.logger.error('Missing .stop method');
   }
 
   public async start() {
     if (await this.handler.start()) {
-      await this.bus.start();
 
-      if (typeof this.handler.handleCommand == 'function') {
-        this.logger.log('Listening %s.Command', this.name);
-        this.bus.listen(this.name, async (command: InCommand) => {
+      if (this.handler.handleCommand != null) {
+        this.logger.log('Listening %s.Command', this.props.name);
+        this.bus.listen(this.props.name, async (command: InCommand) => {
           this.debouncer.satisfy(command, command => {
             return this.handler.handleCommand(command);
           });
         });
       }
 
-      if (typeof this.handler.handleQuery == 'function') {
-        this.logger.log('Serving %s.Query', this.name);
-        this.bus.serve(this.name, async (query: InQuery) => {
+      if (this.handler.handleQuery != null) {
+        this.logger.log('Serving %s.Query', this.props.name);
+        this.bus.serve(this.props.name, async (query: InQuery) => {
           this.throttler.satisfy(query, query => {
             return this.handler.handleQuery(query);
           });
@@ -72,7 +68,6 @@ export class Service {
   }
 
   public async stop() {
-    await this.bus.stop();
     await this.handler.stop()
   }
 

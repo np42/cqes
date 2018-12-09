@@ -1,49 +1,25 @@
-import { Logger }     from './Logger';
+import * as Component from './Component';
+
 import { Command }    from './Command';
 import { State }      from './State';
 import { Reply }      from './Reply';
 import { Event }      from './Event';
 
-interface Bus {
-  request(request: Command, timeout?: number): Promise<Reply>;
-}
+export interface Props extends Component.Props {}
 
-interface Requester {
-  (key: string, order: string, data: any, meta?: any): Promise<Reply>;
-}
+export interface Children extends Component.Children {}
 
-export interface Config {
-  name:     string;
-  bus:      Bus;
-  produce?: (state: State, events: any, requester: Requester) => void;
-};
+export class Reactor extends Component.Component {
 
-
-export class Reactor {
-
-  private logger:    Logger;
-  private config:    Config;
-  private bus:       Bus;
-  private requester: Requester;
-
-  constructor(config: Config) {
-    this.logger  = new Logger(config.name + '.Reactor', 'magenta');
-    this.config  = config;
-    this.bus     = config.bus;
-    this.requester = async (key: string, order: string, data: any, meta?: any) => {
-      this.logger.log('Produce %s : %s', key, order);
-      const command = new Command(key, order, data, meta);
-      const reply   = await this.bus.request(command);
-      return reply;
-    };
+  constructor(props: Props, children: Children) {
+    super({ type: 'Reactor', color: 'magenta', ...props }, children);
   }
 
   public produce(state: State, events: Array<Event>) {
-    if (this.config.produce != null) {
-      return this.config.produce(state, events, this.requester);
-    } else {
-      return null;
-    }
+    return events.forEach(event => {
+      const method = 'produce' + event.name;
+      if (method in this) this[method](state, event);
+    });
   }
 
 }

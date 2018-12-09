@@ -1,4 +1,5 @@
-import { Logger }             from './Logger';
+import * as Component         from './Component';
+
 import { Command, InCommand } from './Command';
 import { Reply }              from './Reply';
 
@@ -9,22 +10,21 @@ interface CachingMap<K, V> {
   get(key: K): V;
 }
 
-export interface Config {
-  name:     string;
+export interface Props extends Component.Props {
   size?:    number;
   ttl?:     number;
-};
+}
 
-export class Debouncer {
+export interface Children extends Component.Children {}
 
-  private logger:  Logger;
+export class Debouncer extends Component.Component {
   private waiting: CachingMap<string, Array<InCommand>>;
   private ttl:     number;
 
-  constructor(config: Config) {
-    this.logger  = new Logger(config.name + '.Debouncer', 'magenta');
-    this.waiting = new CachingMap(config.size >= 0 ? config.size : null);
-    this.ttl     = config.ttl >= 0 ? config.ttl : null;
+  constructor(props: Props, children: any) {
+    super({ type: 'Debouncer', color: 'magenta', ...props }, children);
+    this.waiting = new CachingMap(props.size >= 0 ? props.size : null);
+    this.ttl     = props.ttl >= 0 ? props.ttl : null;
   }
 
   public async satisfy(command: InCommand, handler: (command: Command) => Promise<Reply>): Promise<void> {

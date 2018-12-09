@@ -1,3 +1,5 @@
+import { Bus }           from './Bus';
+import { Logger }        from './Logger';
 import { Status, Reply } from './Reply';
 
 export class Command {

@@ -1,34 +1,28 @@
-import { Logger } from './Logger';
-import { Event }  from './Event';
-import { State }  from './State';
+import * as Component  from './Component';
 
-export type Handler = (state: State, event: Event) => State;
+import { Event }       from './Event';
+import { State }       from './State';
 
-export interface Config {
-  name: string;
-  apply?: (state: State, events: any) => State;
-}
+export interface Props extends Component.Props {}
 
-export class Factory {
+export interface Children extends Component.Children {}
 
-  private logger: Logger;
-  private config: Config;
+export class Factory extends Component.Component {
 
-  constructor(config: Config) {
-    this.logger = new Logger(config.name + '.Factory', 'green');
-    this.config = config;
+  constructor(props: Props, children: Children) {
+    super({ type: 'Factory', color: 'green', ...props }, children);
   }
 
   public apply(state: State, events: Array<Event>) {
-    if (this.config.apply != null) {
-      const newState = this.config.apply(state, events) || state;
-      const diff = newState.version - state.version;
-      if (state.version < newState.version)
-        this.logger.log('State changed +%s -> %s', diff, newState.version);
-      return newState;
-    } else {
+    const version = state.version;
+    const newState = events.reduce((state, event) => {
+      const method = 'apply' + event.name;
+      if (method in this) return this[method](state, event);
       return state;
-    }
+    }, state);
+    const diff = newState.version - version;
+    this.logger.log('State changed +%s -> %s', diff, newState.version);
+    return newState;
   }
 
 }

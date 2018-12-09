@@ -1,57 +1,49 @@
+import * as Component   from './Component';
 import * as Service     from './Service';
 
-import { Logger }       from './Logger';
+import * as Manager     from './Manager';
+import * as Buffer      from './Buffer';
+import * as Factory     from './Factory';
+import * as Repository  from './Repository';
+import * as Responder   from './Responder';
+import * as Reactor     from './Reactor';
 
 import { Command }      from './Command';
 import { Query }        from './Query';
 import { Event }        from './Event';
 import { Reply }        from './Reply';
 import { State }        from './State';
-import { Bus }          from './Bus';
 
-import * as Manager     from './Manager';
-import * as Buffer      from './Buffer';
-import * as Repository  from './Repository';
-import * as Responder   from './Responder';
-import * as Factory     from './Factory';
-import * as Reactor     from './Reactor';
+export interface Props extends Component.Props {
+  Manager?:    Manager.Props;
+  Factory?:    Factory.Props;
+  Buffer?:     Buffer.Props;
+  Repository?: Repository.Props;
+  Responder?:  Responder.Props;
+  Reactor?:    Reactor.Props;
+}
 
-export interface Config {
-  name:        string;
-  Manager?:    Manager.Config;
-  Factory?:    Factory.Config;
-  Buffer?:     Buffer.Config;
-  Repository?: Repository.Config;
-  Responder?:  Responder.Config;
-  Reactor?:    Reactor.Config;
-};
+export interface Children extends Component.Children {
+  Manager:    { new(props: Manager.Props, children: Manager.Children): Manager.Manager };
+  Buffer:     { new(props: Buffer.Props, children: Buffer.Children): Buffer.Buffer };
+  Responder:  { new(props: Responder.Props, children: Responder.Children): Responder.Responder };
+  Reactor:    { new(props: Reactor.Props, children: Reactor.Children): Reactor.Reactor };
+}
 
-export class Aggregator implements Service.Handler {
-  private logger:     Logger;
-  private config:     Config;
-  private manager:    Manager.Manager;
-  private buffer:     Buffer.Buffer;
-  private repository: Repository.Repository;
-  private factory:    Factory.Factory;
-  private responder:  Responder.Responder;
-  private reactor:    Reactor.Reactor;
+export class Aggregator extends Component.Component implements Service.Handler {
+  public manager:    Manager.Manager;
+  public buffer:     Buffer.Buffer;
+  public repository: Repository.Repository;
+  public responder:  Responder.Responder;
+  public reactor:    Reactor.Reactor;
 
-  constructor(config: Config) {
-    this.logger = new Logger(config.name + '.Aggregator', 'grey');
-    this.config = config;
-  }
-
-  public init(_: never, bus: Bus) {
-    this.config.Manager.bus = bus;
-    this.manager    = new Manager.Manager(this.config.Manager);
-    this.factory    = new Factory.Factory(this.config.Factory);
-    this.repository = new Repository.Repository(this.config.Repository);
-    this.config.Buffer.repository = this.repository;
-    this.config.Buffer.factory    = this.factory;
-    this.buffer     = new Buffer.Buffer(this.config.Buffer);
-    this.responder  = new Responder.Responder(this.config.Responder);
-    this.config.Reactor.bus = bus;
-    this.reactor    = new Reactor.Reactor(this.config.Reactor);
+  constructor(props: Props, children: Children) {
+    super({ type: 'Aggregator', color: 'grey', ...props }, children);
+    this.sprout('Manager', Manager);
+    this.sprout('Repository', Repository);
+    this.sprout('Buffer', Buffer);
+    this.sprout('Responder', Responder);
+    this.sprout('Reactor', Reactor);
   }
 
   public start(): Promise<boolean> {
@@ -71,7 +63,6 @@ export class Aggregator implements Service.Handler {
       const events = await this.manager.handle(state, command);
       try {
         const newState = this.buffer.update(key, state.version, events);
-        this.repository.save(newState, events);
         this.reactor.produce(newState, events);
         return this.responder.resolve(command, newState, events);
       } catch (e) {
@@ -83,7 +74,7 @@ export class Aggregator implements Service.Handler {
   }
 
   public handleQuery(query: Query): Promise<Reply> {
-    return this.repository.handleQuery(query);
+    return this.buffer.repository.handleQuery(query);
   }
 
 }

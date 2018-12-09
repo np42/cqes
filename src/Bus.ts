@@ -1,3 +1,5 @@
+import { Logger }                                from './Logger';
+
 import { CommandBus, Handler as CommandHandler } from './CommandBus';
 import { QueryBus, Handler as QueryHandler }     from './QueryBus';
 
@@ -19,11 +21,12 @@ export interface Config {
 }
 
 export class Bus {
-
+  public logger:     Logger;
   public commandBus: CommandBus;
   public queryBus:   QueryBus;
 
   constructor(config: Config) {
+    this.logger     = new Logger('Bus.' + config.name, 'white');
     this.commandBus = new xCommandBus({ name: config.name, url: config.Command });
     this.queryBus   = new xQueryBus({ name: config.name, url: config.Query });
   }
@@ -42,22 +45,27 @@ export class Bus {
     await this.queryBus.stop();
   }
 
+  //--
+  public command(key: string, order: string, data?: any, meta?: any) {
+    this.logger.log('Command %s : %s', key, order);
+    const outCommand = new OutCommand(key, order, data, meta);
+    return this.commandBus.request(outCommand);
+  }
+
   public listen(topic: string, handler: CommandHandler<InCommand>): void {
     return this.commandBus.listen(topic, handler);
   }
 
-  public request(request: Command): Promise<Reply> {
-    const outCommand = new OutCommand(request.key, request.order, request.data, request.meta);
-    return this.commandBus.request(outCommand);
+  //--
+  public query(view: string, method?: string, data?: any, meta?: any) {
+    this.logger.log('Query %s -> %s', view, method);
+    const outQuery = new OutQuery(view, method, data, meta);
+    return this.queryBus.query(outQuery);
   }
 
   public serve(view: string, handler: QueryHandler<InQuery>): void {
     return this.queryBus.serve(view, handler);
   }
 
-  public query(query: Query, timeout?: number): Promise<Reply> {
-    const outQuery = new OutQuery(query.view, query.method, query.data, query.meta);
-    return this.queryBus.query(outQuery, timeout);
-  }
 
 }

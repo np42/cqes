@@ -1,33 +1,34 @@
-export { Logger }       from './src/Logger'
+import { Logger }        from './src/Logger';
 
-export { Process }      from './src/Process'
+import * as Bus          from './src/Bus';
+import * as Component    from './src/Component';
+import * as Process      from './src/Process';
+import * as Service      from './src/Service';
+import * as Gateway      from './src/Gateway';
+import * as Aggregator   from './src/Aggregator';
+import * as Manager      from './src/Manager';
+import * as Buffer       from './src/Buffer';
+import * as Factory      from './src/Factory';
+import * as Repository   from './src/Repository';
+import * as Reactor      from './src/Reactor';
+import * as Responder    from './src/Responder';
 
-export { Bus }          from './src/Bus'
+export { Logger, Bus, Component, Process, Service, Gateway
+       , Aggregator, Manager, Buffer, Factory, Repository
+       , Reactor, Responder
+       };
 
-export { Service }      from './src/Service'
+import { Command }       from './src/Command';
+import { Query }         from './src/Query';
+import { Reply, Status } from './src/Reply';
+import { Event }         from './src/Event';
+import { State }         from './src/State';
 
-export { Aggregator }   from './src/Aggregator'
+export { Command, Query, Reply, Status, Event, State };
 
-export { Gateway }      from './src/Gateway'
+import * as Fx           from './src/Fx';
+import * as Lx           from './src/Lx';
+import * as Mx           from './src/Mx';
+import * as Qx           from './src/Qx';
 
-export { Repository }   from './src/Repository'
-
-export { Event }        from './src/Event'
-
-export { Command }      from './src/Command'
-
-export interface CommandEmitter {
-  (key: string, order: string, data: any, meta?: any): Promise<void>;
-}
-
-export { Query }        from './src/Query'
-
-export { Reply, Status as ReplyStatus } from './src/Reply'
-
-export { State }        from './src/State'
-
-export { Fx }           from './src/Fx'
-export { Mx }           from './src/Mx'
-//export { Lx }           from './src/Lx'
-export { Qx }           from './src/Qx'
-
+export { Fx, Mx, Qx };

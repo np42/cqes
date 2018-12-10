@@ -37,7 +37,8 @@ export class Service extends Component.Component {
   public handler:   Handler;
 
   constructor(props: Props, children: Children) {
-    super(props, children);
+    const color = props.type == 'Aggregator' ? 'green' : 'yellow';
+    super({ type: 'Service', color, ...props }, children);
     this.bus       = this.sprout('Bus', Bus);
     this.debouncer = this.sprout('Debouncer', Debouncer);
     this.throttler = this.sprout('Throttler', Throttler);
@@ -51,21 +52,30 @@ export class Service extends Component.Component {
 
   public async start() {
     if (await this.handler.start()) {
+      const handlerProps = Object.getOwnPropertyNames(this.handler.constructor.prototype);
 
-      if (this.handler.handle != null) {
+      const hasHandleMethod = handlerProps.filter(m => /^handle([A-Z]|$)/.test(m)).length > 0;
+      if (hasHandleMethod) {
         this.logger.log('Listening %s.Command', this.props.name);
         this.bus.listen(this.props.name, async (command: InCommand) => {
           this.debouncer.satisfy(command, command => {
-            return this.handler.handle(command);
+            if ('handle' in this.handler) return this.handler.handle(command);
+            const method = 'handle' + command.order;
+            if (method in this.handler) return this.handler[method](command);
+            return Promise.resolve(null);
           });
         });
       }
 
-      if (this.handler.resolve != null) {
+      const hasResolveMethod = handlerProps.filter(m => /^resolve([A-Z]|$)/.test(m)).length > 0;
+      if (hasResolveMethod) {
         this.logger.log('Serving %s.Query', this.props.name);
         this.bus.serve(this.props.name, async (query: InQuery) => {
           this.throttler.satisfy(query, query => {
-            return this.handler.resolve(query);
+            if ('resolve' in this.handler) return this.handler.resolve(query);
+            const method = 'resolve' + query.method;
+            if (method in this.handler) return this.handler[method](query);
+            return Promise.resolve(null);
           });
         });
       }

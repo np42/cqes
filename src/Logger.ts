@@ -24,58 +24,67 @@ export class Logger {
   }
 
   debugger(...args: Array<any>) {
-    const message = colors.bgBlue(this._headers('DEBUGGER', 'bold') + ' ' +  this._format(args));
-    this._write('debug', message);
+    const header = colors.bgBlue(this._headers('DEBUGGER', 'bold'));
+    const message = this._format(args);
+    this._write(2, header, message);
     debugger;
   }
 
   todo(...args: Array<any>) {
-    const message = this._headers('TODO', 'bold', 'white') + ' ' + this._format(args);
-    this._write('debug', message);
+    const header = this._headers('TODO', 'bold', 'white');
+    const message = this._format(args);
+    this._write(2, header, message);
   }
 
   debug(...args: Array<any>) {
-    const message = this._headers('DBG', 'blue') + ' ' + this._format(args);
-    this._write('debug', message);
+    const header = this._headers('DBG', 'blue');
+    const message = this._format(args);
+    this._write(2, header, message);
   }
 
   stats(...args: Array<any>) {
-    const message = this._headers('STA', 'magenta') + ' ' + this._format(args);
-    this._write('stats', message);
+    const header = this._headers('STA', 'magenta');
+    const message = this._format(args);
+    this._write(1, header, message);
   }
 
   log(...args: Array<any>) {
-    const message = this._headers('LOG', 'green') + ' ' + this._format(args);
-    this._write('log', message);
+    const header = this._headers('LOG', 'green');
+    const message = this._format(args);
+    this._write(1, header, message);
   }
 
   warn(...args: Array<any>) {
-    const message = this._headers('WRN', 'yellow') + ' ' + this._format(args);
-    this._write('warning', message);
+    const header = this._headers('WRN', 'yellow');
+    const message = this._format(args);
+    this._write(2, header, message);
   }
 
   alert(...args: Array<any>) {
-    const message = this._headers('WRN', 'bold', 'yellow') + ' ' + this._format(args);
-    this._write('alert', message);
+    const header = this._headers('WRN', 'bold', 'yellow');
+    const message = this._format(args);
+    this._write(2, header, message);
     this._alert(message);
   }
 
   error(...args: Array<any>) {
+    const header = this._headers('ERR', 'red');
     const e = args[0];
-    const error = (args.length == 1 && e instanceof Error) ? e.stack
+    const message = (args.length == 1 && e instanceof Error) ? e.stack
       : (args.length == 1 && typeof e == 'string') ? e
       : (args.length == 1 && e && e.message) ? e.message
       : this._format(args);
-    const message = this._headers('ERR', 'red') + ' ' + error;
-    this._write('error', message);
+    this._write(2, header, message);
   }
 
   // ------
 
-  _write(type: string, message: string) {
-    switch (type) {
-    default: return process.stdout.write(message + '\n');
-    case 'warning': case 'alert': case 'error': return process.stderr.write(message + '\n');
+  _write(std: number, header: string, message: string) {
+    const log = message.split('\n').map(line => header + ' ' + line + '\n').join('');
+    switch (std) {
+    case 1: return process.stdout.write(log);
+    default:
+    case 2: return process.stderr.write(log);
     }
   }
 

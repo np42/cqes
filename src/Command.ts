@@ -44,6 +44,6 @@ export class OutCommand extends Command {
     super(key, order, data, meta);
   }
   serialize() {
-    return new Buffer(JSON.stringify(this));
+    return Buffer.from(JSON.stringify(this));
   }
 }

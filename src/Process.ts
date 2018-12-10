@@ -11,7 +11,8 @@ const yaml       = require('js-yaml');
 const CLArgs     = require('command-line-args');
 
 const MERGE_OPTIONS   = { arrayMerge: (l: any, r: any, o: any) => r };
-const SERVICE_DEFAULT = { name: 'World', rootpath: 'dist' };
+const PROJECT_DEFAULT = { libpath: 'dist', servicepath: '%r/%l/%s/%t.js', servicekey: '%t' };
+const SERVICE_DEFAULT = { name: 'World' };
 const AMQP_DEFAULT    = 'amqp://guest:guest@localhost/';
 
 export class Process extends Component.Component {
@@ -132,8 +133,8 @@ export class Process extends Component.Component {
     for (const name in process) {
       const serviceConfig   = process[name];
       const serviceName     = serviceConfig.service || name;
-      const project         = this.config.Project || {};
-      const serviceTemplate = { name, ...this.config.Service[serviceName] };
+      const project         = merge(PROJECT_DEFAULT, this.config.Project, MERGE_OPTIONS);
+      const serviceTemplate = { name, service: serviceName, ...this.config.Service[serviceName] };
       const config = <any>merge.all( [SERVICE_DEFAULT, project, serviceTemplate, serviceConfig]
                                    , MERGE_OPTIONS
                                    );
@@ -151,12 +152,21 @@ export class Process extends Component.Component {
 
   private createService(group: string, options: any) {
     const name = options.name;
+    const service = options.service;
     const load = (part: string) => {
-      const path = join(this.rootpath, options.rootpath, name, name + '_' + part + '.js');
+      const vars = { r: this.rootpath, l: options.libpath, s: service, n: name, t: part };
+      const path = options.servicepath
+        .replace(/%([a-z])/g, (_: string, k: string) => vars[k] || '')
+        .replace(/\/+/g, '/');
+      const key = options.servicekey.replace(/%([a-z])/g, (_: string, k: string) => vars[k] || '');
       const module = this.safeRequire(group, path, part);
-      if (module && typeof module != 'function')
+      if (module == null) return null;
+      const constructor = module[key];
+      if (constructor && typeof constructor != 'function') {
         this.logger.warn('%s.%s.%s is not a valid module', group, name, part);
-      return module;
+        return null;
+      }
+      return constructor;
     };
     const props     = { name, type: 'Service', Bus: this.config.Bus, ...options };
     const Bus       = load('Bus');
@@ -190,8 +200,6 @@ export class Process extends Component.Component {
     try {
       const module = require(path);
       this.logger.log('%s %green: %s', group, 'loading', path);
-      if (module[name] != null)   return module[name];
-      if (module.default != null) return module.default;
       return module;
     } catch (e) {
       if (e.code != 'MODULE_NOT_FOUND') throw e;

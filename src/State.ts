@@ -26,4 +26,7 @@ export class State {
     return new State(this.key, this.version + 1, newStatus, data);
   }
 
+  end() {
+    return new State(this.key, -1, null, null);
+  }
 }

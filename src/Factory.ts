@@ -10,7 +10,7 @@ export interface Children extends Component.Children {}
 export class Factory extends Component.Component {
 
   constructor(props: Props, children: Children) {
-    super({ type: 'Factory', color: 'green', ...props }, children);
+    super({ type: 'Factory', ...props }, children);
   }
 
   public apply(state: State, events: Array<Event>) {
@@ -20,8 +20,12 @@ export class Factory extends Component.Component {
       if (method in this) return this[method](state, event);
       return state;
     }, state);
-    const diff = newState.version - version;
-    this.logger.log('State changed +%s -> %s', diff, newState.version);
+    if (newState.version >= 0) {
+      const diff = newState.version - version;
+      this.logger.log('State %s@%s changed +%s', newState.key, newState.version, diff);
+    } else {
+      this.logger.log('State %s destroyed', newState.key);
+    }
     return newState;
   }
 

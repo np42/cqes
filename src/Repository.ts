@@ -12,7 +12,7 @@ export interface Children extends Gateway.Children {}
 export class Repository extends Gateway.Gateway {
 
   constructor(props: Props, children: Children) {
-    super({ type: 'Repository', color: 'blue', ...props }, children);
+    super({ type: 'Repository', ...props, color: 'cyan' }, children);
   }
 
   public start(): Promise<boolean> {
@@ -37,11 +37,11 @@ export class Repository extends Gateway.Gateway {
     return Promise.resolve(new State(key));
   }
 
-  public resolve(query: Query): Promise<Reply> {
+  public resolve(query: Query, buffer?: Map<string, State>): Promise<Reply> {
     const method = 'resolve' + query.method;
     if (method in this) {
       this.logger.log('Resolving %s -> %s', query.view, query.method);
-      return this[method](query);
+      return this[method](query, buffer);
     } else {
       this.logger.log('Ignoring %s -> %s', query.view, query.method);
       return Promise.resolve(new Reply(null, null));

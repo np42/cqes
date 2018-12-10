@@ -25,6 +25,7 @@ export interface Children extends Component.Children {
 interface CachingMap<K, V> {
   set(key: K, value: V, options?: { ttl?: number }): void;
   get(key: K): V;
+  delete(key: K): void;
 }
 
 export class Buffer extends Component.Component {
@@ -34,7 +35,7 @@ export class Buffer extends Component.Component {
   public    factory:    Factory.Factory;
 
   constructor(props: Props, children: Children) {
-    super({ type: 'Buffer', color: 'blue', ...props }, children);
+    super({ type: 'Buffer', ...props }, children);
     this.buffer     = new CachingMap(props.size > 0 ? props.size : null);
     this.ttl        = props.ttl > 0 ? props.ttl : null;
     this.repository = this.sprout('Repository', Repository);
@@ -57,9 +58,11 @@ export class Buffer extends Component.Component {
   public update(key: string, expectedVersion: number, events: Array<Event>) {
     const state = this.buffer.get(key);
     if (state.version != expectedVersion) throw new Error('State has changed');
-    this.logger.log('%s apply %s', key, events.map(e => e.name).join(' '));
+    this.logger.log('%s apply %s', key, events.map(e => e.name).join(', '));
     const newState = this.factory.apply(state, events);
-    this.buffer.set(key, newState, { ttl: this.ttl });
+    this.logger.log('State %s@%s: %j', newState.version, newState.key, newState.data);
+    if (newState == -1) this.buffer.delete(key);
+    else this.buffer.set(key, newState, { ttl: this.ttl });
     this.repository.save(newState, events);
     return newState;
   }
@@ -67,7 +70,7 @@ export class Buffer extends Component.Component {
   //--
 
   public resolve(query: Query): Promise<Reply> {
-    return this.repository.resolve(query);
+    return this.repository.resolve(query, <any>this.buffer);
   }
 
   //--

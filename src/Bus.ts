@@ -15,6 +15,7 @@ import { Query, InQuery, OutQuery }              from './Query';
 import { Reply }                                 from './Reply';
 
 export interface Props {
+  name: string;
   Command: CommandBusConfig;
   Query: QueryBusConfig;
 }
@@ -27,9 +28,9 @@ export class Bus {
   public queryBus:   QueryBus;
 
   constructor(props: Props, children: Children) {
-    this.logger     = new Logger('Bus', 'white');
-    this.commandBus = new xCommandBus(props.Command);
-    this.queryBus   = new xQueryBus(props.Query);
+    this.logger     = new Logger(props.name + '.Bus', 'white');
+    this.commandBus = new xCommandBus({ name: props.name, ...props.Command });
+    this.queryBus   = new xQueryBus({ name: props.name, ...props.Query });
   }
 
   public async start() {
@@ -48,7 +49,7 @@ export class Bus {
 
   //--
   public command(key: string, order: string, data?: any, meta?: any): Promise<Reply> {
-    this.logger.log('Command %s : %s', key, order);
+    this.logger.log('%red %s : %s', 'Command', key, order);
     const outCommand = new OutCommand(key, order, data, meta);
     return this.commandBus.request(outCommand);
   }
@@ -59,7 +60,7 @@ export class Bus {
 
   //--
   public query(view: string, method?: string, data?: any, meta?: any): Promise<Reply> {
-    this.logger.log('Query %s -> %s', view, method);
+    this.logger.log('%blue %s -> %s', 'Query', view, method);
     const outQuery = new OutQuery(view, method, data, meta);
     return this.queryBus.query(outQuery);
   }

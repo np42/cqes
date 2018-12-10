@@ -13,7 +13,7 @@ export interface Children extends Component.Children {}
 export class Manager extends Component.Component {
 
   constructor(props: Props, children: Children) {
-    super({ type: 'Manager', color: 'red', ...props }, children);
+    super({ type: 'Manager', ...props }, children);
   }
 
   public empty(): Array<Event> {

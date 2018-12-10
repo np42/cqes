@@ -12,7 +12,7 @@ export interface Children extends Component.Children {}
 export class Reactor extends Component.Component {
 
   constructor(props: Props, children: Children) {
-    super({ type: 'Reactor', color: 'magenta', ...props }, children);
+    super({ type: 'Reactor', ...props }, children);
   }
 
   public on(state: State, events: Array<Event>) {

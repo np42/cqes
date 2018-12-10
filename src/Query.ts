@@ -10,7 +10,7 @@ export class Query {
   constructor(view: string, method: string, data: any, meta?: any) {
     this.view      = view;
     this.createdAt = new Date();
-    this.method    = method;
+    this.method    = method || view;
     this.data      = data;
     this.meta      = meta || null;
   }
@@ -33,6 +33,6 @@ export class InQuery extends Query {
 
 export class OutQuery extends Query {
   serialize() {
-    return new Buffer(JSON.stringify(this));
+    return Buffer.from(JSON.stringify(this));
   }
 }

@@ -3,8 +3,6 @@ import * as Service     from './Service';
 
 import * as Manager     from './Manager';
 import * as Buffer      from './Buffer';
-import * as Factory     from './Factory';
-import * as Repository  from './Repository';
 import * as Responder   from './Responder';
 import * as Reactor     from './Reactor';
 
@@ -15,10 +13,9 @@ import { Reply }        from './Reply';
 import { State }        from './State';
 
 export interface Props extends Component.Props {
+  tryCount?:   number;
   Manager?:    Manager.Props;
-  Factory?:    Factory.Props;
   Buffer?:     Buffer.Props;
-  Repository?: Repository.Props;
   Responder?:  Responder.Props;
   Reactor?:    Reactor.Props;
 }
@@ -37,7 +34,7 @@ export class Aggregator extends Component.Component implements Service.Handler {
   public reactor:    Reactor.Reactor;
 
   constructor(props: Props, children: Children) {
-    super({ type: 'Aggregator', color: 'grey', ...props }, children);
+    super({ type: 'Aggregator', color: 'green', ...props }, children);
     this.manager    = this.sprout('Manager', Manager);
     this.buffer     = this.sprout('Buffer', Buffer);
     this.responder  = this.sprout('Responder', Responder);
@@ -54,9 +51,8 @@ export class Aggregator extends Component.Component implements Service.Handler {
 
   public async handle(command: Command): Promise<Reply> {
     const key = command.key;
-    let tryCount = 10;
+    let tryCount = this.props.tryCount || 10;
     while (--tryCount >= 0) {
-      this.logger.log('Handle Command [%s] %s : %s', tryCount, command.key, command.order);
       const state  = await this.buffer.get(key);
       const events = await this.manager.handle(state, command);
       try {

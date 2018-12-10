@@ -12,7 +12,7 @@ export interface Children extends Component.Children {}
 export class Responder extends Component.Component {
 
   constructor(props: Props, children: Children) {
-    super({ type: 'Responder', color: 'red', ...props }, children);
+    super({ type: 'Responder', ...props }, children);
   }
 
   public responde(command: Command, state: State, events: Array<Event>) {
@@ -34,13 +34,15 @@ export class Responder extends Component.Component {
       }
     }
     if (result instanceof Reply) {
-      this.logger.log("Resolved %s : %s with %s => %j", command.key, command.order, method, result.data);
+      this.logger.log("Resolved %s by %s => %j", command.key, method, result.data);
       return result;
     } else if (result != null) {
-      this.logger.log("Resolved %s : %s with %s => %j", command.key, command.order, method, result);
+      this.logger.log("Resolved %s by %s => %j", command.key, method, result);
       return new Reply(null, result);
-    } else {
+    } else if (method != null) {
       this.logger.log('No resolution for %s : %s', command.key, command.order);
+      return new Reply(null, null);
+    } else {
       return new Reply(null, null);
     }
   }

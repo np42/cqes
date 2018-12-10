@@ -4,6 +4,7 @@ export class Reply {
   public status: Status;
   public data:   any;
   public meta:   any;
+
   constructor(error: string, data?: any, meta?: any) {
     if (error != null) {
       this.status = Status.Rejected;
@@ -15,8 +16,14 @@ export class Reply {
       this.meta   = meta;
     }
   }
+
   assert() {
     if (this.status == Status.Rejected) throw this.data;
+    return this.data;
+  }
+
+  get() {
+    if (this.status == Status.Rejected) return null;
     return this.data;
   }
 }
@@ -31,6 +38,6 @@ export class InReply extends Reply {
 
 export class OutReply extends Reply {
   serialize() {
-    return new Buffer(JSON.stringify(this));
+    return Buffer.from(JSON.stringify(this));
   }
 }

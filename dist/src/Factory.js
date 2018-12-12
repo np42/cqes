@@ -15,7 +15,7 @@ class Factory extends Component.Component {
         }, state);
         if (newState.version >= 0) {
             const diff = newState.version - version;
-            this.logger.log('State %s@%s changed +%s', newState.key, newState.version, diff);
+            this.logger.log('State %s@%s changed +%s', newState.version, newState.key, diff);
         }
         else {
             this.logger.log('State %s destroyed', newState.key);

@@ -1,8 +1,9 @@
 {
   "name": "cqes",
-  "version": "2.0.1",
+  "version": "2.0.4",
   "description": "CQRS / Event Sourcing Framework",
-  "main": "dist/index.js",
+  "rootDir": "./dist",
+  "main": "./dist/index.js",
   "bin": {
     "cqes": "bin/cqes"
   },
@@ -23,14 +24,12 @@
     "url": "https://github.com/apiculteur/cqes/issues"
   },
   "homepage": "https://github.com/apiculteur/cqes#readme",
-  "devDependencies": {
+  "dependencies": {
     "@types/amqplib": "^0.5.8",
     "@types/core-js": "^2.5.0",
     "@types/deepmerge": "^2.2.0",
     "@types/node": "^8.10.37",
-    "@types/uuid": "^3.4.4"
-  },
-  "dependencies": {
+    "@types/uuid": "^3.4.4",
     "amqplib": "^0.5.2",
     "caching-map": "^1.0.2",
     "colors": "^1.3.2",

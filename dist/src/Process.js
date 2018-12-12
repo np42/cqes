@@ -1,0 +1,239 @@
+"use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const Component = require("./Component");
+const Service_1 = require("./Service");
+const os_1 = require("os");
+const fs_1 = require("fs");
+const path_1 = require("path");
+const merge = require("deepmerge");
+const yaml = require('js-yaml');
+const CLArgs = require('command-line-args');
+const MERGE_OPTIONS = { arrayMerge: (l, r, o) => r };
+const PROJECT_DEFAULT = { libpath: 'dist', servicepath: '%r/%l/%s/%t.js', servicekey: '%t' };
+const SERVICE_DEFAULT = { name: 'World' };
+const AMQP_DEFAULT = 'amqp://guest:guest@localhost/';
+class Process extends Component.Component {
+    constructor() {
+        process.on('uncaughtException', (e) => this.logger.error('exception: %s', e.stack || e));
+        process.on('unhandledRejection', (e) => this.logger.error('reject: %s', e.stack || e));
+        const argv = CLArgs([{ name: 'root', type: String },
+            { name: 'groups', type: String, multiple: true, defaultOption: true },
+            { name: 'dryRun', type: Boolean, defaultOption: false },
+            { name: 'config', type: String, defaultOption: 'config' }
+        ], { partial: true });
+        super({ name: 'CQES', type: 'Process', argv }, {});
+        this.rootpath = argv.root || process.cwd();
+        this.services = new Map();
+        this.loadConstant();
+    }
+    loadConstant() {
+        const environmentsAliases = { dev: 'development', prod: 'production' };
+        const environRaw = (process.env.NODE_ENV || process.env.ENVIRONMENT || 'unknown').toLowerCase();
+        const environ = environmentsAliases[environRaw] || environRaw;
+        if (environ == 'unknown')
+            this.logger.warn('Unknown environment type (e.g. developement, staging, production)');
+        process.env.NODE_ENV = environ;
+        this.hostname = os_1.hostname();
+        this.launcher = process.stdin.isTTY ? 'console' : 'daemon';
+        this.environment = environ;
+    }
+    loadConfig() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const directory = path_1.join(this.rootpath, this.props.argv.config || 'config');
+            this.config = (yield this.getConfig(directory)) || {};
+        });
+    }
+    getConfig(directory) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const files = this.getConfigFileList();
+            let config = {};
+            for (const file of files) {
+                const filepath = path_1.join(directory, file);
+                const part = yield this.configReadYaml(filepath);
+                const layer = yield this.configInflate(part, path_1.dirname(filepath));
+                config = merge(config, layer, MERGE_OPTIONS);
+            }
+            return config;
+        });
+    }
+    getConfigFileList() {
+        const list = ['config.yml'];
+        list.push('config-env-' + this.environment + '.yml');
+        list.push('config-host-' + this.hostname + '.yml');
+        list.push('config-mode-' + this.launcher + '.yml');
+        return list;
+    }
+    configInflate(object, cwd) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (object && typeof object == 'object') {
+                if (object instanceof Array) {
+                    const result = [];
+                    for (const item of object)
+                        result.push(yield this.configInflate(item, cwd));
+                    return result;
+                }
+                else {
+                    if ('$import' in object) {
+                        return yield this.configImport(object.$import, cwd);
+                    }
+                    else {
+                        const result = {};
+                        for (const key in object)
+                            result[key] = yield this.configInflate(object[key], cwd);
+                        return result;
+                    }
+                }
+            }
+            else {
+                return object;
+            }
+        });
+    }
+    configImport(filename, cwd) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const filepath = path_1.join(cwd, filename);
+            const content = yield this.configReadYaml(filepath);
+            return this.configInflate(content, path_1.dirname(filepath));
+        });
+    }
+    configReadYaml(filepath) {
+        return new Promise((resolve, reject) => {
+            return fs_1.readFile(filepath, (err, content) => {
+                if (err)
+                    return resolve({});
+                this.logger.log('Loading config file: %s', filepath);
+                try {
+                    const config = yaml.safeLoad(content.toString());
+                    return resolve(config);
+                }
+                catch (e) {
+                    this.logger.error('Failed when loading:', filepath);
+                    this.logger.error(e);
+                    return resolve({});
+                }
+            });
+        });
+    }
+    loadGroup(group) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (this.config.Process == null)
+                return this.logger.log('%s No .Process property', group);
+            const processMap = this.config.Process;
+            const process = processMap[group];
+            if (process == null)
+                return this.logger.log('Process group "%s" not found', group);
+            for (const name in process) {
+                const serviceConfig = process[name];
+                const serviceName = serviceConfig.service || name;
+                const project = merge(PROJECT_DEFAULT, this.config.Project, MERGE_OPTIONS);
+                const serviceTemplate = Object.assign({ name, service: serviceName }, this.config.Service[serviceName]);
+                const config = merge.all([SERVICE_DEFAULT, project, serviceTemplate, serviceConfig], MERGE_OPTIONS);
+                this.logger.log('%s Loading Custom Service: %cyan', group, name);
+                if (config.type == 'Gateway' || config.type == 'Aggregator') {
+                    if (!this.props.argv.dryRun) {
+                        const service = this.createService(group, config);
+                        this.services.set(name, service);
+                    }
+                }
+                else {
+                    this.logger.error('%s Bad process type for: %s', group, name);
+                }
+            }
+        });
+    }
+    createService(group, options) {
+        const name = options.name;
+        const service = options.service;
+        const load = (part) => {
+            const vars = { r: this.rootpath, l: options.libpath, s: service, n: name, t: part };
+            const path = options.servicepath
+                .replace(/%([a-z])/g, (_, k) => vars[k] || '')
+                .replace(/\/+/g, '/');
+            const key = options.servicekey.replace(/%([a-z])/g, (_, k) => vars[k] || '');
+            const module = this.safeRequire(group, path, part);
+            if (module == null)
+                return null;
+            const constructor = module[key];
+            if (constructor && typeof constructor != 'function') {
+                this.logger.warn('%s.%s.%s is not a valid module', group, name, part);
+                return null;
+            }
+            return constructor;
+        };
+        const props = Object.assign({ name, type: 'Service', Bus: this.config.Bus }, options);
+        const Bus = load('Bus');
+        const Debouncer = load('Debouncer');
+        const Throttler = load('Throttler');
+        switch (options.type) {
+            case 'Aggregator': {
+                const Aggregator = load('Aggregator');
+                const Manager = load('Manager');
+                const Factory = load('Factory');
+                const Repository = load('Repository');
+                const Buffer = load('Buffer');
+                const Responder = load('Responder');
+                const Reactor = load('Reactor');
+                const children = { Bus, Debouncer, Throttler, Aggregator,
+                    Manager, Factory, Repository, Buffer, Responder, Reactor
+                };
+                const service = new Service_1.Service(props, children);
+                return service;
+            }
+            case 'Gateway': {
+                const Gateway = load('Gateway');
+                const children = { Bus, Debouncer, Throttler, Gateway };
+                const service = new Service_1.Service(props, children);
+                return service;
+            }
+        }
+    }
+    safeRequire(group, path, name) {
+        try {
+            const module = require(path);
+            this.logger.log('%s %green: %s', group, 'loading', path);
+            return module;
+        }
+        catch (e) {
+            if (e.code != 'MODULE_NOT_FOUND')
+                throw e;
+            if (!~e.toString().indexOf(path))
+                throw e;
+            return null;
+        }
+    }
+    run() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.loadConfig();
+            for (const group of this.props.argv.groups)
+                yield this.loadGroup(group);
+            return this.start();
+        });
+    }
+    start() {
+        return __awaiter(this, void 0, void 0, function* () {
+            for (const [name, service] of this.services) {
+                const options = (this.config.Service || {})[name] || {};
+                service.start();
+            }
+        });
+    }
+    stop() {
+        return __awaiter(this, void 0, void 0, function* () {
+            for (const [name, service] of this.services) {
+                const options = (this.config.Service || {})[name] || {};
+                service.stop();
+            }
+        });
+    }
+}
+exports.Process = Process;
+;
+//# sourceMappingURL=Process.js.map

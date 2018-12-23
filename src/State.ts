@@ -22,7 +22,7 @@ export class State {
 
   next(status?: string, partial?: any) {
     const newStatus = status || this.status;
-    const data = partial ? merge(this.data, partial, MERGE_OPTIONS) : this.data;
+    const data = partial ? merge(this.data || {}, partial, MERGE_OPTIONS) : this.data;
     return new State(this.key, this.version + 1, newStatus, data);
   }
 

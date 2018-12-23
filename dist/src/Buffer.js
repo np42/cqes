@@ -43,8 +43,8 @@ class Buffer extends Component.Component {
             throw new Error('State has changed');
         this.logger.log('%s apply %s', key, events.map(e => e.name).join(', '));
         const newState = this.factory.apply(state, events);
-        this.logger.log('State %s@%s: %j', newState.version, newState.key, newState.data);
-        if (newState == -1)
+        this.logger.log('State %s@%s (%s): %j', newState.version, newState.key, newState.status, newState.data);
+        if (newState.version === -1)
             this.buffer.delete(key);
         else
             this.buffer.set(key, newState, { ttl: this.ttl });

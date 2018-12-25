@@ -152,7 +152,7 @@ class Process extends Component.Component {
     createService(group, options) {
         const name = options.name;
         const service = options.service;
-        const load = (part) => {
+        const load = (part, service) => {
             const vars = { r: this.rootpath, l: options.libpath, s: service, n: name, t: part };
             const path = options.servicepath
                 .replace(/%([a-z])/g, (_, k) => vars[k] || '')
@@ -169,29 +169,27 @@ class Process extends Component.Component {
             return constructor;
         };
         const props = Object.assign({ name, type: 'Service', Bus: this.config.Bus }, options);
-        const Bus = load('Bus');
-        const Debouncer = load('Debouncer');
-        const Throttler = load('Throttler');
+        const Bus = load('Bus', service);
+        const Debouncer = load('Debouncer', service);
+        const Throttler = load('Throttler', service);
         switch (options.type) {
             case 'Aggregator': {
-                const Aggregator = load('Aggregator');
-                const Manager = load('Manager');
-                const Factory = load('Factory');
-                const Repository = load('Repository');
-                const Buffer = load('Buffer');
-                const Responder = load('Responder');
-                const Reactor = load('Reactor');
+                const Aggregator = load('Aggregator', service);
+                const Manager = load('Manager', service);
+                const Factory = load('Factory', service);
+                const Repository = load('Repository', service);
+                const Buffer = load('Buffer', service);
+                const Responder = load('Responder', service);
+                const Reactor = load('Reactor', service);
                 const children = { Bus, Debouncer, Throttler, Aggregator,
                     Manager, Factory, Repository, Buffer, Responder, Reactor
                 };
-                const service = new Service_1.Service(props, children);
-                return service;
+                return new Service_1.Service(props, children);
             }
             case 'Gateway': {
-                const Gateway = load('Gateway');
+                const Gateway = load('Gateway', service);
                 const children = { Bus, Debouncer, Throttler, Gateway };
-                const service = new Service_1.Service(props, children);
-                return service;
+                return new Service_1.Service(props, children);
             }
         }
     }

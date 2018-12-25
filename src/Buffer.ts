@@ -36,7 +36,7 @@ export class Buffer extends Component.Component {
 
   constructor(props: Props, children: Children) {
     super({ type: 'Buffer', ...props }, children);
-    this.buffer     = new CachingMap(props.size > 0 ? props.size : null);
+    this.buffer     = new CachingMap('size' in props ? props.size : 100);
     this.ttl        = props.ttl > 0 ? props.ttl : null;
     this.repository = this.sprout('Repository', Repository);
     this.factory    = this.sprout('Factory', Factory);

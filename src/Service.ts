@@ -57,6 +57,7 @@ export class Service extends Component.Component {
       const hasHandleMethod = handlerProps.filter(m => /^handle([A-Z]|$)/.test(m)).length > 0;
       if (hasHandleMethod) {
         this.logger.log('Listening %s.Command', this.props.name);
+        // TODO iter on ???? to listen all
         this.bus.listen(this.props.name, async (command: InCommand) => {
           this.debouncer.satisfy(command, command => {
             if ('handle' in this.handler) return this.handler.handle(command);
@@ -65,6 +66,7 @@ export class Service extends Component.Component {
             return Promise.resolve(null);
           });
         });
+        
       }
 
       const hasResolveMethod = handlerProps.filter(m => /^resolve([A-Z]|$)/.test(m)).length > 0;

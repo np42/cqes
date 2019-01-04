@@ -16,7 +16,7 @@ const CachingMap = require('caching-map');
 class Buffer extends Component.Component {
     constructor(props, children) {
         super(Object.assign({ type: 'Buffer' }, props), children);
-        this.buffer = new CachingMap(props.size > 0 ? props.size : null);
+        this.buffer = new CachingMap('size' in props ? props.size : 100);
         this.ttl = props.ttl > 0 ? props.ttl : null;
         this.repository = this.sprout('Repository', Repository);
         this.factory = this.sprout('Factory', Factory);
@@ -33,7 +33,7 @@ class Buffer extends Component.Component {
                 return state;
             }
             else {
-                return new State_1.State(key);
+                return new State_1.State(key, this.repository.empty());
             }
         });
     }

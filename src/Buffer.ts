@@ -51,7 +51,7 @@ export class Buffer extends Component.Component {
       this.buffer.set(key, state);
       return state;
     } else {
-      return new State(key);
+      return new State(key, this.repository.empty());
     }
   }
 

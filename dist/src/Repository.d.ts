@@ -12,6 +12,7 @@ export declare class Repository extends Gateway.Gateway {
     start(): Promise<boolean>;
     stop(): Promise<void>;
     save(state: State, events: Array<Event>): Promise<void>;
+    empty(): any;
     load(key: string): Promise<State>;
     resolve(query: Query, buffer?: Map<string, State>): Promise<Reply>;
 }

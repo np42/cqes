@@ -28,15 +28,15 @@ export class Debouncer extends Component.Component {
   }
 
   public async satisfy(command: InCommand, handler: (command: Command) => Promise<Reply>): Promise<void> {
-    this.logger.log('Receive Command %s : %s', command.key, command.order);
+    this.logger.log('%red %s : %s %j', 'Command', command.key, command.order, command.data);
     try {
       const reply = await handler(command);
       if (reply instanceof Reply) return command[reply.status](reply.data);
       this.logger.warn('Expecting a Reply got: %j', reply);
-      return command.reject(null);
+      command.reject(null);
     } catch (e) {
       this.logger.error(e);
-      return command.reject(e);
+      command.reject(e);
     }
   }
 

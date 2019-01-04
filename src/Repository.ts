@@ -33,6 +33,10 @@ export class Repository extends Gateway.Gateway {
     }
   }
 
+  public empty() {
+    return <any>null;
+  }
+
   public load(key: string): Promise<State> {
     return Promise.resolve(new State(key));
   }

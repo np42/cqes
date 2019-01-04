@@ -23,6 +23,9 @@ class Repository extends Gateway.Gateway {
             return Promise.resolve();
         }
     }
+    empty() {
+        return null;
+    }
     load(key) {
         return Promise.resolve(new State_1.State(key));
     }

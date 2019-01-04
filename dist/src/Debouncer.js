@@ -19,17 +19,17 @@ class Debouncer extends Component.Component {
     }
     satisfy(command, handler) {
         return __awaiter(this, void 0, void 0, function* () {
-            this.logger.log('Receive Command %s : %s', command.key, command.order);
+            this.logger.log('%red %s : %s %j', 'Command', command.key, command.order, command.data);
             try {
                 const reply = yield handler(command);
                 if (reply instanceof Reply_1.Reply)
                     return command[reply.status](reply.data);
                 this.logger.warn('Expecting a Reply got: %j', reply);
-                return command.reject(null);
+                command.reject(null);
             }
             catch (e) {
                 this.logger.error(e);
-                return command.reject(e);
+                command.reject(e);
             }
         });
     }

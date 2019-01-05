@@ -1,3 +1,5 @@
+import { State } from './State';
+
 export enum Status { Resolved = 'resolve', Rejected = 'reject' }
 
 export class Reply {
@@ -12,7 +14,7 @@ export class Reply {
       this.meta   = meta;
     } else {
       this.status = Status.Resolved;
-      this.data   = data;
+      this.data   = data instanceof State ? data.data : data;
       this.meta   = meta;
     }
   }

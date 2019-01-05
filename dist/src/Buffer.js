@@ -33,7 +33,7 @@ class Buffer extends Component.Component {
                 return state;
             }
             else {
-                return new State_1.State(key, this.repository.empty());
+                return new State_1.State(key, -1, null, this.repository.empty());
             }
         });
     }

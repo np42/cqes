@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const State_1 = require("./State");
 var Status;
 (function (Status) {
     Status["Resolved"] = "resolve";
@@ -14,7 +15,7 @@ class Reply {
         }
         else {
             this.status = Status.Resolved;
-            this.data = data;
+            this.data = data instanceof State_1.State ? data.data : data;
             this.meta = meta;
         }
     }

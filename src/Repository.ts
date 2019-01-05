@@ -41,14 +41,21 @@ export class Repository extends Gateway.Gateway {
     return Promise.resolve(new State(key));
   }
 
-  public resolve(query: Query, buffer?: Map<string, State>): Promise<Reply> {
+  public async resolve(query: Query, buffer?: Map<string, State>): Promise<Reply> {
     const method = 'resolve' + query.method;
     if (method in this) {
       this.logger.log('Resolving %s -> %s', query.view, query.method);
-      return this[method](query, buffer);
+      try {
+        const result = await this[method](query, buffer);
+        if (result instanceof Reply) return result;
+        return new Reply(null, result);
+      } catch (error) {
+        if (error instanceof Reply) return error;
+        return new Reply(error);
+      }
     } else {
       this.logger.log('Ignoring %s -> %s', query.view, query.method);
-      return Promise.resolve(new Reply(null, null));
+      return new Reply(null, null);
     }
   }
 

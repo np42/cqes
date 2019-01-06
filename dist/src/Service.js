@@ -46,31 +46,37 @@ class Service extends Component.Component {
                 const handlerProps = Object.getOwnPropertyNames(this.handler.constructor.prototype);
                 const hasHandleMethod = handlerProps.filter(m => /^handle([A-Z]|$)/.test(m)).length > 0;
                 if (hasHandleMethod) {
-                    this.logger.log('Listening %s.Command', this.props.name);
-                    this.bus.listen(this.props.name, (command) => __awaiter(this, void 0, void 0, function* () {
-                        this.debouncer.satisfy(command, command => {
-                            if ('handle' in this.handler)
-                                return this.handler.handle(command);
-                            const method = 'handle' + command.order;
-                            if (method in this.handler)
-                                return this.handler[method](command);
-                            return Promise.resolve(null);
-                        });
-                    }));
+                    const variants = (this.props.listen || []).map((variant) => this.props.name + '.' + variant);
+                    [this.props.name].concat(variants).forEach((channel) => {
+                        this.logger.log('Listening %s.Command', channel);
+                        this.bus.listen(channel, (command) => __awaiter(this, void 0, void 0, function* () {
+                            this.debouncer.satisfy(command, command => {
+                                if ('handle' in this.handler)
+                                    return this.handler.handle(command);
+                                const method = 'handle' + command.order;
+                                if (method in this.handler)
+                                    return this.handler[method](command);
+                                return Promise.resolve(null);
+                            });
+                        }));
+                    });
                 }
                 const hasResolveMethod = handlerProps.filter(m => /^resolve([A-Z]|$)/.test(m)).length > 0;
                 if (hasResolveMethod) {
-                    this.logger.log('Serving %s.Query', this.props.name);
-                    this.bus.serve(this.props.name, (query) => __awaiter(this, void 0, void 0, function* () {
-                        this.throttler.satisfy(query, query => {
-                            if ('resolve' in this.handler)
-                                return this.handler.resolve(query);
-                            const method = 'resolve' + query.method;
-                            if (method in this.handler)
-                                return this.handler[method](query);
-                            return Promise.resolve(null);
-                        });
-                    }));
+                    const variants = (this.props.serve || []).map((variant) => this.props.name + '.' + variant);
+                    [this.props.name].concat(variants).forEach((channel) => {
+                        this.logger.log('Serving %s.Query', this.props.name);
+                        this.bus.serve(this.props.name, (query) => __awaiter(this, void 0, void 0, function* () {
+                            this.throttler.satisfy(query, query => {
+                                if ('resolve' in this.handler)
+                                    return this.handler.resolve(query);
+                                const method = 'resolve' + query.method;
+                                if (method in this.handler)
+                                    return this.handler[method](query);
+                                return Promise.resolve(null);
+                            });
+                        }));
+                    });
                 }
                 return this.bus.start();
             }

@@ -11,6 +11,8 @@ import { Query, InQuery }                 from './Query';
 import { Reply }                          from './Reply';
 
 export interface Props extends Component.Props {
+  listen?:     Array<string>;
+  serve?:      Array<string>;
   Debouncer?:  Debouncer.Props;
   Throttler?:  Throttler.Props;
   Gateway?:    Gateway.Props;
@@ -53,31 +55,34 @@ export class Service extends Component.Component {
   public async start() {
     if (await this.handler.start()) {
       const handlerProps = Object.getOwnPropertyNames(this.handler.constructor.prototype);
-
       const hasHandleMethod = handlerProps.filter(m => /^handle([A-Z]|$)/.test(m)).length > 0;
       if (hasHandleMethod) {
-        this.logger.log('Listening %s.Command', this.props.name);
-        // TODO iter on ???? to listen all
-        this.bus.listen(this.props.name, async (command: InCommand) => {
-          this.debouncer.satisfy(command, command => {
-            if ('handle' in this.handler) return this.handler.handle(command);
-            const method = 'handle' + command.order;
-            if (method in this.handler) return this.handler[method](command);
-            return Promise.resolve(null);
+        const variants = (this.props.listen || []).map((variant: string) => this.props.name + '.' + variant);
+        [this.props.name].concat(variants).forEach((channel: string) => {
+          this.logger.log('Listening %s.Command', channel);
+          this.bus.listen(channel, async (command: InCommand) => {
+            this.debouncer.satisfy(command, command => {
+              if ('handle' in this.handler) return this.handler.handle(command);
+              const method = 'handle' + command.order;
+              if (method in this.handler) return this.handler[method](command);
+              return Promise.resolve(null);
+            });
           });
         });
-        
       }
 
       const hasResolveMethod = handlerProps.filter(m => /^resolve([A-Z]|$)/.test(m)).length > 0;
       if (hasResolveMethod) {
-        this.logger.log('Serving %s.Query', this.props.name);
-        this.bus.serve(this.props.name, async (query: InQuery) => {
-          this.throttler.satisfy(query, query => {
-            if ('resolve' in this.handler) return this.handler.resolve(query);
-            const method = 'resolve' + query.method;
-            if (method in this.handler) return this.handler[method](query);
-            return Promise.resolve(null);
+        const variants = (this.props.serve || []).map((variant: string) => this.props.name + '.' + variant);
+        [this.props.name].concat(variants).forEach((channel: string) => {
+          this.logger.log('Serving %s.Query', this.props.name);
+          this.bus.serve(this.props.name, async (query: InQuery) => {
+            this.throttler.satisfy(query, query => {
+              if ('resolve' in this.handler) return this.handler.resolve(query);
+              const method = 'resolve' + query.method;
+              if (method in this.handler) return this.handler[method](query);
+              return Promise.resolve(null);
+            });
           });
         });
       }

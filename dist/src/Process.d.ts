@@ -6,7 +6,7 @@ export declare class Process extends Component.Component {
     protected environment: string;
     protected hostname: string;
     protected launcher: string;
-    services: Map<string, Service>;
+    protected services: Map<string, Service>;
     constructor();
     private loadConstant;
     private loadConfig;

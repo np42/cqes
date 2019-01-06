@@ -30,7 +30,7 @@ export class Component {
     const childProps = this.props[name] || {};
     const props = { ...this.props, type: name, ...childProps, bus: this.bus };
     if (this.children[name] === USED)
-      throw new Error('Child ' + name + 'already used');
+      throw new Error('Child ' + name + ' already used');
     if (this.children[name] != null) {
       const module = this.children[name];
       if (typeof module != 'function')

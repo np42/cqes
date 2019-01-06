@@ -7,6 +7,8 @@ import { Command } from './Command';
 import { Query } from './Query';
 import { Reply } from './Reply';
 export interface Props extends Component.Props {
+    listen?: Array<string>;
+    serve?: Array<string>;
     Debouncer?: Debouncer.Props;
     Throttler?: Throttler.Props;
     Gateway?: Gateway.Props;

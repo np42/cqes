@@ -168,7 +168,7 @@ class Process extends Component.Component {
             }
             return constructor;
         };
-        const props = Object.assign({ name, type: 'Service', Bus: this.config.Bus }, options);
+        const props = Object.assign({ name, type: 'Service' }, options.Service, { Bus: this.config.Bus }, options);
         const Bus = load('Bus', service);
         const Debouncer = load('Debouncer', service);
         const Throttler = load('Throttler', service);

@@ -21,7 +21,7 @@ export class Process extends Component.Component {
   protected environment: string;
   protected hostname:    string;
   protected launcher:    string;
-  public    services:    Map<string, Service>;
+  protected services:    Map<string, Service>;
 
   constructor() {
     process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
@@ -168,7 +168,7 @@ export class Process extends Component.Component {
       }
       return constructor;
     };
-    const props      = { name, type: 'Service', Bus: this.config.Bus, ...options };
+    const props      = { name, type: 'Service', ...options.Service, Bus: this.config.Bus, ...options };
     const Bus        = load('Bus', service);
     const Debouncer  = load('Debouncer', service);
     const Throttler  = load('Throttler', service);

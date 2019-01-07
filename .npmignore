@@ -1,1 +1,14 @@
-./src/*.ts
+node_modules
+npm-debug.log
+
+tsconfig.json
+
+*.ts
+!*.d.ts
+*.map
+
+*~
+\#*#
+.#*
+.~*#
+

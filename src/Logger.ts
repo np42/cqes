@@ -3,11 +3,11 @@ const colors = require('colors/safe');
 
 type optionName = 'withColor' | 'alertFrequency';
 
-const globalOptions = <Map<optionName, any>>new Map();
+const globalOptions = <Map<optionName | string, any>>new Map();
 
 export class Logger {
 
-  static setOption(key: optionName, data: any) {
+  static setOption(key: optionName | string, data: any) {
     globalOptions.set(key, data);
   }
 

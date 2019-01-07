@@ -10,6 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const Component = require("./Component");
 const Service_1 = require("./Service");
+const Logger_1 = require("./Logger");
 const os_1 = require("os");
 const fs_1 = require("fs");
 const path_1 = require("path");
@@ -49,6 +50,8 @@ class Process extends Component.Component {
         return __awaiter(this, void 0, void 0, function* () {
             const directory = path_1.join(this.rootpath, this.props.argv.config || 'config');
             this.config = (yield this.getConfig(directory)) || {};
+            for (const key in this.config.Logger)
+                Logger_1.Logger.setOption(key, this.config.Logger[key]);
         });
     }
     getConfig(directory) {

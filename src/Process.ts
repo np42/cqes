@@ -1,6 +1,7 @@
 import * as Component    from './Component';
 
 import { Service }       from './Service';
+import { Logger }        from './Logger';
 
 import { hostname }      from 'os';
 import { readFile }      from 'fs';
@@ -54,6 +55,8 @@ export class Process extends Component.Component {
   private async loadConfig(): Promise<void> {
     const directory = join(this.rootpath, this.props.argv.config || 'config');
     this.config = await this.getConfig(directory) || {};
+    for (const key in this.config.Logger)
+      Logger.setOption(key, this.config.Logger[key]);
   }
 
   private async getConfig(directory: string): Promise<any> {

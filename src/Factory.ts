@@ -17,12 +17,16 @@ export class Factory extends Component.Component {
     const version = state.version;
     const newState = events.reduce((state, event) => {
       const method = 'apply' + event.name;
-      if (method in this) return this[method](state, event);
+      if (method in this) return this[method](state, event) || state;
       return state;
     }, state);
     if (newState.version >= 0) {
       const diff = newState.version - version;
-      this.logger.log('State %s@%s changed +%s', newState.version, newState.key, diff);
+      if (diff === 0) {
+        this.logger.log('State %s@%s not changed', newState.version, newState.key);
+      } else {
+        this.logger.log('State %s@%s changed +%s', newState.version, newState.key, diff);
+      }
     } else {
       this.logger.log('State %s destroyed', newState.key);
     }

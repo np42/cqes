@@ -1,6 +1,6 @@
 declare type optionName = 'withColor' | 'alertFrequency';
 export declare class Logger {
-    static setOption(key: optionName, data: any): void;
+    static setOption(key: optionName | string, data: any): void;
     private name;
     private color;
     private withColor;

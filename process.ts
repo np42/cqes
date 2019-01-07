@@ -1,3 +1,5 @@
 import { Process } from './src/Process';
 
-new Process().run();
+const process = new Process();
+process.run();
+(<any>global).CQES = process;

@@ -1,5 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const Process_1 = require("./src/Process");
-new Process_1.Process().run();
+const process = new Process_1.Process();
+process.run();
+global.CQES = process;
 //# sourceMappingURL=process.js.map

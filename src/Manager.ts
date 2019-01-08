@@ -23,7 +23,7 @@ export class Manager extends Component.Component {
   public handle(state: State, command: Command): Promise<Array<Event>> {
     const method = 'handle' + command.order;
     if (method in this) {
-      this.logger.log('Handle %s : %s %j', command.key, command.order, command.data);
+      this.logger.debug('Handle %s : %s %j', command.key, command.order, command.data);
       return this[method](state, command);
     } else {
       this.logger.log('Skip %s : %s %j', command.key, command.order, command.data);

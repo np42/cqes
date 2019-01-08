@@ -23,12 +23,12 @@ export class Factory extends Component.Component {
     if (newState.version >= 0) {
       const diff = newState.version - version;
       if (diff === 0) {
-        this.logger.log('State %s@%s not changed', newState.version, newState.key);
+        this.logger.debug('State %s@%s not changed', newState.version, newState.key);
       } else {
-        this.logger.log('State %s@%s changed +%s', newState.version, newState.key, diff);
+        this.logger.debug('State %s@%s changed +%s', newState.version, newState.key, diff);
       }
     } else {
-      this.logger.log('State %s destroyed', newState.key);
+      this.logger.debug('State %s destroyed', newState.key);
     }
     return newState;
   }

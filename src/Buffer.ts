@@ -58,10 +58,11 @@ export class Buffer extends Component.Component {
   public update(key: string, expectedVersion: number, events: Array<Event>) {
     const state = this.buffer.get(key);
     if (state.version != expectedVersion) throw new Error('State has changed');
-    this.logger.log('%s apply %s', key, events.map(e => e.name).join(', '));
+    events.forEach(e => this.logger.log('%s apply %s: %j', key, e.name, e.data));
     const newState = this.factory.apply(state, events);
-    this.logger.log('State %s@%s (%s): %j', newState.version, newState.key, newState.status, newState.data);
-    if (newState.version === -1) this.buffer.delete(key);
+    const { version, status, data } = newState;
+    this.logger.debug('State %s@%s (%s): %j', version, key, status, data);
+    if (version === -1) this.buffer.delete(key);
     else this.buffer.set(key, newState, { ttl: this.ttl });
     this.repository.save(newState, events);
     return newState;

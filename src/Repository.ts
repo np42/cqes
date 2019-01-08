@@ -26,7 +26,7 @@ export class Repository extends Gateway.Gateway {
   public save(state: State, events: Array<Event>): Promise<void> {
     const method = 'save' + state.status;
     if (method in this) {
-      this.logger.log('Saving %s@%s -> %s', state.version, state.key, state.status);
+      this.logger.debug('Saving %s@%s -> %s', state.version, state.key, state.status);
       return this[method](state, events);
     } else {
       return Promise.resolve();

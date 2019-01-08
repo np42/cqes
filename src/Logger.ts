@@ -4,6 +4,7 @@ const colors = require('colors/safe');
 type optionName = 'withColor' | 'alertFrequency';
 
 const globalOptions = <Map<optionName | string, any>>new Map();
+const isTTY = process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY;
 
 export class Logger {
 
@@ -19,8 +20,7 @@ export class Logger {
   constructor(name: string | { toString: () => string }, color: string = 'reset') {
     this.name       = name;
     this.color      = color;
-    this.withColor  = globalOptions.has('withColor') ? globalOptions.get('withColor')
-      : process.stdin.isTTY || process.stdout.isTTY || process.stderr.isTTY;
+    this.withColor  = globalOptions.has('withColor') ? globalOptions.get('withColor') : isTTY;
   }
 
   debugger(...args: Array<any>) {
@@ -37,6 +37,7 @@ export class Logger {
   }
 
   debug(...args: Array<any>) {
+    if (!isTTY) return ;
     const header = this._headers('DBG', 'blue');
     const message = this._format(args);
     this._write(2, header, message);

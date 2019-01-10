@@ -1,0 +1,15 @@
+#!/bin/sh
+for folder in ../cqes-??-*
+do (
+    cd "$folder"
+    pkg=$(basename "$folder")
+    if git status 2>&1 | grep -Ei 'modified|untracked' > /dev/null
+    then
+        pubVersion=$(curl -s https://registry.npmjs.org/"$pkg" | jq -r '."dist-tags".latest')
+        version=$(cat package.json| jq -r .version)
+        echo "================= $pkg: $pubVersion / $version =================="
+        git status
+        echo
+    fi
+)
+done

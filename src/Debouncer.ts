@@ -35,7 +35,7 @@ export class Debouncer extends Component.Component {
     let timer = null;
     if (this.timeout > 0) {
       timer = setTimeout(() => {
-        this.logger.warn('[MOVED] Timed out after %s ms', this.timeout);
+        this.logger.warn('Timed out after %s ms', this.timeout);
         command.relocate('timeout');
       }, this.timeout);
     }

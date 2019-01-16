@@ -1,8 +1,6 @@
 import { Bus }    from './Bus';
 import { Logger } from './Logger';
 
-const USED = Symbol('CHILD_ALREADY_USED');
-
 export interface Props {
   name:             string;
   type:             string;
@@ -29,17 +27,19 @@ export class Component {
   sprout(name: string, alternative?: any) {
     const childProps = this.props[name] || {};
     const props = { ...this.props, type: name, ...childProps, bus: this.bus };
-    if (this.children[name] === USED)
-      throw new Error('Child ' + name + ' already used');
-    if (this.children[name] != null) {
+    if (this.children[name] instanceof Function) {
       const module = this.children[name];
       if (typeof module != 'function')
         throw new Error(this.props.name + '.' + name + ': must be a constructor');
-      this.children[name] = USED;
-      return new module(props, this.children);
+      const instance = new module(props, this.children);
+      this.children[name] = instance;
+      return instance;
+    } else if (this.children[name] instanceof Component) {
+      return this.children[name];
     } else if (alternative != null) {
-      this.children[name] = USED;
-      return new alternative[name](props, this.children);
+      const instance = new alternative[name](props, this.children);
+      this.children[name] = instance;
+      return instance;
     }
     throw new Error('Unable to sprout ' + name);
   }

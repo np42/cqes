@@ -24,53 +24,60 @@ export class Logger {
   }
 
   debugger(...args: Array<any>) {
-    const header = colors.bgBlue(this._headers('DEBUGGER', 'bold'));
+    const header  = colors.bgBlue(this._headers('DEBUGGER', 'bold'));
     const message = this._format(args);
     this._write(2, header, message);
     debugger;
   }
 
   todo(...args: Array<any>) {
-    const header = this._headers('TODO', 'bold', 'white');
+    const header  = this._headers('TODO', 'bold', 'white');
     const message = this._format(args);
     this._write(2, header, message);
   }
 
   debug(...args: Array<any>) {
     if (!isTTY) return ;
-    const header = this._headers('DBG', 'blue');
+    const header  = this._headers('DBG', 'blue');
     const message = this._format(args);
     this._write(2, header, message);
   }
 
   stats(...args: Array<any>) {
-    const header = this._headers('STA', 'magenta');
+    const header  = this._headers('STA', 'magenta');
     const message = this._format(args);
     this._write(1, header, message);
   }
 
   log(...args: Array<any>) {
-    const header = this._headers('LOG', 'green');
+    const header  = this._headers('LOG', 'green');
     const message = this._format(args);
     this._write(1, header, message);
   }
 
   warn(...args: Array<any>) {
-    const header = this._headers('WRN', 'yellow');
+    const header  = this._headers('WRN', 'yellow');
     const message = this._format(args);
     this._write(2, header, message);
   }
 
   alert(...args: Array<any>) {
-    const header = this._headers('WRN', 'bold', 'yellow');
+    const header  = this._headers('WRN', 'bold', 'yellow');
     const message = this._format(args);
     this._write(2, header, message);
     this._alert(message);
   }
 
+  trace(...args: Array<any>) {
+    const header  = this._headers('WRN', 'bold', 'yellow');
+    const message = this._format(args);
+    const stack   = new Error().stack.split('\n').slice(2).join('\n')
+    this._write(2, header, message + '\n' + stack);
+  }
+
   error(...args: Array<any>) {
     const header = this._headers('ERR', 'red');
-    const e = args[0];
+    const e      = args[0];
     const message = (args.length == 1 && e instanceof Error) ? e.stack
       : (args.length == 1 && typeof e == 'string') ? e
       : (args.length == 1 && e && e.message) ? e.message

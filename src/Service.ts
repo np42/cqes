@@ -65,7 +65,7 @@ export class Service extends Component.Component {
               if ('handle' in this.handler) return this.handler.handle(command);
               const method = 'handle' + command.order;
               if (method in this.handler) return this.handler[method](command);
-              return Promise.resolve(null);
+              return Promise.resolve(new Reply(null, null));
             });
           });
         });
@@ -81,7 +81,7 @@ export class Service extends Component.Component {
               if ('resolve' in this.handler) return this.handler.resolve(query);
               const method = 'resolve' + query.method;
               if (method in this.handler) return this.handler[method](query);
-              return Promise.resolve(null);
+              return Promise.resolve(new Reply(null, null));
             });
           });
         });

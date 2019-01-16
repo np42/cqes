@@ -4,7 +4,7 @@ import { Channel, Message }         from 'amqplib';
 import { CommandBus, Handler }      from './CommandBus';
 import { InCommand, OutCommand }    from './Command';
 import { AMQPInCommand }            from './AMQPCommand';
-import { Reply, Status, OutReply }  from './Reply';
+import { Reply, OutReply }          from './Reply';
 import { AMQPInReply }              from './AMQPReply';
 import * as uuid                    from 'uuid';
 
@@ -16,6 +16,13 @@ interface Session {
 export interface Config {
   name: string;
   url: string;
+};
+
+export enum Status
+{ Resolved = 'resolve'
+, Rejected = 'reject'
+, Relocated = 'relocate'
+, Canceled = 'cancel'
 };
 
 export class AMQPCommandBus extends AMQPBus implements CommandBus {
@@ -72,9 +79,33 @@ export class AMQPCommandBus extends AMQPBus implements CommandBus {
       , channel: { prefetch: 10 }
       , reply: (channel: Channel) => (message: Message) => (method: Status, content: any) => {
           const options = { correlationId: message.properties.correlationId };
-          const reply = method == Status.Rejected ? new OutReply(content) : new OutReply(null, content);
-          channel.sendToQueue(message.properties.replyTo, reply.serialize(), options);
-          channel.ack(message);
+          switch (method) {
+          case Status.Resolved: {
+            const reply = new OutReply(null, content);
+            channel.sendToQueue(message.properties.replyTo, reply.serialize(), options);
+            channel.ack(message);
+            this.logger.debug('Resolved');
+          }; break ;
+          case Status.Rejected: {
+            const reply = new OutReply(content);
+            channel.sendToQueue(message.properties.replyTo, reply.serialize(), options);
+            channel.reject(message);
+            this.logger.debug('Rejected');
+          }; break ;
+          case Status.Canceled: {
+            const reply = new OutReply('Canceled');
+            channel.sendToQueue(message.properties.replyTo, reply.serialize(), options);
+            channel.ack(message);
+            this.logger.debug('Canceled');
+          }; break ;
+          case Status.Relocated: {
+            const moveOptions = { ...options, replyTo: message.properties.replyTo };
+            const target = message.fields.routingKey + '._' + content;
+            channel.ack(message);
+            this.publish(target, message.content, moveOptions);
+            this.logger.debug('Relocated to %s', target);
+          }; break ;
+          }
         }
       };
     return this.consume(topic + '.Command', handler, options);

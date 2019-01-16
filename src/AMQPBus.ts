@@ -1,4 +1,5 @@
 import { Fx }                                        from './Fx';
+import { Logger }                                    from './Logger';
 import { Handler, FxMessageHandler, MessageHandler } from './CommandBus';
 import { AMQPInCommand }                             from './AMQPCommand';
 import * as amqp                                     from 'amqplib';
@@ -13,12 +14,14 @@ export interface Config {
 
 export class AMQPBus {
 
+  protected logger:   Logger;
   private url:        string;
   private connection: FxConnection;
   private channels:   Map<string, FxChannel>;
   private consumers:  Set<any>;
 
   constructor(config: Config) {
+    this.logger    = new Logger('AMQPBus', 'white');
     this.url       = config.url;
     this.channels  = new Map();
     this.consumers = new Set();

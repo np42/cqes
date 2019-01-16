@@ -37,6 +37,7 @@ export class InCommand extends Command {
   resolve(content: any)   { this.reply(Status.Resolved, content); }
   reject(content: any)    { this.reply(Status.Rejected, content); }
   cancel(reason?: string) { this.reply('cancel', reason); }
+  relocate(queue: string) { this.reply('relocate', queue); }
 }
 
 export class OutCommand extends Command {

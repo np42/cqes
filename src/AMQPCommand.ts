@@ -16,8 +16,6 @@ export class AMQPInCommand extends InCommand {
     this.createdAt = new Date(payload.createdAt);
   }
 
-  cancel(reason?: any) { this.reply('reject', reason); }
-
 }
 
 

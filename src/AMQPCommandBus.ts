@@ -1,4 +1,4 @@
-import { AMQPBus, FxConnection }    from './AMQPBus';
+import * as AMQPBus                 from './AMQPBus';
 import { Fx }                       from './Fx';
 import { Channel, Message }         from 'amqplib';
 import { CommandBus, Handler }      from './CommandBus';
@@ -13,31 +13,28 @@ interface Session {
   resolve: (value: any) => void;
 };
 
-export interface Config {
-  name: string;
-  url: string;
-};
-
 export enum Status
-{ Resolved = 'resolve'
-, Rejected = 'reject'
+{ Resolved  = 'resolve'
+, Rejected  = 'reject'
 , Relocated = 'relocate'
-, Canceled = 'cancel'
+, Canceled  = 'cancel'
 };
 
-export class AMQPCommandBus extends AMQPBus implements CommandBus {
+export { Props } from './AMQPBus';
+
+export class AMQPCommandBus extends AMQPBus.AMQPBus implements CommandBus {
 
   private id:         string;
   private pending:    Map<string, Session>;
-  private response:   FxConnection;
+  private response:   AMQPBus.FxConnection;
   private gcInterval: NodeJS.Timer;
 
-  constructor(config: Config) {
-    super(config);
-    this.id         = config.name + '.Result.' + uuid.v1();
-    this.pending    = new Map();
-    this.response   = null;
-    this.gcInterval = null;
+  constructor(props: AMQPBus.Props) {
+    super(props);
+    this.id             = props.name + '.Result.' + uuid.v1();
+    this.pending        = new Map();
+    this.response       = null;
+    this.gcInterval     = null;
   }
 
   private gc() {
@@ -62,12 +59,7 @@ export class AMQPCommandBus extends AMQPBus implements CommandBus {
       if (session == null) return /* FIXME: do not fail silently */;
       session.resolve(reply);
       this.pending.delete(reply.id);
-    }, { noAck: true
-       , channel: { prefetch: 100 }
-       , queue: { exclusive: true, durable: false }
-       , Message: AMQPInReply
-       }
-    );
+    }, this.props.replier);
     return true;
   }
 
@@ -76,7 +68,8 @@ export class AMQPCommandBus extends AMQPBus implements CommandBus {
   public listen(topic: string, handler: Handler<InCommand>) {
     const options =
       { Message: AMQPInCommand
-      , channel: { prefetch: 10 }
+      , channel: this.props.consumer.channel
+      , queue: this.props.consumer.queue
       , reply: (channel: Channel) => (message: Message) => (method: Status, content: any) => {
           const options = { correlationId: message.properties.correlationId };
           switch (method) {

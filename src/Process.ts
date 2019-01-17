@@ -216,21 +216,24 @@ export class Process extends Component.Component {
     await this.loadConfig();
     for (const group of this.props.argv.groups)
       await this.loadGroup(group);
+    this.logger.log('%yellow', '============ Services initialized ============');
     return this.start();
   }
 
   public async start() {
     for (const [name, service] of this.services) {
       const options = (this.config.Service || {})[name] || {};
-      service.start();
+      await service.start();
     }
+    this.logger.log('%green', '============ Services started ============');
   }
 
   public async stop() {
     for (const [name, service] of this.services) {
       const options = (this.config.Service || {})[name] || {};
-      service.stop();
+      await service.stop();
     }
+    this.logger.log('%red', '============ Services stopped ============');
   }
 
 };

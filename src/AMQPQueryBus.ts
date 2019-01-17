@@ -1,4 +1,4 @@
-import { AMQPBus, FxConnection }    from './AMQPBus';
+import * as AMQPBus                 from './AMQPBus';
 import { Fx }                       from './Fx';
 import { Channel, Message }         from 'amqplib';
 import { QueryBus }                 from './QueryBus';
@@ -19,14 +19,16 @@ export interface Config {
   url: string;
 };
 
-export class AMQPQueryBus extends AMQPBus implements QueryBus {
+export { Props } from './AMQPBus';
+
+export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
 
   private id:         string;
   private pending:    Map<string, Session>;
-  private response:   FxConnection;
+  private response:   AMQPBus.FxConnection;
   private gcInterval: NodeJS.Timer;
 
-  constructor(config: Config) {
+  constructor(config: AMQPBus.Props) {
     super(config);
     this.id         = config.name + '.Reply.' + uuid.v1();
     this.pending    = new Map();

@@ -2,29 +2,61 @@ import { Fx }                                        from './Fx';
 import { Logger }                                    from './Logger';
 import { Handler, FxMessageHandler, MessageHandler } from './CommandBus';
 import { AMQPInCommand }                             from './AMQPCommand';
+import { AMQPInReply }                               from './AMQPReply';
 import * as amqp                                     from 'amqplib';
+import * as merge                                    from 'deepmerge';
+
+const MERGE_OPTIONS = { arrayMerge: (l: any, r: any, o: any) => r };
 
 export type FxConnection = Fx<any, amqp.Connection>;
 type FxChannel = Fx<amqp.Connection, amqp.Channel>;
 
-export interface Config {
+export interface Props {
   name: string;
-  url:  string;
+  url: string;
+  consumer?: { channel: PropsChannel, queue: PropsQueue };
+  replier?: PropsReplier
+};
+
+interface PropsChannel {
+  prefetch: number;
 }
 
-export class AMQPBus {
+interface PropsQueue {
+  "x-max-priority": number;
+}
 
+interface PropsReplier {
+  channel: { prefetch: number };
+  queue: { exclusive: boolean, durable: boolean };
+  Message: AMQPInReply;
+}
+
+const CONSUMER_CHANNEL_DEFAULT = { prefetch: 10 }
+const CONSUMER_QUEUE_DEFAULT = { "x-max-priority": 10 }
+const CONSUMER_DEFAULT = { queue: CONSUMER_QUEUE_DEFAULT, channel: CONSUMER_CHANNEL_DEFAULT };
+const REPLIER_DEFAULT =
+  { Message: AMQPInReply, noAck: true
+  , channel: { prefetch: 100 }
+  , queue: { exclusive: true, durable: false }
+  };
+
+export class AMQPBus {
   protected logger:   Logger;
+  protected props:    Props;
   private url:        string;
   private connection: FxConnection;
   private channels:   Map<string, FxChannel>;
   private consumers:  Set<any>;
 
-  constructor(config: Config) {
-    this.logger    = new Logger('AMQPBus', 'white');
-    this.url       = config.url;
-    this.channels  = new Map();
-    this.consumers = new Set();
+  constructor(props: Props) {
+    this.logger         = new Logger('AMQPBus', 'white');
+    this.url            = props.url;
+    this.props          = { ...props };
+    this.props.consumer = merge(CONSUMER_DEFAULT, props.consumer || {}, MERGE_OPTIONS);
+    this.props.replier  = merge(REPLIER_DEFAULT, props.replier || {}, MERGE_OPTIONS);
+    this.channels       = new Map();
+    this.consumers      = new Set();
   }
 
   public start() {
@@ -74,6 +106,7 @@ export class AMQPBus {
     const fxHandler = <FxMessageHandler<any>>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return new Promise((resolve, reject) => {
       const consumer = () => {
+        this.logger.debug('Listening to %s: %j', queue, options);
         const connection = this.getChannel(queue, options.queue).pipe(async (channel, fx) => {
           await channel.prefetch(options.channel.prefetch, false);
           const replier = options.noAck ? null : options.reply(channel);

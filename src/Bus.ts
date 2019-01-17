@@ -4,10 +4,10 @@ import { CommandBus, Handler as CommandHandler } from './CommandBus';
 import { QueryBus, Handler as QueryHandler }     from './QueryBus';
 
 import { AMQPCommandBus as xCommandBus
-       , Config as CommandBusConfig
+       , Props as CommandBusConfig
        }                                         from './AMQPCommandBus';
 import { AMQPQueryBus as xQueryBus
-       , Config as QueryBusConfig
+       , Props as QueryBusConfig
        }                                         from './AMQPQueryBus';
 
 import { Command, OutCommand, InCommand }        from './Command';

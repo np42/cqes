@@ -128,11 +128,11 @@ export class Process extends Component.Component {
 
   private async loadGroup(group: string) {
     if (this.config.Process == null)
-      return this.logger.log('%s No .Process property', group);
+      return this.logger.warn('%s No .Process property', group);
     const processMap = this.config.Process;
     const process = processMap[group];
     if (process == null)
-      return this.logger.log('Process group "%s" not found', group);
+      return this.logger.error('Process group "%s" not found', group);
     for (const name in process) {
       const serviceConfig   = process[name];
       const serviceName     = serviceConfig.service || name;

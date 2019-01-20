@@ -31,4 +31,4 @@ import * as Lx           from './src/Lx';
 import * as Mx           from './src/Mx';
 import * as Qx           from './src/Qx';
 
-export { Fx, Mx, Qx };
+export { Fx, Mx, Qx, Lx };

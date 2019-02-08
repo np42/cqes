@@ -15,6 +15,10 @@ export class Query {
     this.meta      = meta || null;
   }
 
+  get id() {
+    const offset = this.view.indexOf('-');
+    return offset > 0 ? this.view.substr(offset + 1) : this.view;
+  }
 }
 
 export type QueryReplier = (type: Status, value: any) => void;

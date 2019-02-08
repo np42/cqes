@@ -130,11 +130,13 @@ export class Logger {
     const h = this._datePad(date.getHours());
     const m = this._datePad(date.getMinutes());
     const s = this._datePad(date.getSeconds());
-    return [Y, '-', M, '-', D, ' ', h, ':', m, ':', s].join('');
+    const u = this._datePad(date.getMilliseconds(), 3);
+    return [Y, '-', M, '-', D, ' ', h, ':', m, ':', s, '.', u].join('');
   }
 
-  _datePad(number: number) {
-    return number < 10 ? '0' + number : '' + number;
+  _datePad(number: number, length: number = 2) {
+    if (length === 2) return number < 10 ? '0' + number : '' + number;
+    if (length === 3) return (number < 10 ? '00' : number < 100 ? '0' : '') + number;
   }
 
   _format(args: any) {

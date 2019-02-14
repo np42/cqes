@@ -137,6 +137,7 @@ export class Logger {
   _datePad(number: number, length: number = 2) {
     if (length === 2) return number < 10 ? '0' + number : '' + number;
     if (length === 3) return (number < 10 ? '00' : number < 100 ? '0' : '') + number;
+    return number;
   }
 
   _format(args: any) {

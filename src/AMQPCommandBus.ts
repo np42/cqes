@@ -7,6 +7,9 @@ import { AMQPInCommand }            from './AMQPCommand';
 import { Reply, OutReply }          from './Reply';
 import { AMQPInReply }              from './AMQPReply';
 import * as uuid                    from 'uuid';
+import * as merge                   from 'deepmerge';
+
+const MERGE_OPTIONS = { arrayMerge: (l: any, r: any, o: any) => r };
 
 interface Session {
   expiresAt: number;
@@ -105,7 +108,11 @@ export class AMQPCommandBus extends AMQPBus.AMQPBus implements CommandBus {
   }
 
   public async request(request: OutCommand, timeout = 30) {
-    const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: true };
+    const options =
+      { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: true
+      , priority: request.meta && request.meta.priority >= 0 ? request.meta.priority : 0
+      };
+    console.log(options);
     const offset  = request.key.indexOf('-');
     const topic   = offset > 0 ? request.key.substr(0, offset) : request.key;
     const promise = new Promise(resolve => {

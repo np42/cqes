@@ -13,6 +13,6 @@ export type Handler<T>        = MessageHandler<T> | FxMessageHandler<T>;
 export interface CommandBus {
   start(): Promise<boolean>;
   stop():  Promise<void>;
-  listen(topic: string, handler: Handler<InCommand>): void;
+  listen(topic: string, handler: Handler<InCommand>, options?: any): void;
   request(request: OutCommand): Promise<Reply>;
 }

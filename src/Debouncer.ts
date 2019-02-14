@@ -31,6 +31,15 @@ export class Debouncer extends Component.Component {
   }
 
   public async satisfy(command: InCommand, handler: (command: Command) => Promise<Reply>): Promise<void> {
+    const method = 'debounce' + command.order;
+    if (method in this) {
+      const isFirst = await this[method](command);
+      if (!isFirst) {
+        this.logger.warn('%red %s : %s %j', 'Duplicate Command', command.key, command.order, command.data);
+        command.cancel('Duplicate message');
+        return ;
+      }
+    }
     this.logger.log('%red %s : %s %j', 'Command', command.key, command.order, command.data);
     let timer = null;
     if (this.timeout > 0) {

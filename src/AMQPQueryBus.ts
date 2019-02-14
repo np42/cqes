@@ -73,6 +73,7 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
     const options =
       { Message: AMQPInQuery
       , channel: { prefetch: 10 }
+      , queue: { durable: false }
       , reply: (channel: Channel) => (message: Message) => (method: Status, content: any) => {
           const options = { correlationId: message.properties.correlationId };
           const reply = method == Status.Rejected ? new OutReply(content) : new OutReply(null, content);

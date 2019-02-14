@@ -33,7 +33,7 @@ interface PropsReplier {
 }
 
 const CONSUMER_CHANNEL_DEFAULT = { prefetch: 10 }
-const CONSUMER_QUEUE_DEFAULT = { "x-max-priority": 10 }
+const CONSUMER_QUEUE_DEFAULT = { maxPriority: 10 }
 const CONSUMER_DEFAULT = { queue: CONSUMER_QUEUE_DEFAULT, channel: CONSUMER_CHANNEL_DEFAULT };
 const REPLIER_DEFAULT =
   { Message: AMQPInReply, noAck: true
@@ -100,6 +100,8 @@ export class AMQPBus {
     if (options.reply == null)           options.reply = (channel: amqp.Channel) =>
       (message: amqp.Message) => (method: string) => channel[method](message)
     if (options.channel == null)         options.channel = {};
+    if (!options.channel.arguments)      options.channel.arguments = {};
+    if (!options.channel.arguments['x-priority']) options.channel.arguments['x-priority'] = 10;
     if (!(options.channel.prefetch > 0)) options.channel.prefetch = 1;
     if (options.queue == null)           options.queue = {};
     if (options.queue.durable == null)   options.queue.durable = true;
@@ -118,7 +120,7 @@ export class AMQPBus {
             } else {
               channel.reject(rawMessage, true);
             }
-          }, options);
+          }, options.channel);
           fx.on('aborted', () => {
             active = false;
             channel.cancel(subscription.consumerTag);

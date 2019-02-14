@@ -171,7 +171,9 @@ export class Process extends Component.Component {
       }
       return constructor;
     };
-    const props      = { name, type: 'Service', ...options.Service, Bus: this.config.Bus, ...options };
+    const props      = <any>merge.all( [ { name, type: 'Service' }, options.Service || {}
+                                       , { Bus: this.config.Bus }, options || {} ]
+                                     , MERGE_OPTIONS);
     const Bus        = load('Bus', service);
     const Debouncer  = load('Debouncer', service);
     const Throttler  = load('Throttler', service);

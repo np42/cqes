@@ -21,6 +21,11 @@ export class Command {
     const offset = this.key.indexOf('-');
     return offset > 0 ? this.key.substr(offset + 1) : this.key;
   }
+
+  get category() {
+    const offset = this.key.indexOf('-');
+    return offset > 0 ? this.key.substr(0, offset) : this.key;
+  }
 }
 
 export type CommandReplier = (action: string, reason?: any) => void;

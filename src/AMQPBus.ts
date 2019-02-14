@@ -36,8 +36,8 @@ const CONSUMER_CHANNEL_DEFAULT = { prefetch: 10 }
 const CONSUMER_QUEUE_DEFAULT = { maxPriority: 10 }
 const CONSUMER_DEFAULT = { queue: CONSUMER_QUEUE_DEFAULT, channel: CONSUMER_CHANNEL_DEFAULT };
 const REPLIER_DEFAULT =
-  { Message: AMQPInReply, noAck: true
-  , channel: { prefetch: 100 }
+  { Message: AMQPInReply
+  , channel: { prefetch: 100, noAck: true, exclusive: true }
   , queue: { exclusive: true, durable: false }
   };
 
@@ -108,7 +108,7 @@ export class AMQPBus {
     const fxHandler = <FxMessageHandler<any>>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return new Promise((resolve, reject) => {
       const consumer = () => {
-        this.logger.debug('Listening to %s: %j', queue, options);
+        this.logger.log('Listening to %s: %j', queue, options);
         const connection = this.getChannel(queue, options.queue).pipe(async (channel, fx) => {
           await channel.prefetch(options.channel.prefetch, false);
           const replier = options.noAck ? null : options.reply(channel);

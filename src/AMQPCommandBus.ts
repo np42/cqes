@@ -112,7 +112,6 @@ export class AMQPCommandBus extends AMQPBus.AMQPBus implements CommandBus {
       { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: true
       , priority: request.meta && request.meta.priority >= 0 ? request.meta.priority : 0
       };
-    console.log(options);
     const offset  = request.key.indexOf('-');
     const topic   = offset > 0 ? request.key.substr(0, offset) : request.key;
     const promise = new Promise(resolve => {

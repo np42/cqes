@@ -58,9 +58,8 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
       if (session == null) return  /* FIXME: do not fail silently */;
       session.resolve(reply);
       this.pending.delete(reply.id);
-    }, { noAck: true
-       , channel: { prefetch: 100 }
-       , queue: { exclusive: true, durable: false }
+    }, { channel: { prefetch: 100, noAck: true, exclusive: true }
+       , queue: { durable: false, exclusive: true }
        , Message: AMQPInReply
        }
     );

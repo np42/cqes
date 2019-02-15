@@ -17,8 +17,13 @@ export class Factory extends Component.Component {
     const version = state.version;
     const newState = events.reduce((state, event) => {
       const method = 'apply' + event.name;
-      if (method in this) return this[method](state, event) || state;
-      return state;
+      if (method in this) {
+        this.logger.log('%s apply %s: %j', state.key, event.name, event.data);
+        return this[method](state, event) || state;
+      } else {
+        this.logger.warn('%s skip %s: %j', state.key, event.name, event.data);
+        return state;
+      }
     }, state);
     if (newState.version >= 0) {
       const diff = newState.version - version;

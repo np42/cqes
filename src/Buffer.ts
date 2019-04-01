@@ -1,23 +1,15 @@
 import * as Component   from './Component';
 
-import * as Repository  from './Repository';
-
-import { State }        from './State';
-import { Event }        from './Event';
-import { Query }        from './Query';
-import { Reply }        from './Reply';
+import { state }        from './State';
 
 const CachingMap = require('caching-map');
 
-export interface Props extends Component.Props {
+export interface props extends Component.props {
   size?:       number;
   ttl?:        number;
-  Repository?: Repository.Props;
 }
 
-export interface Children extends Component.Children {
-  Repository: { new(props: Repository.Props, children: Repository.Children): Repository.Repository };
-}
+export interface children extends Component.children {}
 
 interface CachingMap<K, V> {
   set(key: K, value: V, options?: { ttl?: number }): void;
@@ -25,83 +17,40 @@ interface CachingMap<K, V> {
   delete(key: K): void;
 }
 
-interface Entry {
-  state: State;
-  queue: PendingQueue;
-}
-
 type PendingQueue = Array<(state: State) => void>;
 
 export class Buffer extends Component.Component {
-  protected cache:      CachingMap<string, Entry>;
+  protected cache:      CachingMap<string, state<any>>;
   protected ttl:        number;
-  public    repository: Repository.Repository;
 
-  constructor(props: Props, children: Children) {
-    super({ type: 'Buffer', ...props }, children);
+  constructor(props: props, children: children) {
+    super({ type: 'buffer', ...props }, children);
     this.cache      = new CachingMap('size' in props ? props.size : 100);
     this.ttl        = props.ttl > 0 ? props.ttl : null;
-    this.repository = this.sprout('Repository', Repository);
   }
 
-  public get(key: string): Promise<State> {
-    return new Promise(resolve => {
-      const entry = this.cache.get(key);
-      if (entry != null) {
-        if (entry.state != null && entry.queue.length == 0)
-          return resolve(entry.state);
-        entry.queue.push(resolve);
-      } else {
-        const entry = { state: <State>null, queue: <PendingQueue>[] };
-        this.cache.set(key, entry);
-        this.repository.load(key).then((state: State) => {
-          entry.state = state;
-          resolve(state);
-        });
-      }
-    });
+  public get(id: string) {
+    return this.cache.get(id);
   }
 
-  public drain(key: string) {
-    const entry = this.cache.get(key);
-    if (entry == null) return ;
-    if (entry.queue.length === 0) return ;
-    return entry.queue.shift()(entry.state);
+  public has(id: string) {
+    return this.cache.has(id);
   }
 
-  public update(guessVersion: number, state: State, events: Array<Event>): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const entry = this.cache.get(state.key);
-      const key   = state.key;
-      if (entry == null)
-        return reject(new Error('Entry not found: ' + key));
-      const version = entry.state.version;
-      if (version != guessVersion)
-        return reject(new Error('State has changed, expected: ' + version + ' got: ' + guessVersion));
-      if (state.version > -1) {
-        entry.state = state;
-        this.cache.set(key, entry, { ttl: this.ttl });
-      } else {
-        this.cache.delete(key);
-      }
-      this.repository.save(state, events).then(resolve);
-    });
+  public setnx(id: string, state: state<any>): void {
+    if (this.cache.has(id)) throw new Error('State already loaded');
+    this.cache.set(id, state, { ttl: this.ttl });
   }
 
-  //--
-
-  public resolve(query: Query): Promise<Reply> {
-    return this.repository.resolve(query, <any>this.cache);
-  }
-
-  //--
-
-  public start(): Promise<boolean> {
-    return this.repository.start();
-  }
-
-  public stop(): Promise<void> {
-    return this.repository.stop();
+  public update(state: state<any>): void {
+    const revision = state.revision;
+    if (!(revision > -1)) throw new Error('Bad revision');
+    if (state == null) throw new Error('Missing state');
+    const oldState = this.cache.get(state.key);
+    if (oldState == null) throw new Error('State lost');
+    if (oldState.revision != revision) throw new Error('Revision missmatch');
+    if (oldState === state && revision !== state.revision) throw new Error('Update forbidden');
+    this.cache.set(state.id, state, { ttl: this.ttl });
   }
 
 }

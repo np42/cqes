@@ -1,37 +1,35 @@
-import { Bus }    from './Bus';
 import { Logger } from './Logger';
 
-export interface Props {
+export interface props {
   name:             string;
   type:             string;
   color?:           string;
-  bus?:             Bus;
   [others: string]: any;
 }
 
-export interface Children {}
+export interface children {}
 
 export class Component {
-  protected props:    Props;
-  protected children: Children;
+  protected name:     string;
+  protected props:    props;
+  protected children: children;
   protected logger:   Logger;
-  protected bus:      Bus;
 
-  constructor(props: Props, children: Children) {
+  constructor(props: props, children: children) {
+    this.name     = props.name;
     this.props    = props;
     this.children = children;
     this.logger   = new Logger(props.name + '.' + props.type, props.color);
-    this.bus      = props.bus;
   }
 
-  sprout(name: string, alternative?: any) {
+  sprout(name: string, alternative: any, extra?: any) {
     const childProps = this.props[name] || {};
-    const props = { ...this.props, type: name, ...childProps, bus: this.bus };
+    const props = { type: name.toLowerCase(), ...childProps, ...extra };
     if (this.children[name] instanceof Function) {
-      const module = this.children[name];
-      if (typeof module != 'function')
+      const component = this.children[name];
+      if (typeof component != 'function')
         throw new Error(this.props.name + '.' + name + ': must be a constructor');
-      const instance = new module(props, this.children);
+      const instance = new component(props, this.children);
       this.children[name] = instance;
       return instance;
     } else if (this.children[name] instanceof Component) {

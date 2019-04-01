@@ -1,20 +1,20 @@
-import { State } from './State';
+import { state } from './state';
 
 export enum Status { Resolved = 'resolve', Rejected = 'reject' }
 
-export class Reply {
+export class reply<A> {
   public status: Status;
   public data:   any;
   public meta:   any;
 
-  constructor(error: string, data?: any, meta?: any) {
+  constructor(error: string, data?: A, meta?: any) {
     if (error != null) {
       this.status = Status.Rejected;
       this.data   = error;
       this.meta   = meta;
     } else {
       this.status = Status.Resolved;
-      this.data   = data instanceof State ? data.data : data;
+      this.data   = data instanceof state ? data.data : data;
       this.meta   = meta;
     }
   }
@@ -27,19 +27,5 @@ export class Reply {
   get() {
     if (this.status == Status.Rejected) return null;
     return this.data;
-  }
-}
-
-export class InReply extends Reply {
-  public  pulledAt: Date;
-  constructor(error: string, data?: any) {
-    super(error, data);
-    this.pulledAt  = new Date();
-  }
-}
-
-export class OutReply extends Reply {
-  serialize() {
-    return Buffer.from(JSON.stringify(this));
   }
 }

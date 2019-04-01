@@ -1,18 +1,33 @@
-import { Fx }                    from './Fx';
-import { InCommand, OutCommand } from './Command';
-import { Reply }                 from './Reply';
+import * as Component from './Component';
+import { command }    from './command';
 
-export interface Subscription { stop: () => void };
+export interface props extends Component.props {}
+export interface children extends Component.children {}
 
-export type FxSubscription      = Fx<any, Subscription>;
-export type FxMessageHandler<T> = Fx<any, MessageHandler<T>>;
+export class CommandBus extends Component.Component {
+  constructor(props: props, children: children) {
+    super(props, children);
+  }
 
-export type MessageHandler<T> = (message: T) => Promise<void>;
-export type Handler<T>        = MessageHandler<T> | FxMessageHandler<T>;
+  public listen(topic: string, handler: (command: command<any>) => void): boolean {
+    return true;
+  }
 
-export interface CommandBus {
-  start(): Promise<boolean>;
-  stop():  Promise<void>;
-  listen(topic: string, handler: Handler<InCommand>, options?: any): void;
-  request(request: OutCommand): Promise<Reply>;
+  public send(type: string, id: string, order: string, data: any, meta?: any): Promise<void> {
+    this.logger.log('%red %s-%s : %s', 'Command', type, id, order);
+    return Promise.resolve();
+  }
+
+  public discard(command: command<any>): Promise<void> {
+    return Promise.resolve();
+  }
+
+  public replay(command: command<any>): Promise<void> {
+    return Promise.resolve();
+  }
+
+  public relocate(command: command<any>, topic: string): Promise<void> {
+    return Promise.resolve();
+  }
+
 }

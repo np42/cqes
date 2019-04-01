@@ -9,12 +9,19 @@ import { join, dirname } from 'path';
 import * as merge        from 'deepmerge';
 
 const yaml       = require('js-yaml');
-const CLArgs     = require('command-line-args');
 
 const MERGE_OPTIONS   = { arrayMerge: (l: any, r: any, o: any) => r };
 const PROJECT_DEFAULT = { libpath: 'dist', servicepath: '%r/%l/%s/%t.js', servicekey: '%t' };
 const SERVICE_DEFAULT = { name: 'World' };
 const AMQP_DEFAULT    = 'amqp://guest:guest@localhost/';
+
+export interface props extends Component.props {
+  root:    string;
+  name:    string;
+  config?: string;
+}
+
+export interface children extends Component.children {}
 
 export class Process extends Component.Component {
   protected config:      any;
@@ -24,18 +31,12 @@ export class Process extends Component.Component {
   protected launcher:    string;
   protected services:    Map<string, Service>;
 
-  constructor() {
+  constructor(props: props, children: children) {
     process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
     process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
-    const argv = CLArgs( [ { name: 'root', type: String }
-                         , { name: 'groups', type: String, multiple: true, defaultOption: true }
-                         , { name: 'dryRun', type: Boolean, defaultOption: false }
-                         , { name: 'config', type: String, defaultOption: 'config' }
-                         ]
-                       , { partial: true }
-                       );
-    super({ name: 'CQES', type: 'Process', argv }, {});
-    this.rootpath = argv.root || process.cwd();
+    super({ type: 'process', ...props }, children);
+    this.config   = {};
+    this.rootpath = props.root;
     this.services = new Map();
     this.loadConstant();
   }

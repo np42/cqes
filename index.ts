@@ -1,30 +1,33 @@
-import { Logger }        from './src/Logger';
-import * as Bus          from './src/Bus';
-import * as Component    from './src/Component';
-import * as Interface    from './src/Interface';
-import * as Process      from './src/Process';
-import * as Service      from './src/Service';
-import * as Debouncer    from './src/Debouncer';
-import * as Throttler    from './src/Throttler';
-import * as Gateway      from './src/Gateway';
-import * as Aggregator   from './src/Aggregator';
-import * as Manager      from './src/Manager';
-import * as Buffer       from './src/Buffer';
-import * as Factory      from './src/Factory';
-import * as Repository   from './src/Repository';
-import * as Reactor      from './src/Reactor';
-import * as Responder    from './src/Responder';
+import { Logger }          from './src/Logger';
 
-export { Logger, Bus, Component, Interface, Process
-       , Service, Debouncer, Throttler, Gateway, Aggregator
-       , Manager, Buffer, Factory, Repository, Reactor, Responder
+import * as Process        from './src/Process';
+import * as Component      from './src/Component';
+import * as Bus            from './src/Bus';
+import * as Interface      from './src/Interface';
+
+import * as Service        from './src/Service';
+import * as Debouncer      from './src/Debouncer';
+import * as Throttler      from './src/Throttler';
+import * as Buffer         from './src/Buffer';
+
+import * as Gateway        from './src/Gateway';
+import * as Manager        from './src/Manager';
+
+import * as CommandHandler from './src/CommandHandler';
+import * as Factory        from './src/Factory';
+import * as Repository     from './src/Repository';
+import * as Reactor        from './src/Reactor';
+
+export { Logger, Process, Component, Bus, Interface
+       , Service, Debouncer, Throttler, Buffer
+       , Gateway, Manager, CommandHandler, Factory, Repository, Reactor
        };
 
-export { Command, InCommand } from './src/Command';
-export { Query, InQuery }     from './src/Query';
-export { Reply, Status }      from './src/Reply';
-export { Event }              from './src/Event';
-export { State }              from './src/State';
+export { command, inCommand } from './src/command';
+export { query, inQuery }     from './src/query';
+export { reply, status }      from './src/reply';
+export { event }              from './src/event';
+export { state }              from './src/state';
 
 import * as Fx           from './src/Fx';
 import * as Lx           from './src/Lx';

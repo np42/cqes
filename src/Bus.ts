@@ -1,61 +1,44 @@
-import { Logger }                                from './Logger';
+import { Logger }     from './Logger';
 
-import { CommandBus, Handler as CommandHandler } from './CommandBus';
-import { QueryBus, Handler as QueryHandler }     from './QueryBus';
+import { CommandBus } from './CommandBus';
+import { QueryBus }   from './QueryBus';
 
-import { AMQPCommandBus as xCommandBus
-       , Props as CommandBusConfig
-       }                                         from './AMQPCommandBus';
-import { AMQPQueryBus as xQueryBus
-       , Props as QueryBusConfig
-       }                                         from './AMQPQueryBus';
+import { command }    from './command';
+import { query }      from './query';
+import { reply }      from './reply';
 
-import { Command, OutCommand, InCommand }        from './Command';
-import { Query, InQuery, OutQuery }              from './Query';
-import { Reply }                                 from './Reply';
-
-export interface Props {
-  name: string;
-  Command: CommandBusConfig;
-  Query: QueryBusConfig;
+export interface props {
+  CommandBus: CommandBus.props;
+  QueryBus:   QueryBus.props;
 }
 
-export interface Children {}
+export interface children {
+  CommandBus: { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
+  QueryBus:   { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
+}
 
-export class Bus {
-  public logger:     Logger;
-  public commandBus: CommandBus;
-  public queryBus:   QueryBus;
+export class Bus extends Component.Component {
+  public command: CommandBus;
+  public query:   QueryBus;
 
   constructor(props: Props, children: Children) {
-    this.logger     = new Logger(props.name + '.Bus', 'white');
-    this.commandBus = new xCommandBus({ name: props.name, ...props.Command });
-    this.queryBus   = new xQueryBus({ name: props.name, ...props.Query });
+    super(props, children);
+    this.command = this.sprout('CommandBus', CommandBus);
+    this.query   = this.sprout('QueryBus', QueryBus);
   }
 
   public async start() {
-    if (await this.queryBus.start()) {
-      if (await this.commandBus.start()) return true;
-      await this.queryBus.stop();
+    if (await this.query.start()) {
+      if (await this.command.start()) return true;
+      await this.query.stop();
       return false;
     }
     return false;
   }
 
   public async stop() {
-    await this.commandBus.stop();
-    await this.queryBus.stop();
-  }
-
-  //--
-  public command(key: string, order: string, data?: any, meta?: any): Promise<Reply> {
-    this.logger.log('%red %s : %s', 'Command', key, order);
-    const outCommand = new OutCommand(key, order, data, meta);
-    return this.commandBus.request(outCommand);
-  }
-
-  public listen(topic: string, handler: CommandHandler<InCommand>): void {
-    return this.commandBus.listen(topic, handler);
+    await this.command.stop();
+    await this.query.stop();
   }
 
   //--

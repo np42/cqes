@@ -89,11 +89,8 @@ export class Logger {
 
   _write(std: number, header: string, message: string) {
     const log = message.split('\n').map(line => header + ' ' + line + '\n').join('');
-    switch (std) {
-    case 1: return process.stdout.write(log);
-    default:
-    case 2: return process.stderr.write(log);
-    }
+    if (std === 1 || !isTTY) process.stdout.write(log);
+    if (std === 2) process.stderr.write(log);
   }
 
   _alert(message: string) {

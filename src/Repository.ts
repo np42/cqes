@@ -1,18 +1,25 @@
-import * as Gateway     from './Gateway';
+import * as Component   from './Component';
+import * as Bus         from './Bus';
 
-import { Query }        from './Query';
-import { Event }        from './Event';
-import { Reply }        from './Reply';
-import { State }        from './State';
+import { query }        from './query';
+import { reply }        from './reply';
+import { state }        from './state';
 
-export interface Props extends Gateway.Props {}
+export interface props extends Component.props {
+  bus: Bus.Bus;
+}
 
-export interface Children extends Gateway.Children {}
+export interface children extends Component.children {}
 
-export class Repository extends Gateway.Gateway {
+export class Repository extends Component.Component {
+  protected bus: Bus.Bus;
 
-  constructor(props: Props, children: Children) {
+  constructor(props: props, children: children) {
     super({ type: 'Repository', ...props, color: 'cyan' }, children);
+    this.bus = props.bus;
+    this['resolve' + this.props.name] = function (query: query<any>) {
+      return this.load(query.id);
+    };
   }
 
   public start(): Promise<boolean> {
@@ -23,39 +30,30 @@ export class Repository extends Gateway.Gateway {
     return Promise.resolve();
   }
 
-  public save(state: State, events: Array<Event>): Promise<void> {
-    const method = 'save' + state.status;
+  public save(state: state<any>): Promise<void> {
+    return Promise.resolve();
+  }
+
+  public load(id: string): Promise<state<any>> {
+    return Promise.resolve(new state(this.name, id));
+  }
+
+  public async resolve(query: query<any>): Promise<reply<any>> {
+    const view = query.view == null ? this.props.name : query.view;
+    const method = 'resolve' + view;
     if (method in this) {
-      this.logger.debug('Saving %s@%s -> %s', state.version, state.key, state.status);
-      return this[method](state, events);
-    } else {
-      return Promise.resolve();
-    }
-  }
-
-  public empty() {
-    return <any>null;
-  }
-
-  public load(key: string): Promise<State> {
-    return Promise.resolve(new State(key));
-  }
-
-  public async resolve(query: Query, buffer?: Map<string, State>): Promise<Reply> {
-    const method = 'resolve' + query.method;
-    if (method in this) {
-      this.logger.log('Resolving %s -> %s', query.view, query.method);
+      this.logger.log('Resolving %s -> %s', query.id, view);
       try {
-        const result = await this[method](query, buffer);
-        if (result instanceof Reply) return result;
-        return new Reply(null, result);
+        const result = await this[method](query);
+        if (result instanceof reply) return result;
+        return new reply(null, result);
       } catch (error) {
-        if (error instanceof Reply) return error;
-        return new Reply(error);
+        if (error instanceof reply) return error;
+        return new reply(error);
       }
     } else {
-      this.logger.log('Ignoring %s -> %s', query.view, query.method);
-      return new Reply(null, null);
+      this.logger.log('Ignoring %s -> %s', query.id, view);
+      return new reply(null, null);
     }
   }
 

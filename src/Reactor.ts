@@ -1,22 +1,26 @@
 import * as Component from './Component';
+import * as Bus         from './Bus';
 
-import { Command }    from './Command';
-import { State }      from './State';
-import { Reply }      from './Reply';
-import { Event }      from './Event';
+import { command }    from './command';
+import { state }      from './state';
+import { reply }      from './reply';
+import { event }      from './event';
 
-export interface Props extends Component.Props {}
+export interface props extends Component.props {}
 
-export interface Children extends Component.Children {}
+export interface children extends Component.children {}
 
 export class Reactor extends Component.Component {
+  protected bus: Bus.Bus;
 
-  constructor(props: Props, children: Children) {
+  constructor(props: props, children: children) {
     super({ type: 'Reactor', ...props }, children);
+    this.bus = props.bus;
   }
 
-  public on(state: State, events: Array<Event>) {
-    return events.forEach(event => {
+  public on(state: state<any>) {
+    if (state.events == null) return ;
+    return state.events.forEach(event => {
       const method = 'on' + event.name;
       if (method in this) this[method](state, event);
     });

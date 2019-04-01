@@ -1,34 +1,129 @@
-import * as Component from './Component';
+import * as Service        from './Service';
 
-import { State }      from './State';
-import { Command }    from './Command';
-import { Query }      from './Query';
-import { Event }      from './Event';
-import { Reply }      from './Reply';
+import * as CH             from './CommandHandler';
+import * as Factory        from './Factory';
+import * as Buffer         from './Buffer';
+import * as Repository     from './Repository';
+import * as Reactor        from './Reactor';
 
-export interface Props extends Component.Props {}
+import { command }         from './command';
+import { query }           from './query';
+import { reply }           from './reply';
+import { event }           from './event';
+import { state }           from './state';
 
-export interface Children extends Component.Children {}
+export interface props extends Service.props {
+  CommandHandler?: CH.props;
+  Factory?:        Factory.props;
+  Buffer?:         Buffer.props;
+  Repository?:     Repository.props;
+  Reactor?:        Reactor.props;
+}
 
-export class Manager extends Component.Component {
+export interface children extends Service.children {
+  CommandHandler: { new(props: CH.props,         children: CH.children):         CH.CommandHandler };
+  Factory:        { new(props: Factory.props,    children: Factory.children):    Factory.Factory };
+  Buffer:         { new(props: Buffer.props,     children: Buffer.children):     Buffer.Buffer };
+  Repository:     { new(props: Repository.props, children: Repository.children): Repository.Repository };
+  Reactor:        { new(props: Reactor.props,    children: Reactor.children):    Reactor.Reactor };
+}
 
-  constructor(props: Props, children: Children) {
-    super({ type: 'Manager', ...props }, children);
+export class Manager extends Service.Service {
+  protected pending:     Map<string, Array<command<any>>>
+  public commandHandler: CH.CommandHandler;
+  public factory:        Factory.Factory;
+  public buffer:         Buffer.Buffer;
+  public repository:     Repository.Repository;
+  public reactor:        Reactor.Reactor;
+
+  constructor(props: props, children: children) {
+    super({ type: 'Manager', color: 'green', ...props }, children);
+    this.pending        = new Map();
+    this.commandHandler = this.sprout('CommandHandler', CH, { bus: this.bus });
+    this.factory        = this.sprout('Factory',        Factory);
+    this.buffer         = this.sprout('Buffer',         Buffer);
+    this.repository     = this.sprout('Repository',     Repository, { bus: this.bus });
+    this.reactor        = this.sprout('Reactor',        Reactor, { bus: this.bus });
   }
 
-  public empty(): Array<Event> {
-    return [];
+  // Query
+  public resolve(query: query<any>): Promise<reply<any>> {
+    return this.repository.resolve(query);
   }
 
-  public handle(state: State, command: Command): Promise<Array<Event>> {
-    const method = 'handle' + command.order;
-    if (method in this) {
-      this.logger.debug('Handle %s : %s %j', command.key, command.order, command.data);
-      return this[method](state, command);
-    } else {
-      this.logger.log('Skip %s : %s %j', command.key, command.order, command.data);
-      return Promise.resolve(this.empty());
+  // Command
+  public async handle(command: command<any>) {
+    const id = command.id;
+    if (this.pending.has(id)) return this.queue(command);
+    this.pending.set(id, []);
+    await this.update(command);
+    this.drain(id);
+  }
+
+  protected async update(command: command<any>) {
+    const id = command.id;
+    try {
+      if (!this.buffer.has(id)) await this.load(id);
+      const state = this.buffer.get(id);
+      const events = await this.commandHandler.handle(state, command);
+      if (events == null || events.length == 0) return ;
+      const newState = this.factory.apply(state, events);
+      this.buffer.update(newState);
+      this.save(newState);
+    } catch (e) {
+      this.logger.error(e);
+      this.bus.command.relocate(command, '.failure');
     }
+  }
+
+  protected queue(command: command<any>) {
+    const queue = this.pending.get(command.id);
+    if (queue == null) {
+      this.pending.set(command.id, [command]);
+    } else {
+      if (queue.length > 0) this.logger.warn('Slow queue:', command.key);
+      queue.push(command);
+    }
+  }
+
+  protected load(id: string) {
+    return new Promise((resolve, reject) => {
+      this.repository.load(id).then(state => {
+        if (state == null) {
+          this.logger.error();
+          reject('Unable to load State for: ' + id);
+        } else {
+          this.buffer.setnx(id, state);
+          resolve();
+        }
+      }).catch(reject);
+    });
+  }
+
+  protected async save(state: state<any>) {
+    await this.repository.save(state);
+    this.reactor.on(state);
+  }
+
+  public async drain(id: string) {
+    const pending = this.pending.get(id);
+    if (pending == null) return ;
+    if (pending.length > 0) {
+      const command = pending.shift();
+      await this.update(command);
+      this.drain(id);
+    } else {
+      this.pending.delete(id);
+    }
+  }
+
+  //--
+  public start() {
+    return this.repository.start();
+  }
+
+  public stop() {
+    return this.repository.stop();
   }
 
 }

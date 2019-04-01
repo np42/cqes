@@ -1,20 +1,20 @@
 import * as Component  from './Component';
 
-import { Event }       from './Event';
-import { State }       from './State';
+import { event }       from './event';
+import { state }       from './state';
 
-export interface Props extends Component.Props {}
+export interface props extends Component.props {}
 
-export interface Children extends Component.Children {}
+export interface children extends Component.children {}
 
 export class Factory extends Component.Component {
 
-  constructor(props: Props, children: Children) {
+  constructor(props: props, children: children) {
     super({ type: 'Factory', ...props }, children);
   }
 
-  public apply(state: State, events: Array<Event>) {
-    const version = state.version;
+  public apply(state: state<any>, events: Array<event<any>>) {
+    const revision = state.revision;
     const newState = events.reduce((state, event) => {
       const method = 'apply' + event.name;
       if (method in this) {
@@ -25,16 +25,17 @@ export class Factory extends Component.Component {
         return state;
       }
     }, state);
-    if (newState.version >= 0) {
-      const diff = newState.version - version;
+    if (newState.revision >= 0) {
+      const diff = newState.revision - revision;
       if (diff === 0) {
-        this.logger.debug('State %s@%s not changed', newState.version, newState.key);
+        this.logger.debug('State %s@%s not changed', newState.revision, newState.key);
       } else {
-        this.logger.debug('State %s@%s changed +%s', newState.version, newState.key, diff);
+        this.logger.debug('State %s@%s changed +%s', newState.revision, newState.key, diff);
       }
     } else {
       this.logger.debug('State %s destroyed', newState.key);
     }
+    newState.events = events;
     return newState;
   }
 

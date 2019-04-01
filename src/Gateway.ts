@@ -1,20 +1,13 @@
-import * as Component   from './Component';
 import * as Service     from './Service';
 
-import { Command }      from './Command';
-import { Query }        from './Query';
-import { Event }        from './Event';
-import { State }        from './State';
-import { Reply }        from './Reply';
+export interface props extends Service.props {}
 
-export interface Props extends Component.Props {}
+export interface children extends Service.children {}
 
-export interface Children extends Component.Children {}
+export class Gateway extends Service.Service {
 
-export class Gateway extends Component.Component implements Service.Handler {
-
-  constructor(props: Props, children: Children) {
-    super({ type: 'Gateway', color: 'yellow', ...props }, children);
+  constructor(props: props, children: children) {
+    super({ type: 'gateway', color: 'yellow', ...props }, children);
   }
 
   public start(): Promise<boolean> {

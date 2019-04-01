@@ -1,7 +1,6 @@
 import * as Component         from './Component';
 
-import { Command, InCommand } from './Command';
-import { Reply, Status }      from './Reply';
+import { command } from './command';
 
 const CachingMap = require('caching-map');
 
@@ -10,56 +9,25 @@ interface CachingMap<K, V> {
   get(key: K): V;
 }
 
-export interface Props extends Component.Props {
+export interface props extends Component.props {
   size?:    number;
   ttl?:     number;
-  timeout?: number;
 }
 
-export interface Children extends Component.Children {}
+export interface children extends Component.children {}
 
 export class Debouncer extends Component.Component {
-  private waiting: CachingMap<string, Array<InCommand>>;
-  private ttl:     number;
-  private timeout: number;
+  private accepted: CachingMap<string, any>;
+  private ttl:      number;
 
-  constructor(props: Props, children: any) {
-    super({ type: 'Debouncer', color: 'magenta', ...props }, children);
-    this.waiting = new CachingMap(props.size >= 0 ? props.size : null);
-    this.ttl     = props.ttl >= 0 ? props.ttl : null;
-    this.timeout = (props.timeout > 0 || props.timeout == -1) ? props.timeout : 60000;
+  constructor(props: props, children: children) {
+    super({ type: 'Debouncer', color: 'white', ...props }, children);
+    this.accepted = new CachingMap(props.size >= 0 ? props.size : null);
+    this.ttl      = props.ttl >= 0 ? props.ttl : null;
   }
 
-  public async satisfy(command: InCommand, handler: (command: Command) => Promise<Reply>): Promise<void> {
-    const method = 'debounce' + command.order;
-    if (method in this) {
-      const isFirst = await this[method](command);
-      if (!isFirst) {
-        this.logger.warn('%red %s : %s %j', 'Duplicate Command', command.key, command.order, command.data);
-        command.cancel('Duplicate message');
-        return ;
-      }
-    }
-    this.logger.log('%red %s : %s %j', 'Command', command.key, command.order, command.data);
-    let timer = null;
-    if (this.timeout > 0) {
-      timer = setTimeout(() => {
-        this.logger.warn('Timed out after %s ms', this.timeout);
-        command.relocate('timeout');
-      }, this.timeout);
-    }
-    try {
-      const reply = await handler(command);
-      if (reply instanceof Reply) return command.resolve(reply.data);
-      if (reply == null) return command.resolve(null);
-      this.logger.error('Expecting a Reply got: %j', reply);
-      command.relocate('bad_result');
-    } catch (e) {
-      this.logger.error('Got exception:', e);
-      command.relocate('failure');
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
+  public exists(command: command<any>): Promise<boolean> {
+    return Promise.resolve(false);
   }
 
 }

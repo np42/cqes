@@ -8,6 +8,7 @@ const CachingMap = require('caching-map');
 interface CachingMap<K, V> {
   set(key: K, value: V, options?: { ttl?: number }): void;
   get(key: K): V;
+  has(key: K): boolean;
 }
 
 export interface props extends Component.props {
@@ -21,7 +22,7 @@ export interface children extends Component.children {
 export class Unthrottler extends Component.Component {
   protected cache: CachingMap<string, Item<reply<any>>>;
   protected ttl:   number;
-  protected Item:  Item<reply<any>>;
+  protected Item:  { new (key: string): Item<reply<any>> };
 
   constructor(props: props, children: children) {
     super({ type: 'unthrottler', color: 'cyan', ...props }, children);
@@ -44,19 +45,19 @@ export class Unthrottler extends Component.Component {
 
 export class Item<R> {
   protected key:       string;
-  protected callbacks: Array<R => void>;
+  protected callbacks: Array<(value: R) => void>;
   protected status:    'empty' | 'running' | 'solved' | 'ready';
   protected value:     R;
 
   constructor(key: string) {
-    this.key      = key;
-    this.calbacks = [];
-    this.status   = 'empty';
+    this.key       = key;
+    this.callbacks = [];
+    this.status    = 'empty';
   }
 
-  public get(callback: reply<any> => void) {
-    if (this.status === 'ready') return callback(reply);
-    this.waitingCallbacks.push(callback);
+  public get(callback: (value: R) => void) {
+    if (this.status === 'ready') return callback(this.value);
+    this.callbacks.push(callback);
     if (this.status === 'solved') this.rehydrate();
   }
 
@@ -68,7 +69,7 @@ export class Item<R> {
   public resolve(resolver: () => Promise<R>) {
     if (this.status === 'running') return ;
     this.status = 'running';
-    resolver().then(value: R => {
+    resolver().then((value: R) => {
       this.status = 'ready';
       this.value = value;
       this.drain();

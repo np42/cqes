@@ -1,6 +1,6 @@
 import * as Component   from './Component';
 
-import { state }        from './State';
+import { state }        from './state';
 
 const CachingMap = require('caching-map');
 
@@ -14,10 +14,11 @@ export interface children extends Component.children {}
 interface CachingMap<K, V> {
   set(key: K, value: V, options?: { ttl?: number }): void;
   get(key: K): V;
+  has(key: K): boolean;
   delete(key: K): void;
 }
 
-type PendingQueue = Array<(state: State) => void>;
+type PendingQueue = Array<(state: state<any>) => void>;
 
 export class Buffer extends Component.Component {
   protected cache:      CachingMap<string, state<any>>;

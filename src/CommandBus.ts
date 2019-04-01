@@ -30,4 +30,14 @@ export class CommandBus extends Component.Component {
     return Promise.resolve();
   }
 
+  //--
+
+  public start(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
+  public stop(): Promise<void> {
+    return Promise.resolve();
+  }
+
 }

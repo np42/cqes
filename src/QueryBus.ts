@@ -24,4 +24,15 @@ export class QueryBus extends Component.Component {
     this.logger.log('%blue [%s] %s -> %s', 'Reply', query.id, query.view, reply);
     return Promise.resolve();
   }
+
+  //--
+
+  public start(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
+  public stop(): Promise<void> {
+    return Promise.resolve();
+  }
+
 }

@@ -7,7 +7,7 @@ import * as Interface      from './src/Interface';
 
 import * as Service        from './src/Service';
 import * as Debouncer      from './src/Debouncer';
-import * as Throttler      from './src/Throttler';
+import * as Unthrottler    from './src/Unthrottler';
 import * as Buffer         from './src/Buffer';
 
 import * as Gateway        from './src/Gateway';
@@ -19,15 +19,15 @@ import * as Repository     from './src/Repository';
 import * as Reactor        from './src/Reactor';
 
 export { Logger, Process, Component, Bus, Interface
-       , Service, Debouncer, Throttler, Buffer
+       , Service, Debouncer, Unthrottler, Buffer
        , Gateway, Manager, CommandHandler, Factory, Repository, Reactor
        };
 
-export { command, inCommand } from './src/command';
-export { query, inQuery }     from './src/query';
-export { reply, status }      from './src/reply';
-export { event }              from './src/event';
-export { state }              from './src/state';
+export { command }       from './src/command';
+export { query }         from './src/query';
+export { reply, Status } from './src/reply';
+export { event }         from './src/event';
+export { state }         from './src/state';
 
 import * as Fx           from './src/Fx';
 import * as Lx           from './src/Lx';

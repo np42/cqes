@@ -10,7 +10,7 @@ export interface children extends Component.children {}
 export class Factory extends Component.Component {
 
   constructor(props: props, children: children) {
-    super({ type: 'Factory', ...props }, children);
+    super({ ...props, type: props.type + '.factory', color: 'green' }, children);
   }
 
   public apply(state: state<any>, events: Array<event<any>>) {

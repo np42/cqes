@@ -15,7 +15,7 @@ export class Repository extends Component.Component {
   protected bus: Bus.Bus;
 
   constructor(props: props, children: children) {
-    super({ type: 'Repository', ...props, color: 'cyan' }, children);
+    super({ ...props, type: props.type + '.repository', color: 'blue' }, children);
     this.bus = props.bus;
     this['resolve' + this.props.name] = function (query: query<any>) {
       return this.load(query.id);

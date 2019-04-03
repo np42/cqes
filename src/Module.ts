@@ -31,7 +31,7 @@ export class Module extends Component.Component {
   public unthrottler: Unthrottler.Unthrottler;
   public service:     Service.Service;
 
-  constructor(props: Props, children: Children) {
+  constructor(props: props, children: children) {
     super({ type: 'module', color: 'white', ...props }, children);
     this.bus         = this.sprout('Bus',         Bus);
     this.debouncer   = this.sprout('Debouncer',   Debouncer);
@@ -42,8 +42,8 @@ export class Module extends Component.Component {
   public async start() {
     if (await this.service.start()) {
       // Bind command topics
-      const topics = this.props.topics || [this.service.name];
-      topics.forEach(topic => {
+      const topics = this.props.topics || [this.props.name];
+      topics.forEach((topic: string) => {
         this.bus.command.listen(topic, async command => {
           if (await this.debouncer.exists(command)) {
             this.bus.command.discard(command);
@@ -53,10 +53,10 @@ export class Module extends Component.Component {
         });
       });
       // Bind query views
-      const views = this.props.views || [this.service.name];
-      views.forEach(view => {
+      const views = this.props.views || [this.props.name];
+      views.forEach((view: string) => {
         this.bus.query.serve(view, async query => {
-          const cache = this.throttler.get(query);
+          const cache = this.unthrottler.get(query);
           cache.get(reply => this.bus.query.reply(query, reply));
           cache.resolve(() => this.service.resolve(query));
         });

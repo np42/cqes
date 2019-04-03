@@ -24,7 +24,8 @@ export class Component {
 
   sprout(name: string, alternative: any, extra?: any) {
     const childProps = this.props[name] || {};
-    const props = { type: name.toLowerCase(), ...childProps, ...extra };
+    const props = { type: this.props.type, ...childProps, ...extra };
+    if (props.name == null) props.name = this.props.name;
     if (this.children[name] instanceof Function) {
       const component = this.children[name];
       if (typeof component != 'function')

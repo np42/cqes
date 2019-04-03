@@ -21,7 +21,7 @@ export class Debouncer extends Component.Component {
   private ttl:      number;
 
   constructor(props: props, children: children) {
-    super({ type: 'Debouncer', color: 'white', ...props }, children);
+    super({ ...props, type: 'debouncer', color: 'red' }, children);
     this.accepted = new CachingMap(props.size >= 0 ? props.size : null);
     this.ttl      = props.ttl >= 0 ? props.ttl : null;
   }

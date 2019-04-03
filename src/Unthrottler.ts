@@ -25,7 +25,7 @@ export class Unthrottler extends Component.Component {
   protected Item:  { new (key: string): Item<reply<any>> };
 
   constructor(props: props, children: children) {
-    super({ type: 'unthrottler', color: 'cyan', ...props }, children);
+    super({ ...props, type: 'unthrottler', color: 'blue' }, children);
     this.cache = new CachingMap();
     this.ttl   = props.ttl > 0 ? props.ttl : null;
   }

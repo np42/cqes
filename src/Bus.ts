@@ -15,7 +15,7 @@ export interface props extends Component.props {
 
 export interface children extends Component.children {
   CommandBus: { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
-  QueryBus:   { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
+  QueryBus:   { new(props: QueryBus.props,   children: QueryBus.children):   QueryBus.QueryBus };
 }
 
 export class Bus extends Component.Component {
@@ -23,7 +23,7 @@ export class Bus extends Component.Component {
   public query:   QueryBus.QueryBus;
 
   constructor(props: props, children: children) {
-    super(props, children);
+    super({ ...props, type: 'bus' }, children);
     this.command = this.sprout('CommandBus', CommandBus);
     this.query   = this.sprout('QueryBus', QueryBus);
   }

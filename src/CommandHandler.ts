@@ -17,7 +17,7 @@ export class CommandHandler extends Component.Component {
   protected bus: Bus.Bus;
 
   constructor(props: props, children: children) {
-    super({ type: 'CommandHandler', ...props }, children);
+    super({ ...props, type: props.type + '.command-handler', color: 'red' }, children);
     this.bus = props.bus;
   }
 

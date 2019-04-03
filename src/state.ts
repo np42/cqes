@@ -14,7 +14,7 @@ export class state<A> {
     this.type     = type;
     this.id       = id;
     this.revision = revision >= 0 ? revision : -1;
-    this.data     = data;
+    this.data     = data || <A>{};
     this.events   = [];
   }
 

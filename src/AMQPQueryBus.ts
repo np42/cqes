@@ -12,14 +12,14 @@ import * as uuid                    from 'uuid';
 interface Session {
   expiresAt: number;
   resolve: (value: any) => void;
-};
+}
 
 export interface Config {
   name: string;
   url: string;
-};
+}
 
-export { Props } from './AMQPBus';
+export interface props extends AMQPBus.props {}
 
 export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
 
@@ -28,8 +28,8 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
   private response:   AMQPBus.FxConnection;
   private gcInterval: NodeJS.Timer;
 
-  constructor(config: AMQPBus.Props) {
-    super(config);
+  constructor(props: AMQPBus.props) {
+    super({ ...props, type: props.type + '.query' });
     this.id         = config.name + '.Reply.' + uuid.v1();
     this.pending    = new Map();
     this.response = null;

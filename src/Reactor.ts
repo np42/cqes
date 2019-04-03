@@ -14,7 +14,7 @@ export class Reactor extends Component.Component {
   protected bus: Bus.Bus;
 
   constructor(props: props, children: children) {
-    super({ type: 'Reactor', ...props }, children);
+    super({ ...props, type: props.type + '.reactor', color: 'magenta' }, children);
     this.bus = props.bus;
   }
 

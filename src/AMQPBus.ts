@@ -1,8 +1,5 @@
 import { Fx }                                        from './Fx';
-import { Logger }                                    from './Logger';
-import { Handler, FxMessageHandler, MessageHandler } from './CommandBus';
-import { AMQPInCommand }                             from './AMQPCommand';
-import { AMQPInReply }                               from './AMQPReply';
+import * as Component                                from './Component'
 import * as amqp                                     from 'amqplib';
 import * as merge                                    from 'deepmerge';
 
@@ -11,8 +8,7 @@ const MERGE_OPTIONS = { arrayMerge: (l: any, r: any, o: any) => r };
 export type FxConnection = Fx<any, amqp.Connection>;
 type FxChannel = Fx<amqp.Connection, amqp.Channel>;
 
-export interface Props {
-  name: string;
+export interface props extends Component.props {
   url: string;
   consumer?: { channel: PropsChannel, queue: PropsQueue };
   replier?: PropsReplier
@@ -23,38 +19,30 @@ interface PropsChannel {
 }
 
 interface PropsQueue {
-  "x-max-priority": number;
+  maxPriority?: number;
 }
 
 interface PropsReplier {
   channel: { prefetch: number };
   queue: { exclusive: boolean, durable: boolean };
-  Message: AMQPInReply;
+  Message: amqp.Message;
 }
 
 const CONSUMER_CHANNEL_DEFAULT = { prefetch: 10 }
-const CONSUMER_QUEUE_DEFAULT = { maxPriority: 10 }
+const CONSUMER_QUEUE_DEFAULT = {}
 const CONSUMER_DEFAULT = { queue: CONSUMER_QUEUE_DEFAULT, channel: CONSUMER_CHANNEL_DEFAULT };
-const REPLIER_DEFAULT =
-  { Message: AMQPInReply
-  , channel: { prefetch: 100, noAck: true, exclusive: true }
-  , queue: { exclusive: true, durable: false }
-  };
 
-export class AMQPBus {
-  protected logger:   Logger;
-  protected props:    Props;
+export class AMQPBus extends Component.Component {
+  protected props:    props;
   private url:        string;
   private connection: FxConnection;
   private channels:   Map<string, FxChannel>;
   private consumers:  Set<any>;
 
-  constructor(props: Props) {
-    this.logger         = new Logger('AMQPBus', 'white');
+  constructor(props: props) {
+    super({ color: 'white', ...props, type: props.type + '.amqp' }, {});
     this.url            = props.url;
-    this.props          = { ...props };
     this.props.consumer = merge(CONSUMER_DEFAULT, props.consumer || {}, MERGE_OPTIONS);
-    this.props.replier  = merge(REPLIER_DEFAULT, props.replier || {}, MERGE_OPTIONS);
     this.channels       = new Map();
     this.consumers      = new Set();
   }
@@ -93,10 +81,9 @@ export class AMQPBus {
     return this.channels.get(queue);
   }
 
-  protected consume(queue: string, handler: Handler<any>, options: any) {
+  protected consume(queue: string, handler: (message: amqp.Message) => void, options: any) {
     if (options == null)                 options = {};
     if (options.noAck == null)           options.noAck = false;
-    if (options.Message == null)         options.Message = AMQPInCommand;
     if (options.reply == null)           options.reply = (channel: amqp.Channel) =>
       (message: amqp.Message) => (method: string) => channel[method](message)
     if (options.channel == null)         options.channel = {};
@@ -105,7 +92,7 @@ export class AMQPBus {
     if (!(options.channel.prefetch > 0)) options.channel.prefetch = 1;
     if (options.queue == null)           options.queue = {};
     if (options.queue.durable == null)   options.queue.durable = true;
-    const fxHandler = <FxMessageHandler<any>>(handler instanceof Fx ? handler : Fx.create(handler)).open();
+    const fxHandler = <any>(handler instanceof Fx ? handler : Fx.create(handler)).open();
     return new Promise((resolve, reject) => {
       const consumer = () => {
         this.logger.log('Listening to %s: %j', queue, options);
@@ -113,12 +100,12 @@ export class AMQPBus {
           await channel.prefetch(options.channel.prefetch, false);
           const replier = options.noAck ? null : options.reply(channel);
           let active = true;
-          const subscription = await channel.consume(queue, rawMessage => {
+          const subscription = await channel.consume(queue, message => {
             if (active) {
-              const message = new options.Message(rawMessage, options.noAck ? null : replier(rawMessage));
-              fxHandler.do(async (handler: MessageHandler<any>) => handler(message));
+              Object.defineProperty(message, 'channel', { value: channel });
+              fxHandler.do(async (handler: any) => handler(message));
             } else {
-              channel.reject(rawMessage, true);
+              channel.reject(message, true);
             }
           }, options.channel);
           fx.on('aborted', () => {

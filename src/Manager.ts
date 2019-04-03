@@ -37,7 +37,7 @@ export class Manager extends Service.Service {
   public reactor:        Reactor.Reactor;
 
   constructor(props: props, children: children) {
-    super({ type: 'Manager', color: 'green', ...props }, children);
+    super({ ...props, type: 'manager', color: 'cyan' }, children);
     this.pending        = new Map();
     this.commandHandler = this.sprout('CommandHandler', CH, { bus: this.bus });
     this.factory        = this.sprout('Factory',        Factory);
@@ -66,10 +66,12 @@ export class Manager extends Service.Service {
       if (!this.buffer.has(id)) await this.load(id);
       const state = this.buffer.get(id);
       const events = await this.commandHandler.handle(state, command);
-      if (events == null || events.length == 0) return ;
-      const newState = this.factory.apply(state, events);
-      this.buffer.update(newState);
-      this.save(newState);
+      if (events != null && events.length > 0) {
+        const newState = this.factory.apply(state, events);
+        this.buffer.update(newState);
+        /* await ? */ this.save(newState);
+      }
+      this.bus.command.discard(command);
     } catch (e) {
       this.logger.error(e);
       this.bus.command.relocate(command, '.failure');

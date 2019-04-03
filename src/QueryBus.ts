@@ -14,14 +14,14 @@ export class QueryBus extends Component.Component {
     return ;
   }
 
-  public request(view: string, method: string, data: any, meta?: any): Promise<void> {
+  public request(view: string, method: string, data: any, meta?: any): Promise<reply<any>> {
     const request = new query(view, method, data, meta);
-    this.logger.log('%blue [%s] %s -> %s', 'Query', request.id, view, method);
-    return Promise.resolve();
+    this.logger.log('%blue [%s] %s -> %s %j', 'Query', request.id, view, method, data);
+    return Promise.resolve(new reply('No service'));
   }
 
   public reply(query: query<any>, reply: any): Promise<void> {
-    this.logger.log('%blue [%s] %s -> %s', 'Reply', query.id, query.view, reply);
+    this.logger.log('%blue [%s] %s -> %s %s %j', 'Reply', query.id, query.view, reply.status, reply.data);
     return Promise.resolve();
   }
 

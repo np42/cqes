@@ -28,6 +28,7 @@ export class Unthrottler extends Component.Component {
     super({ ...props, type: 'unthrottler', color: 'blue' }, children);
     this.cache = new CachingMap();
     this.ttl   = props.ttl > 0 ? props.ttl : null;
+    this.Item  = Item;
   }
 
   public get(query: query<any>) {

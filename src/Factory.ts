@@ -8,6 +8,7 @@ export interface props extends Component.props {}
 export interface children extends Component.children {}
 
 export class Factory extends Component.Component {
+  private versions: Map<string, string>;
 
   constructor(props: props, children: children) {
     super({ ...props, type: props.type + '.factory', color: 'green' }, children);
@@ -17,9 +18,10 @@ export class Factory extends Component.Component {
     const revision = state.revision;
     const newState = events.reduce((state, event) => {
       const method = 'apply' + event.name;
-      if (method in this) {
+      const applier = this.getEventApplier(method, event);
+      if (applier) {
         this.logger.log('%s apply %s: %j', state.key, event.name, event.data);
-        return this[method](state, event) || state;
+        return applier.call(this, state, event) || state;
       } else {
         this.logger.warn('%s skip %s: %j', state.key, event.name, event.data);
         return state;
@@ -37,6 +39,10 @@ export class Factory extends Component.Component {
     }
     newState.events = events;
     return newState;
+  }
+
+  protected getEventApplier(name: string, event: event<any>) {
+    return this[name];
   }
 
 }

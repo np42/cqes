@@ -1,10 +1,11 @@
 export class event<A> {
-  public name: string;
-  public data: A;
-  public meta: any;
+  public version: string;
+  public name:    string;
+  public data:    A;
+  public meta:    any;
 
-  constructor(name: string, data: any = null, meta: any = null) {
-    this.name = name;
+  constructor(data: any = null, meta: any = null) {
+    this.name = this.constructor.name;
     this.data = data instanceof Object ? data : {};
     this.meta = meta;
   }

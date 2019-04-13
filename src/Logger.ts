@@ -49,6 +49,12 @@ export class Logger {
     this._write(1, header, message);
   }
 
+  info(...args: Array<any>) {
+    const header  = this._headers('INF', 'grey');
+    const message = this._format(args);
+    this._write(1, header, message);
+  }
+
   log(...args: Array<any>) {
     const header  = this._headers('LOG', 'green');
     const message = this._format(args);

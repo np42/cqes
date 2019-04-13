@@ -5,8 +5,9 @@ import { state }        from './state';
 const CachingMap = require('caching-map');
 
 export interface props extends Component.props {
-  size?:       number;
-  ttl?:        number;
+  size?:    number;
+  ttl?:     number;
+  storage?: string;
 }
 
 export interface children extends Component.children {}
@@ -26,8 +27,8 @@ export class Buffer extends Component.Component {
 
   constructor(props: props, children: children) {
     super({ type: 'buffer', ...props }, children);
-    this.cache      = new CachingMap('size' in props ? props.size : 100);
-    this.ttl        = props.ttl > 0 ? props.ttl : null;
+    this.cache = new CachingMap('size' in props ? props.size : 100);
+    this.ttl   = props.ttl > 0 ? props.ttl : null;
   }
 
   public get(id: string) {
@@ -43,15 +44,17 @@ export class Buffer extends Component.Component {
     this.cache.set(id, state, { ttl: this.ttl });
   }
 
-  public update(state: state<any>): void {
+  public update(state: state<any>): Promise<void> {
     const revision = state.revision;
-    if (!(revision > -1)) throw new Error('Bad revision');
-    if (state == null) throw new Error('Missing state');
-    const oldState = this.cache.get(state.key);
-    if (oldState == null) throw new Error('State lost');
-    if (oldState.revision != revision) throw new Error('Revision missmatch');
-    if (oldState === state && revision !== state.revision) throw new Error('Update forbidden');
+    const count = state.events.length;
+    if (!(revision > -1)) return Promise.reject('Bad revision');
+    if (state == null) return Promise.reject('Missing state');
+    const oldState = this.cache.get(state.id);
+    if (oldState == null) return Promise.reject('State lost');
+    if (oldState.revision + count != revision) return Promise.reject('Revision missmatch');
+    if (oldState === state && revision !== state.revision) return Promise.reject('Update forbidden');
     this.cache.set(state.id, state, { ttl: this.ttl });
+    return Promise.resolve();
   }
 
 }

@@ -29,6 +29,7 @@ export interface children extends Service.children {
 }
 
 export class Manager extends Service.Service {
+  protected started:     boolean;
   protected pending:     Map<string, Array<command<any>>>
   public commandHandler: CH.CommandHandler;
   public factory:        Factory.Factory;
@@ -38,6 +39,7 @@ export class Manager extends Service.Service {
 
   constructor(props: props, children: children) {
     super({ ...props, type: 'manager', color: 'cyan' }, children);
+    this.started        = false;
     this.pending        = new Map();
     this.commandHandler = this.sprout('CommandHandler', CH, { bus: this.bus });
     this.factory        = this.sprout('Factory',        Factory);
@@ -47,14 +49,14 @@ export class Manager extends Service.Service {
   }
 
   // Query
-  public resolve(query: query<any>): Promise<reply<any>> {
+  public async resolve(query: query<any>): Promise<reply<any>> {
     return this.repository.resolve(query);
   }
 
   // Command
   public async handle(command: command<any>) {
     const id = command.id;
-    if (this.pending.has(id)) return this.queue(command);
+    if (this.started === false || this.pending.has(id)) return this.queue(command);
     this.pending.set(id, []);
     await this.update(command);
     this.drain(id);
@@ -68,8 +70,8 @@ export class Manager extends Service.Service {
       const events = await this.commandHandler.handle(state, command);
       if (events != null && events.length > 0) {
         const newState = this.factory.apply(state, events);
-        this.buffer.update(newState);
-        /* await ? */ this.save(newState);
+        await this.buffer.update(newState);
+        this.react(newState);
       }
       this.bus.command.discard(command);
     } catch (e) {
@@ -102,8 +104,8 @@ export class Manager extends Service.Service {
     });
   }
 
-  protected async save(state: state<any>) {
-    await this.repository.save(state);
+  protected async react(state: state<any>) {
+    this.repository.save(state);
     this.reactor.on(state);
   }
 
@@ -120,11 +122,18 @@ export class Manager extends Service.Service {
   }
 
   //--
-  public start() {
-    return this.repository.start();
+  public async start() {
+    const started = await this.repository.start();
+    if (started) {
+      this.started = true;
+      for (const [id] of this.pending)
+        this.drain(id);
+    }
+    return started;
   }
 
   public stop() {
+    this.started = false;
     return this.repository.stop();
   }
 

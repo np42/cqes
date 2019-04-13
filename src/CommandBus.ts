@@ -1,6 +1,7 @@
 import * as Component         from './Component';
 import { command as Command } from './command';
 import * as AMQPCommandBus    from './AMQPCommandBus';
+import { v4 as uuid }         from 'uuid';
 
 export interface props extends Component.props {
   AMQP?: AMQPCommandBus.props
@@ -18,12 +19,13 @@ export class CommandBus extends Component.Component {
   }
 
   public listen(topic: string, handler: (command: Command<any>) => void): boolean {
-    this.logger.log('Listen', topic);
+    this.logger.log('%red %s', 'Listen', topic);
     this.amqp.listen(topic, handler);
     return true;
   }
 
   public send(topic: string, id: string, order: string, data: any, meta?: any): Promise<void> {
+    if (id == null) id = uuid();
     this.logger.log('%red %s-%s : %s %j', 'Command', topic, id, order, data);
     const type = topic.split('-').shift();
     const command = new Command(type, id, order, data, meta);

@@ -25,11 +25,14 @@ export class CommandHandler extends Component.Component {
     return [];
   }
 
-  public handle(state: state<any>, command: command<any>): Promise<Array<event<any>>> {
+  public async handle(state: state<any>, command: command<any>): Promise<Array<event<any>>> {
     const method = 'handle' + command.order;
     if (method in this) {
       this.logger.debug('Handle %s : %s %j', command.id, command.order, command.data);
-      return this[method](state, command);
+      const result = await this[method](state, command);
+      if (result instanceof Array) return result;
+      if (result instanceof event) return [result];
+      return [];
     } else {
       this.logger.log('Skip %s : %s %j', command.id, command.order, command.data);
       return Promise.resolve(this.noop());

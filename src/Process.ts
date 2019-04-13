@@ -8,11 +8,10 @@ import { hostname, userInfo } from 'os';
 import { readFile }           from 'fs';
 import * as fs                from 'fs';
 import { join, dirname }      from 'path';
-import * as merge             from 'deepmerge';
+import merge                  from './merge';
 
 const yaml            = require('js-yaml');
 
-const MERGE_OPTIONS   = { arrayMerge: (l: any, r: any, o: any) => r };
 const KEYNAMES = new Set( [ 'Component', 'Logger'
                           , 'Module', 'Bus', 'Debouncer', 'Unthrottler', 'Service'
                           , 'CommandBus', 'AMQPCommandBus', 'QueryBus', 'AMQPQueryBus', 'AMQPBus'
@@ -71,7 +70,7 @@ export class Process extends Component.Component {
       const filepath = join(directory, file);
       const part = await this.configReadYaml(filepath);
       const layer = await this.configInflate(part, dirname(filepath));
-      config = merge(config, layer, MERGE_OPTIONS);
+      config = merge(config, layer);
     }
     return config;
   }
@@ -136,7 +135,8 @@ export class Process extends Component.Component {
   private async loadModules() {
     for (const name in this.config) {
       if (name[0] === '$') continue ;
-      const props = <Component.props>merge(this.config.$all, this.config[name], MERGE_OPTIONS);
+      if (name[0] === '_') continue ;
+      const props = <Component.props>merge(this.config.$all, this.config[name]);
       if (props.name == null) props.name = name;
       if (props.type == null) props.type = 'module';
       this.logger.log('Module %s loading', props.name);
@@ -170,9 +170,9 @@ export class Process extends Component.Component {
   private getManagerChildren(name: string) {
     const path     = join(this.rootpath, name + '.manager');
     const children = {};
-    this.retrieve(children, path, 'Module');
-    this.retrieve(children, path, 'Bus', 'Debouncer', 'Unthrottler', 'Manager');
-    this.retrieve(children, path, 'CommandHandler', 'Factory', 'Buffer', 'Repository', 'Reactor');
+    this.retrieve(name, children, path, 'Module');
+    this.retrieve(name, children, path, 'Bus', 'Debouncer', 'Unthrottler', 'Manager');
+    this.retrieve(name, children, path, 'CommandHandler', 'Factory', 'Buffer', 'Repository', 'Reactor');
     (<any>children).Service = (<any>children).Manager || Manager;
     return children;
   }
@@ -180,17 +180,18 @@ export class Process extends Component.Component {
   private getGatewayChildren(name: string) {
     const path     = join(this.rootpath, name + '.gateway');
     const children = {};
-    this.retrieve(children, path, 'Module');
-    this.retrieve(children, path, 'Bus', 'Debouncer', 'Unthrottler', 'Gateway');
+    this.retrieve(name, children, path, 'Module');
+    this.retrieve(name, children, path, 'Bus', 'Debouncer', 'Unthrottler', 'Gateway');
     (<any>children).Service = (<any>children).Gateway || Gateway;
     return children;
   }
 
-  private retrieve(holder: Component.children, path: string, ...elements: Array<string>) {
+  private retrieve(name: string, holder: Component.children, path: string, ...elements: Array<string>) {
     elements.forEach((element: string) => {
       const ns = this.safeRequire(join(path, element + '.js'));
       if (ns == null) return ;
       holder[element] = ns[element];
+      this.logger.log('Module %s %s %green', name, element, 'found');
     });
   }
 
@@ -210,20 +211,20 @@ export class Process extends Component.Component {
   public async run() {
     await this.loadConfig();
     await this.loadModules();
-    this.logger.log('%yellow', '============ Services initialized ============');
     return this.start();
   }
 
   public async start() {
+    this.logger.log('%yellow', '==========  Starting  Services  ==========');
     for (const [name, module] of this.modules)
       if (!await module.start())
         this.logger.error('Unable to start module %s', name);
-    this.logger.log('%green', '============   Services started   ============');
+    this.logger.log('%green',  '========== All Services started ==========');
   }
 
   public async stop() {
     for (const [name, service] of this.modules) await service.stop();
-    this.logger.log('%red', '============   Services stopped   ============');
+    this.logger.log('%red',    '==========   Services stopped   ==========');
   }
 
 };

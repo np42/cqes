@@ -24,7 +24,13 @@ export class Component {
 
   sprout(name: string, alternative: any, extra?: any) {
     const childProps = this.props[name] || {};
-    const props = { type: this.props.type, ...childProps, ...extra };
+    const props = { ...childProps, ...extra };
+    for (const key in this.props) {
+      if (key[0] === key[0].toUpperCase() && key !== name && props[key] == null)
+        props[key] = this.props[key];
+      if (key[0] === key[0].toLowerCase() && props[key] == null)
+        props[key] = this.props[key];
+    }
     if (props.name == null) props.name = this.props.name;
     if (this.children[name] instanceof Function) {
       const component = this.children[name];

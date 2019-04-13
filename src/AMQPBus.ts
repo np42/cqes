@@ -1,9 +1,7 @@
-import { Fx }                                        from './Fx';
-import * as Component                                from './Component'
-import * as amqp                                     from 'amqplib';
-import * as merge                                    from 'deepmerge';
-
-const MERGE_OPTIONS = { arrayMerge: (l: any, r: any, o: any) => r };
+import { Fx }           from './Fx';
+import * as Component   from './Component'
+import * as amqp        from 'amqplib';
+import merge            from './merge';
 
 export type FxConnection = Fx<any, amqp.Connection>;
 type FxChannel = Fx<amqp.Connection, amqp.Channel>;
@@ -42,7 +40,7 @@ export class AMQPBus extends Component.Component {
   constructor(props: props) {
     super({ color: 'white', ...props, type: props.type + '.amqp' }, {});
     this.url            = props.url;
-    this.props.consumer = merge(CONSUMER_DEFAULT, props.consumer || {}, MERGE_OPTIONS);
+    this.props.consumer = merge(CONSUMER_DEFAULT, props.consumer || {});
     this.channels       = new Map();
     this.consumers      = new Set();
   }

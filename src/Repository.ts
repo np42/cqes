@@ -18,7 +18,7 @@ export class Repository extends Component.Component {
     super({ ...props, type: props.type + '.repository', color: 'blue' }, children);
     this.bus = props.bus;
     this['resolve' + this.props.name] = function (query: query<any>) {
-      return this.load(query.id);
+      return this.load(query.data.id);
     };
   }
 
@@ -35,25 +35,24 @@ export class Repository extends Component.Component {
   }
 
   public load(id: string): Promise<state<any>> {
-    return Promise.resolve(new state(this.name, id));
+    return Promise.resolve(new state(id));
   }
 
   public async resolve(query: query<any>): Promise<reply<any>> {
-    const view = query.view == null ? this.props.name : query.view;
-    const method = 'resolve' + view;
+    const method = 'resolve' + query.method;
     if (method in this) {
-      this.logger.log('Resolving %s -> %s', query.id, view);
+      this.logger.log('Resolving %s -> %s', query.view, query.method);
       try {
         const result = await this[method](query);
         if (result instanceof reply) return result;
-        return new reply(null, result);
+        return new reply(result);
       } catch (error) {
         if (error instanceof reply) return error;
-        return new reply(error);
+        return new reply(null, error);
       }
     } else {
-      this.logger.log('Ignoring %s -> %s', query.id, view);
-      return new reply(null, null);
+      this.logger.log('Ignoring %s -> %s', query.view, query.method);
+      return new reply(null, 'Ignored');
     }
   }
 

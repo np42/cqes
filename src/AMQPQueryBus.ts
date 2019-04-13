@@ -2,17 +2,9 @@ import * as AMQPBus                 from './AMQPBus';
 import { Fx }                       from './Fx';
 import { Channel, Message }         from 'amqplib';
 import { QueryBus }                 from './QueryBus';
-import { Handler }                  from './CommandBus';
-import { InQuery, OutQuery }        from './Query';
-import { AMQPInQuery }              from './AMQPQuery';
-import { Reply, Status, OutReply }  from './Reply';
-import { AMQPInReply }              from './AMQPReply';
+import { query as Query }           from './query';
+import { reply as Reply, Status }   from './reply';
 import * as uuid                    from 'uuid';
-
-interface Session {
-  expiresAt: number;
-  resolve: (value: any) => void;
-}
 
 export interface Config {
   name: string;
@@ -21,46 +13,30 @@ export interface Config {
 
 export interface props extends AMQPBus.props {}
 
-export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
+function rand() {
+  return process.pid + '.' + Math.floor(Math.random() * 1000);
+}
+
+export class AMQPQueryBus extends AMQPBus.AMQPBus {
 
   private id:         string;
-  private pending:    Map<string, Session>;
   private response:   AMQPBus.FxConnection;
-  private gcInterval: NodeJS.Timer;
 
   constructor(props: AMQPBus.props) {
     super({ ...props, type: props.type + '.query' });
-    this.id         = config.name + '.Reply.' + uuid.v1();
-    this.pending    = new Map();
+    this.id       = this.name + '.reply.' + rand();
     this.response = null;
-    this.gcInterval = null;
-  }
-
-  private gc() {
-    // FIXME write a better algo
-    const expired = [];
-    const now = Date.now();
-    for (const [key, item] of this.pending) {
-      if (item.expiresAt > now) continue ;
-      expired.push(key);
-    }
-    for (const key of expired) {
-      this.pending.get(key).resolve(new Reply('Timed out'));
-      this.pending.delete(key);
-    }
   }
 
   public async start() {
     super.start();
-    this.gcInterval = setInterval(() => this.gc(), 1000);
-    this.response = <any>await this.consume(this.id, async (reply: AMQPInReply) => {
-      const session = this.pending.get(reply.id);
-      if (session == null) return  /* FIXME: do not fail silently */;
-      session.resolve(reply);
-      this.pending.delete(reply.id);
+    this.response = <any>await this.consume(this.id, async (message: Message) => {
+      const payload = JSON.parse(message.content.toString());
+      const reply   = new Reply(payload.data);
+      reply.status  = payload.status;
+      this.props.handler(message.properties.correlationId, reply);
     }, { channel: { prefetch: 100, noAck: true, exclusive: true }
        , queue: { durable: false, exclusive: true }
-       , Message: AMQPInReply
        }
     );
     return true;
@@ -68,32 +44,39 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
 
   //--
 
-  public serve(view: string, handler: Handler<InQuery>) {
-    const options =
-      { Message: AMQPInQuery
-      , channel: { prefetch: 10 }
-      , queue: { durable: false }
-      , reply: (channel: Channel) => (message: Message) => (method: Status, content: any) => {
-          const options = { correlationId: message.properties.correlationId };
-          const reply = method == Status.Rejected ? new OutReply(content) : new OutReply(null, content);
-          channel.sendToQueue(message.properties.replyTo, reply.serialize(), options)
-          channel.ack(message);
-        }
-      };
-    return this.consume(view + '.Query', handler, options);
+  public serve(view: string, handler: (query: Query<any>) => void) {
+    const options = { channel: { prefetch: 10 }, queue: { durable: false } };
+    return this.consume(view + '.query', (message: Message) => {
+      const payload = JSON.parse(message.content.toString());
+      const meta  = {};
+      const query = new Query(payload.view, payload.method, payload.data, meta);
+      Object.defineProperty(meta, 'amqp', { value: message });
+      handler(query);
+    }, options);
   }
 
-  public query(request: OutQuery, timeout = 30): Promise<Reply> {
-    const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
-    const offset  = request.view.indexOf('-');
-    const topic   = offset > 0 ? request.view.substr(0, offset) : request.view;
-    const promise = new Promise(resolve => {
-      const session = { expiresAt: Date.now() + (timeout * 1000), resolve };
+  public query(request: Query<any>, timeout = 30): Promise<string> {
+    const id      = uuid.v4();
+    const options = { replyTo: this.id, correlationId: id, persistent: false
+                    , channel: { durable: false }
+                    };
+    const topic   = request.view.split('-').shift();
+    return new Promise(resolve => {
       (<any>options).expiration = String(timeout * 1000);
-      this.pending.set(options.correlationId, session);
-      this.publish(topic + '.Query', request.serialize(), options);
+      const payload = Buffer.from(JSON.stringify(request));
+      this.publish(topic + '.query', payload, options);
+      return resolve(id);
     });
-    return <any>promise;
+  }
+
+  public async reply(query: Query<any>, reply: Reply<any>): Promise<void> {
+    const message = query.meta.amqp;
+    if (message == null) return this.logger.error('Unable to reply AMQP Message: not found');
+    const payload = Buffer.from(JSON.stringify(reply));
+    const options = { correlationId: message.properties.correlationId
+                    , channel: { durable: false }
+                    };
+    return message.channel.sendToQueue(message.properties.replyTo, payload, options);
   }
 
 }

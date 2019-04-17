@@ -85,6 +85,23 @@ export class Process extends Component.Component {
     return list;
   }
 
+  private configReadYaml(filepath: string) {
+    return new Promise((resolve, reject) => {
+      return readFile(filepath, (err, content) => {
+        if (err) return resolve({});
+        this.logger.log('Loading config file: %s', filepath);
+        try {
+          const config = yaml.safeLoad(content.toString());
+          return resolve(config);
+        } catch (e) {
+          this.logger.error('Failed when loading:', filepath);
+          this.logger.error(e);
+          return resolve({});
+        }
+      });
+    });
+  }
+
   private async configInflate(object: any, cwd: string): Promise<any> {
     if (object && typeof object == 'object') {
       if (object instanceof Array) {
@@ -111,23 +128,6 @@ export class Process extends Component.Component {
     const filepath = join(cwd, filename);
     const content = await this.configReadYaml(filepath);
     return this.configInflate(content, dirname(filepath));
-  }
-
-  private configReadYaml(filepath: string) {
-    return new Promise((resolve, reject) => {
-      return readFile(filepath, (err, content) => {
-        if (err) return resolve({});
-        this.logger.log('Loading config file: %s', filepath);
-        try {
-          const config = yaml.safeLoad(content.toString());
-          return resolve(config);
-        } catch (e) {
-          this.logger.error('Failed when loading:', filepath);
-          this.logger.error(e);
-          return resolve({});
-        }
-      });
-    });
   }
 
   /******************************/

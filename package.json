@@ -1,6 +1,6 @@
 {
   "name": "cqes",
-  "version": "3.0.8",
+  "version": "3.0.10",
   "description": "CQRS / Event Sourcing / DDD Framework",
   "rootDir": "./dist",
   "main": "./dist/index.js",

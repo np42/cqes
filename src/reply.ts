@@ -12,7 +12,7 @@ export class reply<A> {
       this.data   = data instanceof state ? data.data : data;
     } else {
       this.status = Status.Rejected;
-      this.data   = error;
+      this.data   = String(error);
     }
   }
 

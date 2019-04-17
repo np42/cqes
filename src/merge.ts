@@ -15,10 +15,14 @@ function merge<S, T>(left: S, right: T): any {
 }
 
 function mergeObject<S, T>(left: S, right: T): T {
+  // TODO: write better algo
   const result = clone(right);
-  for (const key in <any>left)
+  for (const key in <any>left) {
     if (result[key] === undefined)
       result[key] = clone(left[key]);
+    else
+      result[key] = merge(left[key], right[key]);
+  }
   return result;
 }
 

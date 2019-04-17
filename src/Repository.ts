@@ -48,6 +48,7 @@ export class Repository extends Component.Component {
         return new reply(result);
       } catch (error) {
         if (error instanceof reply) return error;
+        if (error instanceof Error) this.logger.error(error);
         return new reply(null, error);
       }
     } else {

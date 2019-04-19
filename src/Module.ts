@@ -1,42 +1,58 @@
 import * as Component   from './Component';
 
 import * as Bus         from './Bus';
-import * as Debouncer   from './Debouncer';
-import * as Unthrottler from './Unthrottler';
+
 import * as Service     from './Service';
 
-import { command }      from './command';
-import { query }        from './query';
-import { reply }        from './reply';
+import * as CH          from './CommandHandler';
+import * as Gateway     from './Gateway';
+import * as Repository  from './Repository';
+import * as Reactor     from './Reactor';
+import * as Factory     from './Factory';
+
+import { command } from './command';
+import { query }   from './query';
+import { reply }   from './reply';
+import { event }   from './event';
+import { state }   from './state';
 
 export interface props extends Component.props {
-  Bus?:          Bus.props;
-  Debouncer?:    Debouncer.props;
-  Unthrottler?:  Unthrottler.props;
-  Service?:      Service.props;
-  topics?:       Array<string>;
-  views?:        Array<string>;
+  bus?:          Bus.props;
 }
 
 export interface children extends Component.children {
-  Bus?:         { new(props: Bus.props,         children: Bus.children):         Bus.Bus };
-  Unthrottler?: { new(props: Unthrottler.props, children: Unthrottler.children): Unthrottler.Unthrottler };
-  Debouncer?:   { new(props: Debouncer.props,   children: Debouncer.children):   Debouncer.Debouncer };
-  Service?:     { new(props: Service.props,     children: Service.children):     Service.Service };
+  Factory?:        { new (p: Factory.props, c: Factory.children): Factory.Factory };
+  CommandHandler?: { new (p: CH.props, c: CH.children): CH.CommandHandler };
+  Reactor?:        { new (p: Reactor.props, c: Reactor.children): Reactor.Reactor };
+  Repository?:     { new (p: Repository.props, c: Repository.children): Repository.Repository };
+  Gateway?:        { new (p: Gateway.props, c: Gateway.children): Gateway.Gateway };
 }
+
+export enum Type { Manager = 'manager', Repository = 'repository', Gateway = 'gateway' };
 
 export class Module extends Component.Component {
   public bus:         Bus.Bus;
-  public debouncer:   Debouncer.Debouncer;
-  public unthrottler: Unthrottler.Unthrottler;
+  public factory:     Factory.Factory;
   public service:     Service.Service;
 
   constructor(props: props, children: children) {
     super({ type: 'module', color: 'white', ...props }, children);
-    this.bus         = this.sprout('Bus',         Bus);
-    this.debouncer   = this.sprout('Debouncer',   Debouncer);
-    this.unthrottler = this.sprout('Unthrottler', Unthrottler);
-    this.service     = this.sprout('Service',     Service, { bus: this.bus });
+    this.bus = this.sprout('Bus', Bus);
+    this.factory = this.sprout('Factory', Factory);
+    switch (true) {
+    case 'CommandHandler' in children: {
+      this.service = this.sprout('CommandHandler', CH, { bus: this.bus });
+    } break ;
+    case 'Reactor' in children: {
+      this.service = this.sprout('Reactor', Reactor, { bus: this.bus });
+    } break ;
+    case 'Repository' in children: {
+      this.service = this.sprout('Repository', Repository, { bus: this.bus });
+    } break ;
+    case 'Gateway' in children: {
+      this.service = this.sprout('Gateway', Gateway, { bus: this.bus });
+    } break ;
+    }
   }
 
   public async start() {
@@ -45,20 +61,29 @@ export class Module extends Component.Component {
       const topics = this.props.topics || [this.props.name];
       topics.forEach((topic: string) => {
         this.bus.command.listen(topic, async command => {
-          if (await this.debouncer.exists(command)) {
-            this.bus.command.discard(command);
-          } else {
-            this.service.handle(command);
-          }
+          
+          this.service.handle(command);
+          
         });
       });
       // Bind query views
       const views = this.props.views || [this.props.name];
       views.forEach((view: string) => {
         this.bus.query.serve(view, async query => {
+          
           const cache = this.unthrottler.get(query);
           cache.get(reply => this.bus.query.reply(query, reply));
           cache.resolve(() => this.service.resolve(query));
+          
+        });
+      });
+      // Bind events types
+      const types = this.props.types || [this.props.name];
+      types.forEach((type: string) => {
+        this.bus.event.subscribe(view, async event => {
+          
+          this.service.on(event);
+          
         });
       });
       // Start bus

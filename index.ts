@@ -33,5 +33,6 @@ import * as Fx           from './src/Fx';
 import * as Lx           from './src/Lx';
 import * as Mx           from './src/Mx';
 import * as Qx           from './src/Qx';
+import { Px }            from './src/Px';
 
-export { Fx, Mx, Qx, Lx };
+export { Fx, Mx, Qx, Lx, Px };

@@ -1,8 +1,14 @@
 import * as Component    from './Component';
 
-import { Module }   from './Module';
-import { Manager }  from './Manager';
-import { Gateway }  from './Gateway';
+import { Bus }            from './Bus';
+
+import { Module }         from './Module';
+
+import { CommandHandler } from './CommandHandler';
+import { Gateway }        from './Gateway';
+import { Repository }     from './Repository';
+import { Reactor }        from './Reactor';
+import { Factory }        from './Factory';
 
 import { hostname, userInfo } from 'os';
 import { readFile }           from 'fs';
@@ -10,14 +16,7 @@ import * as fs                from 'fs';
 import { join, dirname }      from 'path';
 import merge                  from './merge';
 
-const yaml            = require('js-yaml');
-
-const KEYNAMES = new Set( [ 'Component', 'Logger'
-                          , 'Module', 'Bus', 'Debouncer', 'Unthrottler', 'Service'
-                          , 'CommandBus', 'AMQPCommandBus', 'QueryBus', 'AMQPQueryBus', 'AMQPBus'
-                          , 'Manager', 'CommandHandler', 'Factory', 'Repository', 'Reactor'
-                          , 'Gateway'
-                          ] );
+const yaml                    = require('js-yaml');
 
 export interface props extends Component.props {
   root:    string;
@@ -26,22 +25,44 @@ export interface props extends Component.props {
 
 export interface children extends Component.children {}
 
+interface Contexts { [context: string]: Context }
+interface Context {
+  props:    { [module: string]: any };
+  children: { [module: string]: Child };
+  bus:      Bus;
+}
+
+interface ChildManager    { CommandHandler: CommandHandler; Factory: Factory }
+interface ChildRepository { Repository: Repository; }
+interface ChildGateway    { Gateway: Gateway; }
+
+type Child = ChildManager | ChildRepository | ChildGateway;
+
 export class Process extends Component.Component {
-  protected config:      any;
+  protected contexts:    Contexts;
   protected rootpath:    string;
   protected environment: string;
   protected hostname:    string;
   protected procuser:    string;
   protected launcher:    string;
-  protected modules:     Map<string, Module>;
+
+  static safeRequire(path: string) {
+    try {
+      const module = require(path);
+      return module;
+    } catch (e) {
+      if (e.code != 'MODULE_NOT_FOUND') throw e;
+      if (!~e.toString().indexOf(path)) throw e;
+      return null;
+    }
+  }
 
   constructor(props: props, children: children) {
     process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
     process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
     super(props, children);
-    this.config   = {};
     this.rootpath = props.root;
-    this.modules  = new Map();
+    this.contexts = {};
     this.loadConstant();
   }
 
@@ -58,34 +79,46 @@ export class Process extends Component.Component {
     this.environment = environ;
   }
 
-  private async loadConfig(): Promise<void> {
+  private async loadContexts(): Promise<void> {
+    const filename  = 'cqes.yml';
     const directory = this.rootpath;
-    this.config = await this.getConfig(directory) || {};
+    const filepath  = join(directory, filename);
+    const processes = await this.readYaml(filepath);
+    const contexts  = processes[this.name] || {};
+    for (const context in contexts)
+      this.contexts[context] = { props: contexts[context], children: {}, bus: null };
   }
 
-  private async getConfig(directory: string): Promise<any> {
-    const files = this.getConfigFileList(this.name);
+  private async loadProps(): Promise<void> {
+    for (const context in this.contexts) {
+      const directory = join(this.rootpath, context);
+      const props = await this.getProps(directory, context) || {};
+      this.contexts[context].props = merge(props, this.contexts[context].props);
+    }
+  }
+
+  private async getProps(directory: string, name: string): Promise<any> {
+    const files = this.getPropsFileList();
     let config = {};
     for (const file of files) {
       const filepath = join(directory, file);
-      const part = await this.configReadYaml(filepath);
-      const layer = await this.configInflate(part, dirname(filepath));
+      const layer = await this.readYaml(filepath);
       config = merge(config, layer);
     }
     return config;
   }
 
-  private  getConfigFileList(key: string): Array<string> {
-    const extension = '.process.yml';
-    const list = [key + extension];
-    list.push(key + '-env-' + this.environment + extension);
-    list.push(key + '-host-' + this.hostname + extension);
-    list.push(key + '-user-' + this.procuser + extension);
-    list.push(key + '-mode-' + this.launcher + extension);
+  private  getPropsFileList(): Array<string> {
+    const extension = '.yml';
+    const list = ['Process' + extension];
+    list.push('Process.env-' + this.environment + extension);
+    list.push('Process.host-' + this.hostname + extension);
+    list.push('Process.user-' + this.procuser + extension);
+    list.push('Process.mode-' + this.launcher + extension);
     return list;
   }
 
-  private configReadYaml(filepath: string) {
+  private readYaml(filepath: string) {
     return new Promise((resolve, reject) => {
       return readFile(filepath, (err, content) => {
         if (err) return resolve({});
@@ -102,115 +135,60 @@ export class Process extends Component.Component {
     });
   }
 
-  private async configInflate(object: any, cwd: string): Promise<any> {
-    if (object && typeof object == 'object') {
-      if (object instanceof Array) {
-        const result = [];
-        for (const item of object)
-          result.push(await this.configInflate(item, cwd));
-        return result;
-      } else {
-        if ('$import' in object) {
-          return await this.configImport(object.$import, cwd);
-        } else {
-          const result = <any>{};
-          for (const key in object)
-            result[key] = await this.configInflate(object[key], cwd);
-          return result;
-        }
-      }
-    } else {
-      return object;
-    }
-  }
-
-  private async configImport(filename: string, cwd: string): Promise<any> {
-    const filepath = join(cwd, filename);
-    const content = await this.configReadYaml(filepath);
-    return this.configInflate(content, dirname(filepath));
-  }
-
   /******************************/
 
   private async loadModules() {
-    for (const name in this.config) {
-      if (name[0] === '$') continue ;
-      if (name[0] === '_') continue ;
-      const props = <Component.props>merge(this.config.$all, this.config[name]);
-      if (props.name == null) props.name = name;
-      if (props.type == null) props.type = 'module';
-      this.logger.log('Module %s loading', props.name);
-      const module = this.getModule(props);
-      if (module == null) {
-        this.logger.warn('Module %s %red', props.name, 'does not exists');
-      } else {
-        this.modules.set(name, module);
-        this.logger.log('Module %s %green', props.name, 'loaded');
-      }
+    for (const ctx in this.contexts) {
+      const context = this.contexts[ctx];
+      const modules = Object.keys(context.props).filter(n => /^[A-Z0-9]/.test(n))
+      modules.forEach((name: string) => {
+        const props = <Component.props>merge(context.props.$all, context.props[name]);
+        if (props.name == null) props.name = name;
+        this.logger.log('Module %s.%s loading', ctx, name);
+        const module = this.getModuleService(ctx, name);
+        if (module == null) this.logger.error('Unable to load %s.%s', ctx, name);
+        else context.children[name] = module;
+      });
     }
   }
 
-  private getModule(props: Component.props) {
-    const name   = props.name;
-    const folder = join(this.rootpath, name);
-    const exists = ['gateway', 'manager'].reduce((result, type) => {
-      if (result) return result;
-      const path = name + '.' + type;
-      if (fs.existsSync(path)) return type;
+  private getModuleService(context: string, name: string): any {
+    return [ ['CommandHandler', 'Factory']
+           , ['Repository', 'Factory']
+           , ['Gateway', 'Factory']
+           , ['Reactor', 'Factory']
+           ].reduce((children, types) => {
+      if (children != null) return children;
+      return types.reduce((children, type) => {
+        const path = join(this.rootpath, context, name, type);
+        const part = Process.safeRequire(path);
+        if (part == null) return children;
+        return { ...<any>children, [type]: part[type] };
+      }, children);
     }, null);
-    const children = {};
-    switch (exists) {
-    case null: case undefined: return null;
-    case 'manager': Object.assign(children, this.getManagerChildren(name)); break ;
-    case 'gateway': Object.assign(children, this.getGatewayChildren(name)); break ;
-    }
-    return new Module(props, children);
   }
 
-  private getManagerChildren(name: string) {
-    const path     = join(this.rootpath, name + '.manager');
-    const children = {};
-    this.retrieve(name, children, path, 'Module');
-    this.retrieve(name, children, path, 'Bus', 'Debouncer', 'Unthrottler', 'Manager');
-    this.retrieve(name, children, path, 'CommandHandler', 'Factory', 'Buffer', 'Repository', 'Reactor');
-    (<any>children).Service = (<any>children).Manager || Manager;
-    return children;
-  }
-
-  private getGatewayChildren(name: string) {
-    const path     = join(this.rootpath, name + '.gateway');
-    const children = {};
-    this.retrieve(name, children, path, 'Module');
-    this.retrieve(name, children, path, 'Bus', 'Debouncer', 'Unthrottler', 'Gateway');
-    (<any>children).Service = (<any>children).Gateway || Gateway;
-    return children;
-  }
-
-  private retrieve(name: string, holder: Component.children, path: string, ...elements: Array<string>) {
-    elements.forEach((element: string) => {
-      const ns = this.safeRequire(join(path, element + '.js'));
-      if (ns == null) return ;
-      holder[element] = ns[element];
-      this.logger.log('Module %s %s %green', name, element, 'found');
-    });
-  }
-
-  private safeRequire(path: string) {
-    try {
-      const module = require(path);
-      return module;
-    } catch (e) {
-      if (e.code != 'MODULE_NOT_FOUND') throw e;
-      if (!~e.toString().indexOf(path)) throw e;
-      return null;
+  private loadInstances() {
+    for (const context in this.contexts) {
+      const ns = this.contexts[context];
+      ns.bus = new Bus({ name: context, ...ns.props.$Bus }, {});
+      debugger;
+      for (const name in ns.children) {
+        const children = ns.children[name];
+        const props    = { ...ns.props[name], bus: ns.bus };
+        const module   = new Module(props, children);
+        debugger;
+      }
     }
   }
 
   /*******************************************/
 
   public async run() {
-    await this.loadConfig();
+    await this.loadContexts();
+    await this.loadProps();
     await this.loadModules();
+    await this.loadInstances();
     return this.start();
   }
 

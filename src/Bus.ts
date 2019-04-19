@@ -14,8 +14,8 @@ export interface props extends Component.props {
 }
 
 export interface children extends Component.children {
-  CommandBus: { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
-  QueryBus:   { new(props: QueryBus.props,   children: QueryBus.children):   QueryBus.QueryBus };
+  CommandBus?: { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
+  QueryBus?:   { new(props: QueryBus.props,   children: QueryBus.children):   QueryBus.QueryBus };
 }
 
 export class Bus extends Component.Component {

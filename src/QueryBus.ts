@@ -67,7 +67,7 @@ export class QueryBus extends Component.Component {
       expired.push(key);
     }
     for (const key of expired) {
-      this.pending.get(key).resolve(new Reply('Timed out'));
+      this.pending.get(key).resolve(new Reply(null, 'Timed out'));
       this.pending.delete(key);
     }
   }

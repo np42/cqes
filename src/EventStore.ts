@@ -1,8 +1,10 @@
-import * as Component from './Component';
+import * as Component             from './Component';
+import { PersistentSubscription } from './PersistentSubscription';
 
 import * as net       from 'net';
 import * as fs        from 'fs';
 import { createHash } from 'crypto';
+import { v4 as uuid } from 'uuid';
 
 export interface props extends Component.props {
   net?:     { allowHalfOpen?: boolean, pauseOnConnect?: boolean };
@@ -22,16 +24,23 @@ interface Field {
 
 interface State {
   ids: Map<string, number>;
-  subscriptions: Set<{ offset: number, handler: SubscriptionHandler }>;
+  subscriptions: Map<Subscription>;
 }
 
-// Length Stream ID revision date <payload> checksum
-export interface DBIterator {
-  (item: { stream: string, id: string, revision: number, date: number, payload: Payload }): void
+interface Subscription {
+  handler:    SubscriptionHandler;
+  status:     SubscriptionStatus;
+  persistent: PersistentSubscription;
 }
+
+enum SubscriptionStatus { Updating, Running, Stalled }
 
 export interface SubscriptionHandler {
-  (id: string, revision: number, date: number, payload: Buffer): void
+  (id: string, revision: number, date: number, payload: Buffer): Promise<void>
+}
+
+export interface DBIterator {
+  (item: { stream: string, id: string, revision: number, date: number, payload: Payload }): void
 }
 
 const CHECKSUM_LENGTH = 4;
@@ -61,7 +70,7 @@ export class EventStore extends Component.Component {
   protected sessions: Map<string, { date: number, resolve: any, reject: any }>
   protected db:       fs.WriteStream;
   protected ready:    boolean;
-  protected states:   { [name: string]: State };
+  protected streams:  { [name: string]: State };
   protected lock:     string;
   protected pending:  Array<{ type: string, payload: any, resolve: any, reject: any }>;
   protected cursor:   number;
@@ -74,7 +83,7 @@ export class EventStore extends Component.Component {
     if (props.address == null) props = { ...props, address: '127.0.0.1:9632' };
     if (props.db == null) props = { ...props, db: './cqes.evs' };
     super({ name: 'event', color: 'green', type: 'store', ...props }, children);
-    this.states   = {};
+    this.streams  = {};
     this.ready    = false;
     this.pending  = [];
     this.sessions = new Map();
@@ -138,27 +147,6 @@ export class EventStore extends Component.Component {
     }
   }
 
-
-  /*******************/
-
-  protected initStream(stream: string) {
-    this.states[stream] = { ids: new Map(), subscriptions: new Set() };
-  }
-
-  protected addSubscription(stream: string, handler: SubscriptionHandler) {
-    if (!(stream in this.states)) this.initStream(stream);
-    this.logger.log('New subscription for %s', stream);
-    this.states[stream].subscriptions.add({ offset: this.cursor, handler });
-  }
-
-  protected spreadEvent(stream: string, id: string, rev: number, date: number, payload: Buffer) {
-    if (!(stream in this.states)) return this.logger.warn('Stream %s not declared', stream);
-    const subscriptions = this.states[stream].subscriptions;
-    for (const subscription of subscriptions) {
-      subscription.handler(id, rev, date, payload);
-      subscription.offset = this.cursor;
-    }
-  }
 
   /*******************************/
 
@@ -226,6 +214,54 @@ export class EventStore extends Component.Component {
       rest = EMPTY;
       
     });
+  }
+
+  /*******************************/
+
+  protected initStream(stream: string) {
+    this.streams[stream] = { ids: new Map(), subscriptions: new Map() };
+  }
+
+  protected async spreadEvent(stream: string, id: string, rev: number, date: number, payload: Buffer) {
+    if (!(stream in this.streams)) return this.logger.warn('Stream %s not declared', stream);
+    const subscriptions = this.streams[stream].subscriptions;
+    for (const [name, subscription] of subscriptions) {
+      if (subscription.status === SubscriptionStatus.Running) {
+        try {
+          await subscription.handler(id, rev, date, payload);
+          if (subscription.persistent) subscription.persistent.forward(this.cursor);
+        } catch (e) {
+          this.stallSubscription(stream, name);
+        }
+      }
+    }
+  }
+
+  protected createSubscription(
+    stream: string, name: string, handler: SubscriptionHandler, status: SubscriptionStatus
+  ) {
+    if (!(stream in this.streams)) this.initStream(stream);
+    this.logger.log('New subscription %s for %s', name, stream);
+    const subscription = { handler, status, persistent: null };
+    this.streams[stream].subscriptions.set(name, subscription);
+    return subscription;
+  }
+
+  protected addSubscription(stream: string, handler: SubscriptionHandler) {
+    this.createSubscription(stream, uuid(), handler, SubscriptionStatus.Running);
+  }
+
+  protected stallSubscription(stream: string, name: string) {
+    
+  }
+
+  /*******************/
+
+  protected async addPSubscription(name: string, stream: string, handler: SubscriptionHandler) {
+    const subscription = this.createSubscription(stream, name, handler, SubscriptionStatus.Updating);
+    const props = { db: this.props.db, name };
+    subscription.persistent = new PersistentSubscription(props, {});
+    subscription.persistent.start();
   }
 
   /******************/
@@ -346,11 +382,11 @@ export class EventStore extends Component.Component {
   }
 
   protected applyDBEvent(stream: string, id: string, revision: number, payload: Payload) {
-    if (!(stream in this.states)) {
+    if (!(stream in this.streams)) {
       this.logger.log('Discover stream: %s', stream);
       this.initStream(stream);
     }
-    const items = this.states[stream].ids;
+    const items = this.streams[stream].ids;
     const lastRevision = items.get(id);
     if (revision === -2) {
       items.delete(id);
@@ -505,6 +541,27 @@ export class EventStore extends Component.Component {
     });
   }
 
+  public psubscribe(name: string, stream: string, handler: SubscriptionHandler) {
+    return new Promise((resolve, reject) => {
+      if (!this.ready || this.pending.length > 0) {
+        this.queue('psubscribe', { stream, handler }, resolve, reject);
+      } else {
+        switch (this.mode) {
+        case Mode.Server: {
+          return this.addPSubscription(name, stream, handler)
+            .then(resolve).catch(reject);
+        } break ;
+        case Mode.Client: {
+          
+        } break ;
+        default: {
+          
+        } break ;
+        }
+      }
+    });
+  }
+
   /*******************/
 
   protected queue(type: string, payload: any, resolve: Function, reject: Function) {
@@ -526,3 +583,4 @@ export class EventStore extends Component.Component {
   }
 
 }
+

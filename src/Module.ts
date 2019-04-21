@@ -17,7 +17,7 @@ import { event }   from './event';
 import { state }   from './state';
 
 export interface props extends Component.props {
-  bus?:          Bus.props;
+  bus?:          Bus.Bus;
 }
 
 export interface children extends Component.children {
@@ -36,23 +36,26 @@ export class Module extends Component.Component {
   public service:     Service.Service;
 
   constructor(props: props, children: children) {
-    super({ type: 'module', color: 'white', ...props }, children);
-    this.bus = this.sprout('Bus', Bus);
-    this.factory = this.sprout('Factory', Factory);
     switch (true) {
     case 'CommandHandler' in children: {
-      this.service = this.sprout('CommandHandler', CH, { bus: this.bus });
+      super({ type: 'handler', color: 'red', ...props }, children);
+      this.service = this.sprout('CommandHandler', CH, { bus: props.bus });
     } break ;
     case 'Reactor' in children: {
-      this.service = this.sprout('Reactor', Reactor, { bus: this.bus });
+      super({ type: 'reactor', color: 'magenta', ...props }, children);
+      this.service = this.sprout('Reactor', Reactor, { bus: props.bus });
     } break ;
     case 'Repository' in children: {
-      this.service = this.sprout('Repository', Repository, { bus: this.bus });
+      super({ type: 'repository', color: 'blue', ...props }, children);
+      this.service = this.sprout('Repository', Repository, { bus: props.bus });
     } break ;
     case 'Gateway' in children: {
-      this.service = this.sprout('Gateway', Gateway, { bus: this.bus });
+      super({ type: 'gateway', color: 'yellow', ...props }, children);
+      this.service = this.sprout('Gateway', Gateway, { bus: props.bus });
     } break ;
     }
+    this.bus     = props.bus;
+    this.factory = this.sprout('Factory', Factory);
   }
 
   public async start() {
@@ -62,7 +65,6 @@ export class Module extends Component.Component {
       topics.forEach((topic: string) => {
         this.bus.command.listen(topic, async command => {
           
-          this.service.handle(command);
           
         });
       });
@@ -71,18 +73,14 @@ export class Module extends Component.Component {
       views.forEach((view: string) => {
         this.bus.query.serve(view, async query => {
           
-          const cache = this.unthrottler.get(query);
-          cache.get(reply => this.bus.query.reply(query, reply));
-          cache.resolve(() => this.service.resolve(query));
           
         });
       });
       // Bind events types
       const types = this.props.types || [this.props.name];
       types.forEach((type: string) => {
-        this.bus.event.subscribe(view, async event => {
+        this.bus.event.subscribe(type, async event => {
           
-          this.service.on(event);
           
         });
       });

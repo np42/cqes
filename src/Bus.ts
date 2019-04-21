@@ -3,6 +3,7 @@ import { Logger }      from './Logger';
 import * as Component  from './Component';
 import * as CommandBus from './CommandBus';
 import * as QueryBus   from './QueryBus';
+import * as EventBus   from './EventBus';
 
 import { command }     from './command';
 import { query }       from './query';
@@ -11,16 +12,19 @@ import { reply }       from './reply';
 export interface props extends Component.props {
   CommandBus: CommandBus.props;
   QueryBus:   QueryBus.props;
+  EventBus:   EventBus.props;
 }
 
 export interface children extends Component.children {
   CommandBus?: { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
   QueryBus?:   { new(props: QueryBus.props,   children: QueryBus.children):   QueryBus.QueryBus };
+  EventBus?:   { new(props: EventBus.props,   children: EventBus.children):   EventBus.EventBus };
 }
 
 export class Bus extends Component.Component {
   public command: CommandBus.CommandBus;
   public query:   QueryBus.QueryBus;
+  public event:   EventBus.EventBus;
 
   constructor(props: props, children: children) {
     super({ ...props, type: 'bus' }, children);

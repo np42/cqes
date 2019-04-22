@@ -15,8 +15,6 @@ export interface children extends Component.children {};
 
 export enum Mode { Server = 'S', Client = 'C' };
 
-type Payload = string | Buffer;
-
 interface Field {
   name: string;
   type: Function;
@@ -24,7 +22,7 @@ interface Field {
 
 interface State {
   ids: Map<string, number>;
-  subscriptions: Map<Subscription>;
+  subscriptions: Map<string, Subscription>;
 }
 
 interface Subscription {
@@ -40,7 +38,17 @@ export interface SubscriptionHandler {
 }
 
 export interface DBIterator {
-  (item: { stream: string, id: string, revision: number, date: number, payload: Payload }): void
+  (item: DBRow): Promise<void>
+}
+
+interface DBRow {
+  position?: number;
+  length?:   number;
+  stream:    string;
+  id:        string;
+  revision:  number;
+  date?:     number;
+  payload:   Buffer;
 }
 
 const CHECKSUM_LENGTH = 4;
@@ -75,7 +83,7 @@ export class EventStore extends Component.Component {
   protected pending:  Array<{ type: string, payload: any, resolve: any, reject: any }>;
   protected cursor:   number;
 
-  static checksum(payload: Payload) {
+  static checksum(payload: Buffer | string) {
     return createHash('md5').update(payload).digest('hex').substr(0, 4);
   }
 
@@ -185,30 +193,37 @@ export class EventStore extends Component.Component {
 
   protected handleClientConnection(client: net.Socket) {
     let rest = EMPTY;
-    client.on('data', (chunk: Buffer) => {
+    client.on('data', async (chunk: Buffer) => {
       client.pause();
       const data = Buffer.concat([rest, chunk]);
       const result = this.parseChunk(REQUEST_FIELDS, data);
-      result.rows.forEach(row => {
+      for (let i = 0; i < result.rows.length; i += 1) {
+        const row = result.rows[i];
         const tid = row.id;
         switch (row.action) {
         case 'emit': {
           const data = this.parseChunk(EVENT_FIELDS, Buffer.concat([row.payload, EOL]));
-          data.rows.forEach(row => {
-            this.writeDB(row.stream, row.id, row.revision, row.payload)
-              .then(offset => {
-                const response = this.createResponseChunk(tid, 'resolve', JSON.stringify({ offset }));
-                client.write(Buffer.concat([response, EOL]));
-              }).catch(e => {
-                const response = this.createResponseChunk(tid, 'reject', e.toString());
-                client.write(Buffer.concat([response, EOL]));
-              });
-          });
+          for (let ii = 0; ii < data.rows.length; ii += 1) {
+            const row = data.rows[ii];
+            try {
+              const position = await this.emit(row.stream, row.id, row.revision, row.payload);
+              const payload = Buffer.from(JSON.stringify({ position }));
+              const response = this.createResponseChunk(tid, 'resolve', payload);
+              client.write(Buffer.concat([response, EOL]));
+            } catch (error) {
+              const payload = Buffer.from(error.toString());
+              const response = this.createResponseChunk(tid, 'reject', payload);
+              client.write(Buffer.concat([response, EOL]));
+            }
+          }
         } break ;
         }
-      });
+      }
       rest = result.rest;
       client.resume();
+    });
+    client.on('error', (error) => {
+      this.logger.warn(error);
     });
     client.on('end', () => {
       rest = EMPTY;
@@ -222,16 +237,16 @@ export class EventStore extends Component.Component {
     this.streams[stream] = { ids: new Map(), subscriptions: new Map() };
   }
 
-  protected async spreadEvent(stream: string, id: string, rev: number, date: number, payload: Buffer) {
-    if (!(stream in this.streams)) return this.logger.warn('Stream %s not declared', stream);
-    const subscriptions = this.streams[stream].subscriptions;
+  protected async spreadEvent(item: DBRow) {
+    if (!(item.stream in this.streams)) return this.logger.warn('Stream %s not declared', item.stream);
+    const subscriptions = this.streams[item.stream].subscriptions;
     for (const [name, subscription] of subscriptions) {
       if (subscription.status === SubscriptionStatus.Running) {
         try {
-          await subscription.handler(id, rev, date, payload);
-          if (subscription.persistent) subscription.persistent.forward(this.cursor);
+          await subscription.handler(item.id, item.revision, item.date, item.payload);
+          if (subscription.persistent) subscription.persistent.forward(item.length);
         } catch (e) {
-          this.stallSubscription(stream, name);
+          this.stallSubscription(item.stream, name);
         }
       }
     }
@@ -242,7 +257,7 @@ export class EventStore extends Component.Component {
   ) {
     if (!(stream in this.streams)) this.initStream(stream);
     this.logger.log('New subscription %s for %s', name, stream);
-    const subscription = { handler, status, persistent: null };
+    const subscription = { handler, status, persistent: <PersistentSubscription>null };
     this.streams[stream].subscriptions.set(name, subscription);
     return subscription;
   }
@@ -259,9 +274,19 @@ export class EventStore extends Component.Component {
 
   protected async addPSubscription(name: string, stream: string, handler: SubscriptionHandler) {
     const subscription = this.createSubscription(stream, name, handler, SubscriptionStatus.Updating);
-    const props = { db: this.props.db, name };
+    const props = { name: this.name, type: 'psubscription', db: this.props.db, pname: name };
     subscription.persistent = new PersistentSubscription(props, {});
-    subscription.persistent.start();
+    await subscription.persistent.start();
+    await this.updatePSubscription(subscription);
+    this.logger.log('PSubscription %s ready', name);
+    subscription.status = SubscriptionStatus.Running;
+  }
+
+  protected updatePSubscription(subscription: Subscription) {
+    return this.readDB(async item => {
+      await subscription.handler(item.id, item.revision, item.date, item.payload);
+      subscription.persistent.forward(item.length);
+    }, subscription.persistent.cursor);
   }
 
   /******************/
@@ -308,7 +333,7 @@ export class EventStore extends Component.Component {
     
   }
 
-  protected sendClient(payload: Payload) {
+  protected sendClient(payload: Buffer) {
     return new Promise((resolve, reject) => {
       const tid = String(Math.random() + Math.random() * Math.random()).substr(2, 4);
       const action  = 'emit';
@@ -318,7 +343,7 @@ export class EventStore extends Component.Component {
     });
   }
 
-  protected sendClientEvent(stream: string, id: string, revision: number, payload: Payload) {
+  protected sendClientEvent(stream: string, id: string, revision: number, payload: Buffer) {
     const events = this.createEventChunk(stream, id, revision, Date.now(), payload);
     return this.sendClient(events);
   }
@@ -343,9 +368,10 @@ export class EventStore extends Component.Component {
   }
 
   protected async loadDB() {
-    const { count, rest } = await this.readDB(({ stream, id, revision, date, payload }) => {
-      try { this.applyDBEvent(stream, id, revision, payload); }
+    const { count, rest } = await this.readDB(row => {
+      try { this.applyDBEvent(row); }
       catch (e) { this.logger.warn(e.toString()); }
+      return Promise.resolve();
     });
     this.cursor = count;
     if (rest > 0) {
@@ -358,22 +384,30 @@ export class EventStore extends Component.Component {
     }
   }
 
-  protected readDB(iterator: DBIterator): Promise<{ count: number, rest: number }> {
+  protected readDB(iterator: DBIterator, start?: number): Promise<{ count: number, rest: number }> {
+    if (!(start >= 0)) start = 0;
     return new Promise((resolve, reject) => {
-      const stream = fs.createReadStream(this.props.db);
+      const stream = fs.createReadStream(this.props.db, { start, autoClose: true });
       let count = 0;
       let rest = EMPTY;
-      stream.on('data', (chunk: Buffer) => {
+      stream.on('data', async (chunk: Buffer) => {
         count += chunk.length;
         stream.pause();
         const data = Buffer.concat([rest, chunk]);
-        const result = this.parseChunk(EVENT_FIELDS, data);
-        result.rows.forEach(iterator);
+        const result = this.parseChunk(EVENT_FIELDS, data, start + count);
+        try {
+          for (let i = 0; i < result.rows.length; i += 1)
+            await iterator(result.rows[i]);
+        } catch (e) {
+          stream.close();
+          reject(e);
+        }
         rest = result.rest;
         stream.resume();
       });
       stream.on('error', error => {
         this.logger.error('Failed to load Database:', error);
+        reject(error);
       });
       stream.on('close', () => {
         resolve({ count: count - rest.length, rest: rest.length });
@@ -381,7 +415,7 @@ export class EventStore extends Component.Component {
     });
   }
 
-  protected applyDBEvent(stream: string, id: string, revision: number, payload: Payload) {
+  protected applyDBEvent({ stream, id, revision, position }: DBRow) {
     if (!(stream in this.streams)) {
       this.logger.log('Discover stream: %s', stream);
       this.initStream(stream);
@@ -400,7 +434,8 @@ export class EventStore extends Component.Component {
       } else if (revision === -1) {
         items.set(id, expectedRevision);
       } else {
-        throw new Error('Bad revision, expected ' + expectedRevision + ' got ' + revision);
+        const pos = position != null ? ' @' + position : '';
+        throw new Error('Bad revision' + pos + ', expected ' + expectedRevision + ' got ' + revision);
       }
     }
     return items.get(id);
@@ -408,17 +443,17 @@ export class EventStore extends Component.Component {
 
   protected writeDB(stream: string, id: string, revision: number, payload: Buffer) {
     return new Promise((resolve, reject) => {
-      try { revision = this.applyDBEvent(stream, id, revision, payload); }
+      try { revision = this.applyDBEvent({ stream, id, revision, payload }); }
       catch (e) { return reject(e); }
       const date   = Date.now();
       const events = this.createEventChunk(stream, id, revision, date, payload);
       const chunk  = Buffer.concat([events, EOL]);
       const size   = chunk.length;
       this.db.write(chunk, () => {
-        const offset = this.cursor;
+        const position = this.cursor;
         this.cursor += size;
-        resolve(offset);
-        this.spreadEvent(stream, id, revision, date, payload);
+        resolve(position);
+        this.spreadEvent({ length: size, position, stream, id, revision, date, payload });
       });
     });
   }
@@ -431,29 +466,30 @@ export class EventStore extends Component.Component {
 
   /*******************/
 
-  protected createChunk(fields: Array<string>, payload: Payload): Buffer {
+  protected createChunk(fields: Array<string>, payload: Buffer): Buffer {
     const data = Buffer.concat([ Buffer.from(['0000'].concat(fields).join(SEPARATOR.toString()))
-                               , SEPARATOR, Buffer.from(payload), SEPARATOR
+                               , SEPARATOR, payload, SEPARATOR
                                ]);
     const length = data.length.toString(16);
     data.write(length, 4 - length.length);
     return Buffer.concat([data, Buffer.from(EventStore.checksum(data))]);
   }
 
-    protected createEventChunk(stream: string, id: string, rev: number, date: number, payload: Payload) {
+    protected createEventChunk(stream: string, id: string, rev: number, date: number, payload: Buffer) {
     return this.createChunk([stream, id, String(rev), String(date)], payload);
   }
 
-  protected createRequestChunk(id: string, action: string, payload: Payload) {
+  protected createRequestChunk(id: string, action: string, payload: Buffer) {
     return this.createChunk([id, action], payload);
   }
 
-  protected createResponseChunk(id: string, status: string, payload: Payload) {
+  protected createResponseChunk(id: string, status: string, payload: Buffer) {
     return this.createChunk([id, status], payload);
   }
 
-  protected parseChunk(fields: Array<Field>, chunk: Buffer) {
+  protected parseChunk(fields: Array<Field>, chunk: Buffer, offset?: number) {
     const rows = [];
+    if (!(offset >= 0)) offset = 0;
     let cursor = 0;
     while (cursor < chunk.length) {
       if (chunk.readInt8(0) === 10) {
@@ -463,6 +499,7 @@ export class EventStore extends Component.Component {
       const strlen = chunk.slice(cursor, cursor + 4).toString();
       if (strlen.length < 4) break ;
       const length = parseInt(strlen, 16);
+      const data = <any>{ position: cursor + offset, length: length + CHECKSUM_LENGTH + 1 };
       if (cursor + length + CHECKSUM_LENGTH + 1 > chunk.length) break ;
       if (isNaN(length) || length === 0) {
         const next = chunk.indexOf(EOL, cursor);
@@ -487,10 +524,10 @@ export class EventStore extends Component.Component {
         result.fields[field.name] = field.type(value);
         result.offset = offset + 1;
         return result;
-      }, { offset: 5, fields: <any>{} });
+      }, { offset: 5, fields: data });
+      cursor += length + CHECKSUM_LENGTH + 1;
       result.fields.payload = line.slice(result.offset, length - 1);
       rows.push(result.fields);
-      cursor += length + CHECKSUM_LENGTH + 1;
     }
     const rest = chunk.slice(cursor);
     return { rows, rest };
@@ -498,14 +535,14 @@ export class EventStore extends Component.Component {
 
   /*******************/
 
-  public emit(stream: string, id: string, expectedRevision: number, payload: Payload) {
+  public emit(stream: string, id: string, expectedRevision: number, payload: Buffer) {
     return new Promise((resolve, reject) => {
       if (!this.ready || this.pending.length > 0) {
         this.queue('emit', { stream, id, expectedRevision, payload }, resolve, reject);
       } else {
         switch (this.mode) {
         case Mode.Server: {
-          return this.writeDB(stream, id, expectedRevision, Buffer.from(payload))
+          return this.writeDB(stream, id, expectedRevision, payload)
             .then(resolve).catch(reject);
         } break ;
         case Mode.Client: {
@@ -541,10 +578,10 @@ export class EventStore extends Component.Component {
     });
   }
 
-  public psubscribe(name: string, stream: string, handler: SubscriptionHandler) {
+  public psubscribe(name: string, stream: string, handler: SubscriptionHandler): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.ready || this.pending.length > 0) {
-        this.queue('psubscribe', { stream, handler }, resolve, reject);
+        this.queue('psubscribe', { name, stream, handler }, resolve, reject);
       } else {
         switch (this.mode) {
         case Mode.Server: {
@@ -576,6 +613,16 @@ export class EventStore extends Component.Component {
       case 'emit': {
         const value = item.payload;
         this.emit(value.stream, value.id, value.expectedRevision, value.payload)
+          .then(item.resolve).catch(item.reject);
+      } break ;
+      case 'subscribe': {
+        const value = item.payload;
+        this.subscribe(value.stream, value.handler)
+          .then(item.resolve).catch(item.reject);
+      } break ;
+      case 'psubscribe': {
+        const value = item.payload;
+        this.psubscribe(value.name, value.stream, value.handler)
           .then(item.resolve).catch(item.reject);
       } break ;
       }

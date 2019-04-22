@@ -9,5 +9,5 @@ class TestDone extends event {};
 (async () => {
   await es.start();
   while (true)
-    await es.emit('Test', uuid(), -1, JSON.stringify([new TestDone({ some: 'data' })]));
+    await es.emit('Test', uuid(), -1, Buffer.from(JSON.stringify([new TestDone({ some: 'data' })])));
 })();

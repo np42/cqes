@@ -9,13 +9,11 @@ export interface props extends Component.props {
 export interface children extends Component.children {}
 
 export class CommandBus extends Component.Component {
-  protected shared: void; // TODO
-  protected pipe:   void; // TODO
   protected amqp:   AMQPCommandBus.AMQPCommandBus;
 
   constructor(props: props, children: children) {
-    super({ ...props, type: props.type + '.command', color: 'red' }, children);
-    this.amqp = new AMQPCommandBus.AMQPCommandBus({ ...props, ...props.AMQP });
+    super({ ...props, type: 'command-bus', color: 'red' }, children);
+    this.amqp = new AMQPCommandBus.AMQPCommandBus({ ...this.props, ...props.AMQP });
   }
 
   public listen(topic: string, handler: (command: Command<any>) => void): boolean {
@@ -48,6 +46,7 @@ export class CommandBus extends Component.Component {
   //--
 
   public start(): Promise<boolean> {
+    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
     return this.amqp.start();
   }
 

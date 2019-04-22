@@ -1,16 +1,23 @@
 import * as Service from './Service';
+
 import { command }  from './command';
 import { query }    from './query';
 import { reply }    from './reply';
 
 export interface props extends Service.props {}
-
 export interface children extends Service.children {}
 
 export class Gateway extends Service.Service {
-
   constructor(props: props, children: children) {
     super({ type: 'gateway', color: 'yellow', ...props }, children);
+  }
+
+  public async start() {
+    this.logger.debug('%s Starting %s %s %s', this.constructor.name, this.context, this.name, this.type);
+    this.bus.event.psubscribe(this.name, this.context, async event => {
+      debugger;
+    });
+    return super.start();
   }
 
   public async handle(command: command<any>) {
@@ -46,14 +53,6 @@ export class Gateway extends Service.Service {
       this.logger.log('Ignoring %s -> %s', query.view, query.method);
       return new reply(null, 'Ignored');
     }
-  }
-
-  public start(): Promise<boolean> {
-    return Promise.resolve(true);
-  }
-
-  public stop(): Promise<void> {
-    return Promise.resolve();
   }
 
 }

@@ -9,10 +9,11 @@ export interface props extends AMQPBus.props {}
 export class AMQPCommandBus extends AMQPBus.AMQPBus {
 
   constructor(props: props) {
-    super({ ...props, type: props.type + '.command' });
+    super({ ...props, type: 'amqp' });
   }
 
   public async start() {
+    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
     super.start();
     return true;
   }
@@ -21,7 +22,8 @@ export class AMQPCommandBus extends AMQPBus.AMQPBus {
 
   public listen(topic: string, handler: (command: Command<any>) => void) {
     const options = { channel: this.props.consumer.channel, queue: this.props.consumer.queue };
-    return this.consume(topic + '.command', (message: Message) => {
+    const queue = [this.context, topic, 'command'].join('.');
+    return this.consume(queue, (message: Message) => {
       const payload = JSON.parse(message.content.toString());
       const meta = {};
       Object.defineProperty(meta, 'amqp', { value: message });

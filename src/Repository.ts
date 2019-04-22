@@ -1,41 +1,32 @@
-import * as Component   from './Component';
-import * as Bus         from './Bus';
+import * as Service from './Service';
 
-import { query }        from './query';
-import { reply }        from './reply';
-import { state }        from './state';
+import { query }    from './query';
+import { reply }    from './reply';
+import { state }    from './state';
+import { event }    from './event';
 
-export interface props extends Component.props {
-  bus: Bus.Bus;
-}
+export interface props extends Service.props {}
+export interface children extends Service.children {}
 
-export interface children extends Component.children {}
-
-export class Repository extends Component.Component {
-  protected bus: Bus.Bus;
-
+export class Repository extends Service.Service {
   constructor(props: props, children: children) {
-    super({ ...props, type: props.type + '.repository', color: 'blue' }, children);
-    this.bus = props.bus;
-    this['resolve' + this.props.name] = function (query: query<any>) {
-      return this.load(query.data.id);
-    };
+    super({ ...props, type: 'repository', color: 'cyan' }, children);
   }
 
-  public start(): Promise<boolean> {
-    return Promise.resolve(true);
+  public async start() {
+    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
+    debugger;
+    this.bus.query.serve(this.name, async query => {
+      debugger;
+    });
+    this.bus.event.psubscribe(this.name, this.context, async event => {
+      debugger;
+    });
+    return super.start();
   }
 
-  public stop(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  public save(state: state<any>): Promise<void> {
-    return Promise.resolve();
-  }
-
-  public load(id: string): Promise<state<any>> {
-    return Promise.resolve(new state(id));
+  public async on(state: state<any>, event: event<any>) {
+    debugger;
   }
 
   public async resolve(query: query<any>): Promise<reply<any>> {

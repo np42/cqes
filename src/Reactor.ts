@@ -1,21 +1,23 @@
-import * as Component from './Component';
-import * as Bus         from './Bus';
+import * as Service from './Service';
 
-import { command }    from './command';
-import { state }      from './state';
-import { reply }      from './reply';
-import { event }      from './event';
+import { command }  from './command';
+import { state }    from './state';
+import { reply }    from './reply';
+import { event }    from './event';
 
-export interface props extends Component.props {}
+export interface props extends Service.props {}
+export interface children extends Service.children {}
 
-export interface children extends Component.children {}
-
-export class Reactor extends Component.Component {
-  protected bus: Bus.Bus;
-
+export class Reactor extends Service.Service {
   constructor(props: props, children: children) {
     super({ ...props, type: props.type + '.reactor', color: 'magenta' }, children);
-    this.bus = props.bus;
+  }
+
+  public async start() {
+    this.bus.event.psubscribe(this.name, this.context, async event => {
+      debugger;
+    });
+    return super.start();
   }
 
   public on(state: state<any>) {
@@ -25,5 +27,4 @@ export class Reactor extends Component.Component {
       if (method in this) this[method](state, event);
     });
   }
-
 }

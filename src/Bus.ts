@@ -28,14 +28,25 @@ export class Bus extends Component.Component {
 
   constructor(props: props, children: children) {
     super({ ...props, type: 'bus' }, children);
-    this.command = this.sprout('CommandBus', CommandBus);
-    this.query   = this.sprout('QueryBus', QueryBus);
+    this.command = this.sprout('CommandBus', CommandBus, { context: this.context });
+    this.query   = this.sprout('QueryBus', QueryBus, { context: this.context });
+    this.event   = this.sprout('EventBus', EventBus, { context: this.context });
   }
 
   public async start() {
+    debugger;
+    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
     if (await this.query.start()) {
-      if (await this.command.start()) return true;
-      await this.query.stop();
+      if (await this.event.start()) {
+        if (await this.command.start()) {
+          return true;
+        } else {
+          await this.event.stop();
+          await this.query.stop();
+        }
+      } else {
+        await this.query.stop();
+      }
       return false;
     }
     return false;
@@ -43,6 +54,7 @@ export class Bus extends Component.Component {
 
   public async stop() {
     await this.command.stop();
+    await this.event.stop();
     await this.query.stop();
   }
 

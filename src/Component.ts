@@ -1,6 +1,7 @@
 import { Logger } from './Logger';
 
 export interface props {
+  context?:         string;
   name:             string;
   type:             string;
   color?:           string;
@@ -10,13 +11,17 @@ export interface props {
 export interface children {}
 
 export class Component {
+  protected context:  string;
   protected name:     string;
+  protected type:     string;
   protected props:    props;
   protected children: children;
   protected logger:   Logger;
 
   constructor(props: props, children: children) {
+    this.context  = props.context || 'Hive';
     this.name     = props.name;
+    this.type     = props.type;
     this.props    = props;
     this.children = children;
     this.logger   = new Logger(props.name + '.' + props.type, props.color);

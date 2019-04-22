@@ -5,22 +5,14 @@ import * as Component      from './src/Component';
 import * as Bus            from './src/Bus';
 import * as Interface      from './src/Interface';
 
-import * as Service        from './src/Service';
-import * as Debouncer      from './src/Debouncer';
-import * as Unthrottler    from './src/Unthrottler';
-import * as Buffer         from './src/Buffer';
-
-import * as Gateway        from './src/Gateway';
-import * as Manager        from './src/Manager';
-
 import * as CommandHandler from './src/CommandHandler';
-import * as Factory        from './src/Factory';
 import * as Repository     from './src/Repository';
 import * as Reactor        from './src/Reactor';
+import * as Gateway        from './src/Gateway';
+import * as Factory        from './src/Factory';
 
 export { Logger, Process, Component, Bus, Interface
-       , Service, Debouncer, Unthrottler, Buffer
-       , Gateway, Manager, CommandHandler, Factory, Repository, Reactor
+       , Gateway, CommandHandler, Factory, Repository, Reactor
        };
 
 export { command }       from './src/command';

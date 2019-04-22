@@ -38,7 +38,7 @@ export class AMQPBus extends Component.Component {
   private consumers:  Set<any>;
 
   constructor(props: props) {
-    super({ color: 'white', ...props, type: props.type + '.amqp' }, {});
+    super(props, {});
     this.url            = props.url;
     this.props.consumer = merge(CONSUMER_DEFAULT, props.consumer || {});
     this.channels       = new Map();
@@ -46,6 +46,7 @@ export class AMQPBus extends Component.Component {
   }
 
   public start() {
+    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
     if (this.connection != null) return Promise.resolve(true);
     const name = 'AMQP.Connection';
     const url = this.url;
@@ -94,11 +95,15 @@ export class AMQPBus extends Component.Component {
     return new Promise((resolve, reject) => {
       const consumer = () => {
         this.logger.log('Listening to %s: %j', queue, options);
+        debugger;
         const connection = this.getChannel(queue, options.queue).pipe(async (channel, fx) => {
+          debugger;
           await channel.prefetch(options.channel.prefetch, false);
           const replier = options.noAck ? null : options.reply(channel);
           let active = true;
+          debugger;
           const subscription = await channel.consume(queue, message => {
+            debugger;
             if (active) {
               Object.defineProperty(message, 'channel', { value: channel });
               fxHandler.do(async (handler: any) => handler(message));
@@ -106,6 +111,7 @@ export class AMQPBus extends Component.Component {
               channel.reject(message, true);
             }
           }, options.channel);
+          debugger;
           fx.on('aborted', () => {
             active = false;
             channel.cancel(subscription.consumerTag);

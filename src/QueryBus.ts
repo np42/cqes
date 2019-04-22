@@ -16,16 +16,14 @@ export interface children extends Component.children {}
 export class QueryBus extends Component.Component {
   private   pending:    Map<string, Session>;
   private   gcInterval: NodeJS.Timer;
-  protected shared:     void; // TODO
-  protected pipe:       void; // TODO
   protected amqp:       AMQPQueryBus.AMQPQueryBus;
 
   constructor(props: props, children: children) {
-    super(props, children);
+    super({ ...props, type: 'amqp', color: 'blue' }, children);
     this.gcInterval = null;
     this.pending    = new Map();
     const handler   = (id: string, reply: Reply<any>) => this.handleReply(id, reply);
-    this.amqp       = new AMQPQueryBus.AMQPQueryBus({ ...props, ...props.AMQP, handler });
+    this.amqp       = new AMQPQueryBus.AMQPQueryBus({ ...this.props, ...props.AMQP, handler });
   }
 
   public serve(view: string, handler: (query: Query<any>) => void): boolean {
@@ -73,6 +71,7 @@ export class QueryBus extends Component.Component {
   }
 
   public start(): Promise<boolean> {
+    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
     this.gcInterval = setInterval(() => this.gc(), 1000);
     return this.amqp.start();
   }

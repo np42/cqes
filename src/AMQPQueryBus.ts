@@ -23,30 +23,35 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
   private response:   AMQPBus.FxConnection;
 
   constructor(props: AMQPBus.props) {
-    super({ ...props, type: props.type + '.query' });
-    this.id       = this.name + '.reply.' + rand();
+    super(props);
+    this.id       = [this.context, this.name, 'reply', rand()].join('.');
     this.response = null;
   }
 
   public async start() {
-    super.start();
-    this.response = <any>await this.consume(this.id, async (message: Message) => {
-      const payload = JSON.parse(message.content.toString());
-      const reply   = new Reply(payload.data);
-      reply.status  = payload.status;
-      this.props.handler(message.properties.correlationId, reply);
-    }, { channel: { prefetch: 100, noAck: true, exclusive: true }
-       , queue: { durable: false, exclusive: true }
-       }
-    );
-    return true;
+    if (this.response != null) return true;
+    if (await super.start()) {
+      this.response = <any>await this.consume(this.id, async (message: Message) => {
+        const payload = JSON.parse(message.content.toString());
+        const reply   = new Reply(payload.data);
+        reply.status  = payload.status;
+        this.props.handler(message.properties.correlationId, reply);
+      }, { channel: { prefetch: 100, noAck: true, exclusive: true }
+         , queue: { durable: false, exclusive: true }
+         }
+      );
+      return true;
+    } else {
+      return false;
+    }
   }
 
   //--
 
   public serve(view: string, handler: (query: Query<any>) => void) {
     const options = { channel: { prefetch: 10 }, queue: { durable: false } };
-    return this.consume(view + '.query', (message: Message) => {
+    const queue = [this.context, view, 'query'].join('.');
+    return this.consume(queue, (message: Message) => {
       const payload = JSON.parse(message.content.toString());
       const meta  = {};
       const query = new Query(payload.view, payload.method, payload.data, meta);

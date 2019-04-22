@@ -15,9 +15,9 @@ export class Repository extends Service.Service {
 
   public async start() {
     this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
-    debugger;
     this.bus.query.serve(this.name, async query => {
-      debugger;
+      const reply = await this.resolve(query);
+      this.bus.query.reply(query, reply);
     });
     this.bus.event.psubscribe(this.name, this.context, async event => {
       debugger;

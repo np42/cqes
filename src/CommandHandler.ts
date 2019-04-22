@@ -24,10 +24,35 @@ export class CommandHandler extends Service.Service {
     topics.forEach((topic: string) => {
       this.bus.command.listen(topic, async command => {
         debugger;
+        const state = <any>{};
+        try {
+          const events = await this.handle(state, command);
+          if (events.length === 0) {
+            this.bus.command.discard(command);
+          } else {
+            debugger;
+            const stream = this.name
+            const id = command.id;
+            const revision = this.factory.revisions.get(id);
+            const expectedRevision = revision != null ? revision : -1;
+            try {
+              const position = await this.bus.event.emit(stream, id, expectedRevision, events);
+              this.bus.command.discard(command);
+            } catch (e) {
+              this.logger.warn(e);
+              this.bus.command.replay(command);
+            }
+          }
+        } catch (e) {
+          this.logger.error(e);
+          this.bus.command.relocate(command, topic + '.failed');
+        }
       });
     });
     this.bus.event.psubscribe(this.name, this.context, async event => {
       debugger;
+      const state = <any>{};
+      this.factory.apply(state, event);
     });
     return super.start();
   }

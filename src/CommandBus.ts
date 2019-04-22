@@ -36,10 +36,12 @@ export class CommandBus extends Component.Component {
   }
 
   public replay(command: Command<any>): Promise<void> {
+    this.logger.todo();
     return Promise.resolve();
   }
 
   public relocate(command: Command<any>, topic: string): Promise<void> {
+    this.logger.todo();
     return Promise.resolve();
   }
 

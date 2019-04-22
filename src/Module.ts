@@ -3,7 +3,6 @@ import * as Service    from './Service';
 import * as CH         from './CommandHandler';
 import * as Gateway    from './Gateway';
 import * as Repository from './Repository';
-import * as Reactor    from './Reactor';
 import * as Factory    from './Factory';
 
 import { command }     from './command';
@@ -15,7 +14,6 @@ import { state }       from './state';
 export interface props extends Service.props {}
 export interface children extends Service.children {
   CommandHandler?: { new (p: CH.props, c: CH.children): CH.CommandHandler };
-  Reactor?:        { new (p: Reactor.props, c: Reactor.children): Reactor.Reactor };
   Repository?:     { new (p: Repository.props, c: Repository.children): Repository.Repository };
   Gateway?:        { new (p: Gateway.props, c: Gateway.children): Gateway.Gateway };
 }

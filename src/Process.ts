@@ -7,7 +7,6 @@ import { Module }         from './Module';
 import { CommandHandler } from './CommandHandler';
 import { Gateway }        from './Gateway';
 import { Repository }     from './Repository';
-import { Reactor }        from './Reactor';
 import { Factory }        from './Factory';
 
 import { hostname, userInfo } from 'os';
@@ -33,14 +32,14 @@ interface Context {
 }
 
 interface ChildManager    { CommandHandler: CommandHandler; Factory: Factory }
-interface ChildRepository { Repository: Repository; }
-interface ChildGateway    { Gateway: Gateway; }
+interface ChildRepository { Repository: Repository; Factory: Factory }
+interface ChildGateway    { Gateway: Gateway; Factory: Factory }
 
 type Child = ChildManager | ChildRepository | ChildGateway;
 
 export class Process extends Component.Component {
   protected contexts:    Contexts;
-  protected modules:     Map<string, Component.Component>;
+  protected modules:     Map<string, Module>;
   protected rootpath:    string;
   protected environment: string;
   protected hostname:    string;

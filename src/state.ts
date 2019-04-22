@@ -6,14 +6,12 @@ export class state<A> {
   public id:        string;
   public revision:  number;
   public data:      A;
-  public events:    Array<event<any>>;
 
   constructor(id: string, revision?: number, data?: A) {
     this.type     = this.constructor.name;
     this.id       = id;
     this.revision = revision >= 0 ? revision : -1;
     this.data     = data || <A>{};
-    this.events   = [];
   }
 
   get key() {

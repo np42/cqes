@@ -8,25 +8,23 @@ export interface props extends Component.props {}
 export interface children extends Component.children {}
 
 export class Factory extends Component.Component {
-  private versions: Map<string, string>;
+  public revisions: Map<string, number>;
 
   constructor(props: props, children: children) {
     super({ ...props, type: props.type + '.factory', color: 'green' }, children);
   }
 
-  public apply(state: state<any>, events: Array<event<any>>) {
+  public apply(state: state<any>, event: event<any>) {
     const revision = state.revision;
-    const newState = events.reduce((state, event) => {
-      const method = 'apply' + event.name;
-      const applier = this.getEventApplier(method, event);
-      if (applier) {
-        this.logger.log('%s apply %s: %j', state.key, event.name, event.data);
-        return applier.call(this, state, event) || state;
-      } else {
-        this.logger.warn('%s skip %s: %j', state.key, event.name, event.data);
-        return state;
-      }
-    }, state);
+    const method = 'apply' + event.name;
+    const applier = this.getEventApplier(method, event);
+    let newState = state;
+    if (applier) {
+      this.logger.log('%s apply %s: %j', state.key, event.name, event.data);
+      newState = applier.call(this, state, event) || state;
+    } else {
+      this.logger.warn('%s skip %s: %j', state.key, event.name, event.data);
+    }
     if (newState.revision >= 0) {
       const diff = newState.revision - revision;
       if (diff === 0) {
@@ -37,7 +35,6 @@ export class Factory extends Component.Component {
     } else {
       this.logger.debug('State %s destroyed', newState.key);
     }
-    newState.events = events;
     return newState;
   }
 

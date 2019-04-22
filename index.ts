@@ -7,12 +7,11 @@ import * as Interface      from './src/Interface';
 
 import * as CommandHandler from './src/CommandHandler';
 import * as Repository     from './src/Repository';
-import * as Reactor        from './src/Reactor';
 import * as Gateway        from './src/Gateway';
 import * as Factory        from './src/Factory';
 
 export { Logger, Process, Component, Bus, Interface
-       , Gateway, CommandHandler, Factory, Repository, Reactor
+       , Gateway, CommandHandler, Factory, Repository
        };
 
 export { command }       from './src/command';

@@ -1,4 +1,5 @@
 import * as Service from './Service';
+import * as Factory from './Factory';
 
 import { state }    from './state';
 import { command }  from './command';
@@ -15,7 +16,8 @@ export class CommandHandler extends Service.Service {
   }
 
   constructor(props: props, children: children) {
-    super({ ...props, type: 'command-handler', color: 'magenta' }, children);
+    super( { ...props, type: 'command-handler', color: 'magenta' }
+         , { Factory: Factory.Factory, ...children });
   }
 
   public async start() {
@@ -23,8 +25,8 @@ export class CommandHandler extends Service.Service {
     const topics = this.props.topics || [this.name];
     topics.forEach((topic: string) => {
       this.bus.command.listen(topic, async command => {
+        const state = await this.factory.get(command.id);
         debugger;
-        const state = <any>{};
         try {
           const events = await this.handle(state, command);
           if (events.length === 0) {
@@ -33,8 +35,7 @@ export class CommandHandler extends Service.Service {
             debugger;
             const stream = this.name
             const id = command.id;
-            const revision = this.factory.revisions.get(id);
-            const expectedRevision = revision != null ? revision : -1;
+            const expectedRevision = state.revision;
             try {
               const position = await this.bus.event.emit(stream, id, expectedRevision, events);
               this.bus.command.discard(command);
@@ -48,11 +49,6 @@ export class CommandHandler extends Service.Service {
           this.bus.command.relocate(command, topic + '.failed');
         }
       });
-    });
-    this.bus.event.psubscribe(this.name, this.context, async event => {
-      debugger;
-      const state = <any>{};
-      this.factory.apply(state, event);
     });
     return super.start();
   }

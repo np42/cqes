@@ -8,6 +8,10 @@ export interface props extends Component.props {
 }
 export interface children extends Component.children {}
 
+interface EventHandler {
+  (id: string, revision: number, event: Array<Event<any>>): Promise<void>
+}
+
 export class EventBus extends Component.Component {
   protected es: EventStore.EventStore;
 
@@ -16,17 +20,30 @@ export class EventBus extends Component.Component {
     this.es = new EventStore.EventStore({ ...this.props, ...props.EventStore }, {});
   }
 
-  public psubscribe(name: string, stream: string, handler: (event: Event<any>) => void): boolean {
-    this.logger.log('%green %s.%s', 'PSubscribe', name, stream);
-    this.es.psubscribe(name, stream, async (id, revision, date, payload) => {
-      JSON.parse(payload.toString()).forEach((item: any) => {
+  public subscribe(stream: string, handler: EventHandler, position: number): Promise<void> {
+    this.logger.log('%green %s.%s', 'Subscribe', stream);
+    return this.es.subscribe(stream, async (id, revision, date, payload) => {
+      const events = JSON.parse(payload.toString()).map((item: any) => {
         const event = new Event(item.data, item.meta);
         event.version = item.version;
         event.name = item.name;
-        handler(event);
+        return event;
       })
+      return handler(id, revision, events);
+    }, position);
+  }
+
+  public psubscribe(name: string, stream: string, handler: EventHandler): Promise<void> {
+    this.logger.log('%green %s.%s', 'PSubscribe', name, stream);
+    return this.es.psubscribe(name, stream, async (id, revision, date, payload) => {
+      const events =JSON.parse(payload.toString()).map((item: any) => {
+        const event = new Event(item.data, item.meta);
+        event.version = item.version;
+        event.name = item.name;
+        return event;
+      })
+      return handler(id, revision, events);
     });
-    return true;
   }
 
   public emit(stream: string, id: string, revision: number, events: Array<Event<any>>) {

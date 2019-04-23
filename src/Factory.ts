@@ -1,17 +1,48 @@
 import * as Component  from './Component';
 
+import * as Bus        from './Bus';
+import { Queue }       from './Queue';
+
 import { event }       from './event';
 import { state }       from './state';
 
-export interface props extends Component.props {}
+export interface props extends Component.props {
+  bus: Bus.Bus
+}
 
 export interface children extends Component.children {}
 
+type events = Array<event<any>>;
+
 export class Factory extends Component.Component {
-  public revisions: Map<string, number>;
+  protected bus:     Bus.Bus;
+  protected states:  Map<string, state<any>>;
+  protected queue:   Queue;
+  protected ready:   boolean;
 
   constructor(props: props, children: children) {
-    super({ ...props, type: props.type + '.factory', color: 'green' }, children);
+    super({ ...props, type: 'factory', color: 'green' }, children);
+    this.bus     = props.bus;
+    this.states  = new Map();
+    this.queue   = new Queue();
+  }
+
+  public async start(): Promise<boolean> {
+    await this.bus.event.subscribe(this.context, async (id: string, revision: number, events: events) => {
+      const state = await this.get(id);
+      const newState = events.reduce((state, event) => this.apply(state, event), state);
+      this.states.set(id, state);
+    }, 0);
+    this.queue.resume();
+    return true;
+  }
+
+  public get(id: string): Promise<state<any>> {
+    if (this.queue.running) {
+      return Promise.resolve(this.states.get(id));
+    } else {
+      return this.queue.push(this, this.get, id);
+    }
   }
 
   public apply(state: state<any>, event: event<any>) {

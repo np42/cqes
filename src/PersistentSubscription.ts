@@ -24,7 +24,7 @@ export class PersistentSubscription extends Component.Component {
 
   constructor(props: props, children: children) {
     super(props, children);
-    this.filename = props.db + '.' + props.pname;
+    this.filename = props.db + '.' + props.pname + '.sub';
     this.cursor   = 0;
     this.length   = 0;
     this.swaping  = false;

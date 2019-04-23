@@ -17,10 +17,12 @@ export class Service extends Component.Component {
   constructor(props: props, children: children) {
     super(props, children);
     this.bus     = props.bus;
-    this.factory = this.sprout('Factory', Factory);
+    if ('Factory' in children)
+      this.factory = this.sprout('Factory', Factory, { bus: this.bus });
   }
 
   public start(): Promise<boolean> {
+    if (this.factory) return this.factory.start();
     return Promise.resolve(true);
   }
 

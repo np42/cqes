@@ -24,7 +24,7 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
 
   constructor(props: AMQPBus.props) {
     super(props);
-    this.id       = [this.context, this.name, 'reply', rand()].join('.');
+    this.id       = [this.context, 'reply', rand()].join('.');
     this.response = null;
   }
 

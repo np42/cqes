@@ -14,9 +14,11 @@ export class Gateway extends Service.Service {
 
   public async start() {
     this.logger.debug('%s Starting %s %s %s', this.constructor.name, this.context, this.name, this.type);
-    this.bus.event.psubscribe(this.name, this.context, async event => {
-      debugger;
-    });
+    if (this.factory == null) {
+      this.bus.event.psubscribe(this.name, this.context, async event => {
+        debugger;
+      });
+    }
     return super.start();
   }
 

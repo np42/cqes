@@ -1,5 +1,6 @@
 import * as Component             from './Component';
 import { PersistentSubscription } from './PersistentSubscription';
+import { Queue }                  from './Queue';
 
 import * as net       from 'net';
 import * as fs        from 'fs';
@@ -77,10 +78,9 @@ export class EventStore extends Component.Component {
   protected client:   net.Socket;
   protected sessions: Map<string, { date: number, resolve: any, reject: any }>
   protected db:       fs.WriteStream;
-  protected ready:    boolean;
   protected streams:  { [name: string]: State };
   protected lock:     string;
-  protected pending:  Array<{ type: string, payload: any, resolve: any, reject: any }>;
+  protected queue:    Queue;
   protected cursor:   number;
 
   static checksum(payload: Buffer | string) {
@@ -88,12 +88,10 @@ export class EventStore extends Component.Component {
   }
 
   constructor(props: props, children: children) {
-    if (props.address == null) props = { ...props, address: '127.0.0.1:9632' };
-    if (props.db == null) props = { ...props, db: './Store.evs' };
+    if (props.db == null) props = { ...props, db: './' + props.name };
     super({ ...props, type: 'event-store' }, children);
     this.streams  = {};
-    this.ready    = false;
-    this.pending  = [];
+    this.queue    = new Queue();
     this.sessions = new Map();
     process.on('exit', () => this.onExit());
     process.on('SIGINT', () => this.onExit());
@@ -118,7 +116,7 @@ export class EventStore extends Component.Component {
       if (this.client) this.client.end();
       const lockfile = this.lock;
       this.lock = null;
-      this.ready = false;
+      this.queue.pause();
       if (lockfile) fs.unlink(lockfile, () => resolve());
       else resolve();
     });
@@ -268,8 +266,19 @@ export class EventStore extends Component.Component {
     return subscription;
   }
 
-  protected addSubscription(stream: string, handler: SubscriptionHandler) {
-    this.createSubscription(stream, uuid(), handler, SubscriptionStatus.Running);
+  protected async addSubscription(stream: string, start: number, handler: SubscriptionHandler) {
+    if (start == null) start = this.cursor;
+    const status = start === this.cursor ? SubscriptionStatus.Running : SubscriptionStatus.Updating;
+    const subscription = this.createSubscription(stream, uuid(), handler, status);
+    if (start !== this.cursor) {
+      await this.readDB(async item => {
+        if (this.cursor === item.position + item.length)
+          subscription.status = SubscriptionStatus.Running;
+        if (item.stream === stream)
+          await handler(item.id, item.revision, item.date, item.payload);
+      });
+      subscription.status = SubscriptionStatus.Running;
+    }
   }
 
   protected stallSubscription(subscription: Subscription) {
@@ -352,7 +361,7 @@ export class EventStore extends Component.Component {
     
   }
 
-  protected sendClient(payload: Buffer) {
+  protected sendClient(payload: Buffer): Promise<number> {
     return new Promise((resolve, reject) => {
       const tid = String(Math.random() + Math.random() * Math.random()).substr(2, 4);
       const action  = 'emit';
@@ -362,7 +371,7 @@ export class EventStore extends Component.Component {
     });
   }
 
-  protected sendClientEvent(stream: string, id: string, revision: number, payload: Buffer) {
+  protected sendClientEvent(stream: string, id: string, revision: number, payload: Buffer): Promise<number> {
     const events = this.createEventChunk(stream, id, revision, Date.now(), payload);
     return this.sendClient(events);
   }
@@ -375,7 +384,7 @@ export class EventStore extends Component.Component {
       fs.writeFile(lockfile, String(process.pid), { flag: 'wx' }, err => {
         if (err) return reject(err);
         this.lock = lockfile;
-        this.db = fs.createWriteStream(this.props.db, { flags: 'a' });
+        this.db = fs.createWriteStream(this.props.db + '.evt', { flags: 'a' });
         this.db.on('ready', () => {
           resolve();
         });
@@ -406,7 +415,7 @@ export class EventStore extends Component.Component {
   protected readDB(iterator: DBIterator, start?: number): Promise<{ count: number, rest: number }> {
     if (!(start >= 0)) start = 0;
     return new Promise((resolve, reject) => {
-      const stream = fs.createReadStream(this.props.db, { start, autoClose: true });
+      const stream = fs.createReadStream(this.props.db + '.evt', { start, autoClose: true });
       let count = 0;
       let rest = EMPTY;
       stream.on('data', async (chunk: Buffer) => {
@@ -460,7 +469,7 @@ export class EventStore extends Component.Component {
     return items.get(id);
   }
 
-  protected writeDB(stream: string, id: string, revision: number, payload: Buffer) {
+  protected writeDB(stream: string, id: string, revision: number, payload: Buffer): Promise<number> {
     return new Promise((resolve, reject) => {
       try { revision = this.applyDBEvent({ stream, id, revision, payload }); }
       catch (e) { return reject(e); }
@@ -478,9 +487,8 @@ export class EventStore extends Component.Component {
   }
 
   protected setDBReady() {
-    this.ready = true;
+    this.queue.resume();
     this.logger.log('DB is ready');
-    this.drain();
   }
 
   /*******************/
@@ -555,96 +563,42 @@ export class EventStore extends Component.Component {
   /*******************/
 
   public emit(stream: string, id: string, expectedRevision: number, payload: Buffer): Promise<number> {
-    return new Promise((resolve, reject) => {
-      if (!this.ready) {
-        this.queue('emit', { stream, id, expectedRevision, payload }, resolve, reject);
-      } else {
-        switch (this.mode) {
-        case Mode.Server: {
-          return this.writeDB(stream, id, expectedRevision, payload)
-            .then(resolve).catch(reject);
-        } break ;
-        case Mode.Client: {
-          return this.sendClientEvent(stream, id, expectedRevision, payload)
-            .then(resolve).catch(reject);
-        } break ;
-        default: {
-          
-        } break ;
-        }
+    if (this.queue.running) {
+      switch (this.mode) {
+      case Mode.Server: return this.writeDB(stream, id, expectedRevision, payload);
+      case Mode.Client: return this.sendClientEvent(stream, id, expectedRevision, payload);
+      default: return Promise.reject('Unknown mode');
       }
-    });
+    } else {
+      return this.queue.push(this, this.emit, stream, id, expectedRevision, payload);
+    }
   }
 
-  public subscribe(stream: string, handler: SubscriptionHandler) {
-    return new Promise((resolve, reject) => {
-      if (!this.ready) {
-        this.queue('subscribe', { stream, handler }, resolve, reject);
-      } else {
-        switch (this.mode) {
-        case Mode.Server: {
-          this.addSubscription(stream, handler);
-          return resolve();
-        } break ;
-        case Mode.Client: {
-          
-        } break ;
-        default: {
-          
-        } break ;
-        }
+  public subscribe(stream: string, handler: SubscriptionHandler, start?: number): Promise<void> {
+    if (this.queue.running) {
+      switch (this.mode) {
+      case Mode.Server: return this.addSubscription(stream, start, handler);
+      case Mode.Client: {
+        
+      } break ;
+      default: return Promise.reject('Unknown mode');
       }
-    });
+    } else {
+      return this.queue.push(this, this.subscribe, stream, handler, start);
+    }
   }
 
   public psubscribe(name: string, stream: string, handler: SubscriptionHandler): Promise<any> {
-    return new Promise((resolve, reject) => {
-      if (!this.ready) {
-        this.queue('psubscribe', { name, stream, handler }, resolve, reject);
-      } else {
-        switch (this.mode) {
-        case Mode.Server: {
-          return this.addPSubscription(name, stream, handler)
-            .then(resolve).catch(reject);
-        } break ;
-        case Mode.Client: {
-          
-        } break ;
-        default: {
-          
-        } break ;
-        }
+    if (this.queue.running) {
+      switch (this.mode) {
+      case Mode.Server: return this.addPSubscription(name, stream, handler)
+      case Mode.Client: {
+        
+      } break ;
+      default: return Promise.reject('Unknown mode');
       }
-    });
-  }
-
-  /*******************/
-
-  protected queue(type: string, payload: any, resolve: Function, reject: Function) {
-    this.pending.push({ type, payload, resolve, reject });
-  }
-
-  protected async drain() {
-    if (this.pending.length === 0) return ;
-    while (this.pending.length > 0) {
-      const item = this.pending.shift();
-      switch (item.type) {
-      case 'emit': {
-        const value = item.payload;
-        this.emit(value.stream, value.id, value.expectedRevision, value.payload)
-          .then(item.resolve).catch(item.reject);
-      } break ;
-      case 'subscribe': {
-        const value = item.payload;
-        this.subscribe(value.stream, value.handler)
-          .then(item.resolve).catch(item.reject);
-      } break ;
-      case 'psubscribe': {
-        const value = item.payload;
-        this.psubscribe(value.name, value.stream, value.handler)
-          .then(item.resolve).catch(item.reject);
-      } break ;
-      }
+    } else {
+      return this.queue.push(this, this.psubscribe, name, stream, handler);
     }
   }
 

@@ -19,9 +19,11 @@ export class Repository extends Service.Service {
       const reply = await this.resolve(query);
       this.bus.query.reply(query, reply);
     });
-    this.bus.event.psubscribe(this.name, this.context, async event => {
-      debugger;
-    });
+    if (this.factory == null) {
+      this.bus.event.psubscribe(this.name, this.context, async event => {
+        debugger;
+      });
+    }
     return super.start();
   }
 

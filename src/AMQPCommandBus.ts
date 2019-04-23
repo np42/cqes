@@ -22,7 +22,7 @@ export class AMQPCommandBus extends AMQPBus.AMQPBus {
 
   public listen(topic: string, handler: (command: Command<any>) => void) {
     const options = { channel: this.props.consumer.channel, queue: this.props.consumer.queue };
-    const queue = [this.context, topic, 'command'].join('.');
+    const queue = [topic, 'command'].join('.');
     return this.consume(queue, (message: Message) => {
       const payload = JSON.parse(message.content.toString());
       const meta = {};

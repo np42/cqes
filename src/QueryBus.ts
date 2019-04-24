@@ -43,7 +43,7 @@ export class QueryBus extends Component.Component {
   }
 
   public reply(query: Query<any>, reply: Reply<any>): Promise<void> {
-    this.logger.log('%blue [%s] %s %j', 'Reply', query.view, reply.status, reply.data);
+    this.logger.log('%blue [%s] %s %j', 'Reply', query.view, reply.type, reply.data);
     return this.amqp.reply(query, reply);
   }
 

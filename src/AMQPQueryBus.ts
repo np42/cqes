@@ -1,10 +1,10 @@
-import * as AMQPBus                 from './AMQPBus';
-import { Fx }                       from './Fx';
-import { Channel, Message }         from 'amqplib';
-import { QueryBus }                 from './QueryBus';
-import { query as Query }           from './query';
-import { reply as Reply, Status }   from './reply';
-import * as uuid                    from 'uuid';
+import * as AMQPBus            from './AMQPBus';
+import { Fx }                  from './Fx';
+import { Channel, Message }    from 'amqplib';
+import { QueryBus }            from './QueryBus';
+import { query as Q }          from './query';
+import { reply as R }          from './reply';
+import * as uuid               from 'uuid';
 
 export interface Config {
   name: string;
@@ -33,8 +33,7 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
     if (await super.start()) {
       this.response = <any>await this.consume(this.id, async (message: Message) => {
         const payload = JSON.parse(message.content.toString());
-        const reply   = new Reply(payload.data);
-        reply.status  = payload.status;
+        const reply   = new R(payload.type, payload.data);
         this.props.handler(message.properties.correlationId, reply);
       }, { channel: { prefetch: 100, noAck: true, exclusive: true }
          , queue: { durable: false, exclusive: true }
@@ -48,19 +47,19 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
 
   //--
 
-  public serve(view: string, handler: (query: Query<any>) => void) {
+  public serve(view: string, handler: (query: Q) => void) {
     const options = { channel: { prefetch: 10 }, queue: { durable: false } };
     const queue = [this.context, view, 'query'].join('.');
     return this.consume(queue, (message: Message) => {
       const payload = JSON.parse(message.content.toString());
-      const meta  = {};
-      const query = new Query(payload.view, payload.method, payload.data, meta);
+      const meta    = {};
+      const query   = new Q(payload.view, payload.method, payload.data, meta);
       Object.defineProperty(meta, 'amqp', { value: message });
       handler(query);
     }, options);
   }
 
-  public query(request: Query<any>, timeout = 30): Promise<string> {
+  public query(request: Q, timeout = 30): Promise<string> {
     const id      = uuid.v4();
     const options = { replyTo: this.id, correlationId: id, persistent: false
                     , channel: { durable: false }
@@ -74,7 +73,7 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
     });
   }
 
-  public async reply(query: Query<any>, reply: Reply<any>): Promise<void> {
+  public async reply(query: Q, reply: R): Promise<void> {
     const message = query.meta.amqp;
     if (message == null) return this.logger.error('Unable to reply AMQP Message: not found');
     const payload = Buffer.from(JSON.stringify(reply));

@@ -34,9 +34,11 @@ export class Bus extends Component.Component {
   }
 
   public async start() {
-    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
+    this.logger.debug('Starting QueryBus', this.context);
     if (await this.query.start()) {
+      this.logger.debug('Starting EventBus', this.context);
       if (await this.event.start()) {
+        this.logger.debug('Starting CommandBus', this.context);
         if (await this.command.start()) {
           return true;
         } else {

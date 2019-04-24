@@ -9,11 +9,11 @@ import { Gateway }        from './Gateway';
 import { Repository }     from './Repository';
 import { Factory }        from './Factory';
 
-import { hostname, userInfo } from 'os';
-import { readFile }           from 'fs';
-import * as fs                from 'fs';
-import { join, dirname }      from 'path';
-import merge                  from './merge';
+import { hostname, userInfo }      from 'os';
+import { readFile }                from 'fs';
+import * as fs                     from 'fs';
+import { join, dirname, basename } from 'path';
+import merge                       from './merge';
 
 const yaml                    = require('js-yaml');
 
@@ -154,18 +154,26 @@ export class Process extends Component.Component {
   }
 
   private getModuleService(context: string, name: string): any {
-    return [ ['CommandHandler', 'Factory']
-           , ['Repository', 'Factory']
-           , ['Gateway', 'Factory']
+    return [ [['CommandHandler', 'Factory'], ['commands', 'state']]
+           , [['Repository', 'Factory'], ['queries', 'replies', 'state']]
+           , [['Gateway', 'Factory'], ['state']]
            ].reduce((children, types) => {
       if (children != null) return children;
-      return types.reduce((children, type) => {
+      const result = types[0].reduce((children, type) => {
         const path = join(this.rootpath, context, name, type);
         const part = Process.safeRequire(path);
         if (part == null) return children;
         this.logger.log('Found %s.%s %s', context, name, type);
-        return { ...<any>children, [type]: part[type] };
-      }, children);
+        if (part[name + type] == null) this.logger.warn('Missing %s in %s', name + type, path);
+        return { ...<any>children, [type]: part[name + type] };
+      }, null);
+      if (result == null) return result;
+      return ['../events'].concat(types[1]).reduce((ios, io) => {
+        const path = join(this.rootpath, context, name, io);
+        const types = Process.safeRequire(path);
+        if (types) ios[basename(io)] = types;
+        return ios;
+      }, result);
     }, null);
   }
 
@@ -176,7 +184,7 @@ export class Process extends Component.Component {
       for (const name in ns.children) {
         const children = ns.children[name];
         const props    = { context, name, ...ns.props[name], bus: ns.bus };
-        const module   = new Module(props, children);
+        const module   = new Module(props, <any>children);
         this.modules.set(context + '.' + name, module);
       }
     }
@@ -194,9 +202,11 @@ export class Process extends Component.Component {
 
   public async start() {
     this.logger.log('%yellow', '==========  Starting  Services  ==========');
-    for (const [name, module] of this.modules)
+    for (const [name, module] of this.modules) {
+      this.logger.log('Starting %s', name);
       if (!await module.start())
         this.logger.error('Unable to start module %s', name);
+    }
     for (const name in this.contexts)
       await this.contexts[name].bus.start();
     this.logger.log('%green',  '========== All Services started ==========');

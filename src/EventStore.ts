@@ -7,6 +7,8 @@ import * as fs        from 'fs';
 import { createHash } from 'crypto';
 import { v4 as uuid } from 'uuid';
 
+// TODO: implement BTree (ex: https://github.com/oscarlab/betrfs)
+
 export interface props extends Component.props {
   net?:     { allowHalfOpen?: boolean, pauseOnConnect?: boolean };
   address?: string | number;
@@ -276,7 +278,7 @@ export class EventStore extends Component.Component {
           subscription.status = SubscriptionStatus.Running;
         if (item.stream === stream)
           await handler(item.id, item.revision, item.date, item.payload);
-      });
+      }, start);
       subscription.status = SubscriptionStatus.Running;
     }
   }
@@ -414,12 +416,12 @@ export class EventStore extends Component.Component {
 
   protected readDB(iterator: DBIterator, start?: number): Promise<{ count: number, rest: number }> {
     if (!(start >= 0)) start = 0;
+    if (this.cursor > 0 && start === this.cursor) return Promise.resolve({ count: 0, rest: 0 });
     return new Promise((resolve, reject) => {
       const stream = fs.createReadStream(this.props.db + '.evt', { start, autoClose: true });
       let count = 0;
       let rest = EMPTY;
       stream.on('data', async (chunk: Buffer) => {
-        count += chunk.length;
         stream.pause();
         const data = Buffer.concat([rest, chunk]);
         const result = this.parseChunk(EVENT_FIELDS, data, start + count);
@@ -431,6 +433,7 @@ export class EventStore extends Component.Component {
           reject(e);
         }
         rest = result.rest;
+        count += chunk.length;
         stream.resume();
       });
       stream.on('error', error => {

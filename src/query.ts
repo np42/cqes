@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 
-export class query<A> {
+export class query<A = any> {
   public view:      string;
   public method:    string;
   public createdAt: Date;

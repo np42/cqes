@@ -1,28 +1,19 @@
-import { state } from './state';
+export class reply<A = any> {
+  public type: 'Error' | string;
+  public data: A;
 
-export enum Status { Resolved = 'resolve', Rejected = 'reject' }
-
-export class reply<A> {
-  public status: Status;
-  public data:   any;
-
-  constructor(data?: A, error?: any) {
-    if (data != null) {
-      this.status = Status.Resolved;
-      this.data   = data instanceof state ? data.data : data;
-    } else {
-      this.status = Status.Rejected;
-      this.data   = String(error);
-    }
+  constructor(type: string, data: A) {
+    this.type = type;
+    this.data = data;
   }
 
   assert(): A {
-    if (this.status == Status.Rejected) throw this.data;
+    if (this.type === 'Error') throw this.data;
     return this.data;
   }
 
   get(): A {
-    if (this.status == Status.Rejected) return null;
+    if (this.type === 'Error') return null;
     return this.data;
   }
 }

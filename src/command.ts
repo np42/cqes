@@ -1,4 +1,4 @@
-export class command<A> {
+export class command<A = any> {
   public type:      string;
   public id:        string;
   public order:     string;

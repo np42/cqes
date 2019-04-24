@@ -1,13 +1,13 @@
 import { event }  from './event';
 import merge      from './merge';
 
-export class state<A> {
+export class state<A = any> {
   public type:      string;
   public id:        string;
   public revision:  number;
   public data:      A;
 
-  constructor(id: string, revision?: number, data?: A) {
+  constructor(id: string, revision: number, data: A) {
     this.type     = this.constructor.name;
     this.id       = id;
     this.revision = revision >= 0 ? revision : -1;

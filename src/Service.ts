@@ -3,11 +3,13 @@ import * as Factory   from './Factory';
 import * as Bus       from './Bus';
 
 export interface props extends Component.props {
-  bus: Bus.Bus;
+  bus:     Bus.Bus;
 }
 
 export interface children extends Component.children {
   Factory?: { new (p: Factory.props, c: Factory.children): Factory.Factory };
+  events?: { [name: string]: { new (data: any): any } }
+  state?:  { [name: string]: { new (data: any): any } }
 }
 
 export class Service extends Component.Component {
@@ -17,8 +19,10 @@ export class Service extends Component.Component {
   constructor(props: props, children: children) {
     super(props, children);
     this.bus     = props.bus;
-    if ('Factory' in children)
-      this.factory = this.sprout('Factory', Factory, { bus: this.bus });
+    if ('Factory' in children) {
+      const { events, state } = children;
+      this.factory = this.sprout('Factory', Factory, { bus: this.bus, events, state });
+    }
   }
 
   public start(): Promise<boolean> {

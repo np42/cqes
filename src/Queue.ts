@@ -24,7 +24,7 @@ export class Queue {
   }
 
   public drain() {
-    while (this.pending.length > 0) {
+    while (this.running && this.pending.length > 0) {
       const item = this.pending.shift();
       try {
         const result = item.handler.apply(item.context, item.args);

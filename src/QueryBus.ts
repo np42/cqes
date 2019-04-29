@@ -1,6 +1,6 @@
-import * as Component         from './Component';
-import { query as Query }     from './query';
-import { reply as Reply }     from './reply';
+import * as Component       from './Component';
+import { query as Q }       from './query';
+import { reply as R }       from './reply';
 import * as AMQPQueryBus    from './AMQPQueryBus';
 
 interface Session {
@@ -22,18 +22,18 @@ export class QueryBus extends Component.Component {
     super({ ...props, type: 'amqp', color: 'blue' }, children);
     this.gcInterval = null;
     this.pending    = new Map();
-    const handler   = (id: string, reply: Reply<any>) => this.handleReply(id, reply);
+    const handler   = (id: string, reply: R) => this.handleReply(id, reply);
     this.amqp       = new AMQPQueryBus.AMQPQueryBus({ ...this.props, ...props.AMQP, handler });
   }
 
-  public serve(view: string, handler: (query: Query<any>) => void): boolean {
+  public serve(view: string, handler: (query: Q) => void): boolean {
     this.logger.log('%blue %s', 'Serve', view);
     this.amqp.serve(view, handler);
     return true;
   }
 
-  public async request(view: string, method: string, data: any, meta?: any): Promise<Reply<any>> {
-    const request = new Query(view, method, data, meta);
+  public async request(view: string, method: string, data: any, meta?: any): Promise<R> {
+    const request = new Q(view, null, method, data, meta);
     const timeout = 30;
     this.logger.log('%blue %s -> %s %j', 'Query', view, method, data);
     const id = await this.amqp.query(request, timeout);
@@ -42,12 +42,12 @@ export class QueryBus extends Component.Component {
     });
   }
 
-  public reply(query: Query<any>, reply: Reply<any>): Promise<void> {
+  public reply(query: Q, reply: R): Promise<void> {
     this.logger.log('%blue [%s] %s %j', 'Reply', query.view, reply.type, reply.data);
     return this.amqp.reply(query, reply);
   }
 
-  public handleReply(id: string, reply: Reply<any>) {
+  public handleReply(id: string, reply: R) {
     const session = this.pending.get(id);
     if (session == null) return this.logger.warn('Reply lost: %j', reply);
     this.pending.delete(id);
@@ -65,7 +65,7 @@ export class QueryBus extends Component.Component {
       expired.push(key);
     }
     for (const key of expired) {
-      this.pending.get(key).resolve(new Reply(null, 'Timed out'));
+      this.pending.get(key).resolve(new R('Error', new Error('Timed out')));
       this.pending.delete(key);
     }
   }

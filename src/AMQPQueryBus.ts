@@ -53,7 +53,7 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
     return this.consume(queue, (message: Message) => {
       const payload = JSON.parse(message.content.toString());
       const meta    = {};
-      const query   = new Q(payload.view, payload.method, payload.data, meta);
+      const query   = new Q(payload.view, null, payload.method, payload.data, meta);
       Object.defineProperty(meta, 'amqp', { value: message });
       handler(query);
     }, options);

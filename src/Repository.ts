@@ -3,6 +3,7 @@ import { deserialize } from "serializer.ts/Serializer";
 
 import { query as Q } from './query';
 import { reply as R } from './reply';
+import { state as S } from './state';
 
 export interface props    extends Gateway.props {
   queries?: { [name: string]: { new (data: any): any } }
@@ -22,26 +23,28 @@ export class Repository extends Gateway.Gateway {
 
   public async start() {
     this.bus.query.serve(this.name, async query => {
-      const qtype = this.queries[query.view];
+      const qtype = this.queries[query.method];
       if (qtype == null) {
         this.logger.error('No type for %j', query);
         const reply = new R('Error', new Error('Query type is missing'));
         return this.bus.query.reply(query, reply);
       } else {
+        const id = query.id;
         query.data = deserialize(qtype, query.data);
-        const reply = await this.resolve(query);
+        const state = this.factory ? await this.factory.get(id) : new S(id, -1, null);
+        const reply = await this.resolve(state, query);
         return this.bus.query.reply(query, reply);
       }
     });
     return super.start();
   }
 
-  public async resolve(query: Q): Promise<R> {
+  public async resolve(state: S, query: Q): Promise<R> {
     const method = 'resolve' + query.method;
     if (method in this) {
       this.logger.log('Resolving %s -> %s', query.view, query.method);
       try {
-        const reply = await this[method](query);
+        const reply = await this[method](state, query);
         if (reply instanceof R) return reply;
         return new R(reply.constructor.name, reply);
       } catch (error) {

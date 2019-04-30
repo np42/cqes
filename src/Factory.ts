@@ -77,16 +77,7 @@ export class Factory extends Component.Component {
     } else {
       this.logger.warn('%s skip %s: %j', state.key, event.name, event.data);
     }
-    if (newState.revision >= 0) {
-      const diff = newState.revision - revision;
-      if (diff === 0) {
-        this.logger.debug('State %s@%s not changed', newState.revision, newState.key);
-      } else {
-        this.logger.debug('State %s@%s changed +%s', newState.revision, newState.key, diff);
-      }
-    } else {
-      this.logger.debug('State %s destroyed', newState.key);
-    }
+    newState.revision = state.revision + 1;
     return newState;
   }
 

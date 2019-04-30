@@ -216,7 +216,7 @@ export class Process extends Component.Component {
     }
   }
 
-  private bindDependencies() {
+  private injectDependencies() {
     for (const context in this.contexts) {
       const ns = this.contexts[context];
       for (const module in ns.dependencies) {
@@ -249,7 +249,7 @@ export class Process extends Component.Component {
     await this.loadProps();
     await this.loadModules();
     this.createInstances();
-    this.bindDependencies();
+    this.injectDependencies();
     return this.start();
   }
 

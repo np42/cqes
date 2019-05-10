@@ -4,11 +4,11 @@ import { v4 as uuid } from 'uuid';
 export class Value {
   public static _value = <typeof Value>null;
 
-  public static Set() { return _Set.from(this); }
-  public static Array() { return _Array.from(this); }
-  public static Map(index: any) { return _Map.from(index, this); }
+  public static Set() { return _Set.of(this); }
+  public static Array() { return _Array.of(this); }
+  public static Map(index: any) { return _Map.of(index, this); }
 
-  public static from(model?: any, ...rest: any[]) {
+  public static of(model?: any, ...rest: any[]) {
     if (model && model.prototype instanceof Value) {
       return model;
     } else {
@@ -18,9 +18,9 @@ export class Value {
     }
   }
 
-  public static parse(data: any): any {
+  public static from(data: any): any {
     if (this._value && this._value.prototype instanceof Value) {
-      return this._value.parse(data);
+      return this._value.from(data);
     } else {
       return null;
     }
@@ -31,7 +31,7 @@ export class Value {
 // Boolean
 export class _Boolean extends Value {
 
-  public static parse(value: any) {
+  public static from(value: any) {
     return !!value;
   }
 
@@ -40,7 +40,8 @@ export class _Boolean extends Value {
 // Number
 export class _Number extends Value {
 
-  public static parse(value: any) {
+  public static from(value: any) {
+    if (value == null) return null;
     return parseFloat(value);
   }
 
@@ -49,7 +50,8 @@ export class _Number extends Value {
 // String
 export class _String extends Value {
 
-  public static parse(value: any) {
+  public static from(value: any) {
+    if (value == null) return null;
     return String(value);
   }
 
@@ -60,15 +62,15 @@ export class Enum extends Value {
 
   public static _either = new Set();
 
-  public static parse(value: any) {
-    if (this._either.has(value)) return value;
-    return null;
-  }
-
-  public static from(...args: any[]) {
+  public static of(...args: any[]) {
     const _enum = class extends this {};
     _enum._either = new Set(args);
     return _enum;
+  }
+
+  public static from(value: any) {
+    if (this._either.has(value)) return value;
+    return null;
   }
 
 }
@@ -76,8 +78,8 @@ export class Enum extends Value {
 // Date
 export class _Date extends Value {
 
-  public static parse(value: any) {
-    return super.parse(value);
+  public static from(value: any) {
+    return super.from(value);
   }
 
 }
@@ -85,8 +87,8 @@ export class _Date extends Value {
 // Time
 export class _Time extends Value {
 
-  public static parse(value: any) {
-    return super.parse(value);
+  public static from(value: any) {
+    return super.from(value);
   }
 
 }
@@ -103,14 +105,14 @@ export class Record extends Value {
 
   public static _object = <{ [name: string]: typeof Value }>{};
 
-  public static from<T extends CRecord>(this: T, model: any): T {
+  public static of<T extends CRecord>(this: T, model: any): T {
     const object = class extends this {};
     object._object = {};
     for (const field in model) {
       if (model[field] instanceof Array)
-        object._object[field] = Value.from(...model[field]);
+        object._object[field] = Value.of(...model[field]);
       else
-        object._object[field] = Value.from(model[field]);
+        object._object[field] = Value.of(model[field]);
     }
     return object;
   }
@@ -118,34 +120,34 @@ export class Record extends Value {
   public static add<T extends CRecord>(this: T, field: string, ...args: any[]): T {
     const object = class extends this {};
     object._object = { ...this._object };
-    object._object[field] = Value.from(...args);
+    object._object[field] = Value.of(...args);
     return object;
   }
 
-  public static parse(data: any) {
+  public static from(data: any) {
     if (!(data && data instanceof Object)) data = {};
     const record = <any>new this();
     for (const field in this._object)
-      record[field] = this._object[field].parse(data[field]);
+      record[field] = this._object[field].from(data[field]);
     return record;
   }
 
 }
 
 // Entity
-
 export class Entity extends Record {
 
   public static _object = <{ [name: string]: typeof Value }>{ ID: _String };
 
   public static ID() { return _String; }
+  public static ByID() { return _Map.of(this.ID(), this); }
 
   public ID: string;
 
-  public static parse(data: any) {
+  public static from(data: any) {
     if (data == null) data = {};
     if (data.ID == null) data.ID = uuid();
-    return super.parse(data);
+    return super.from(data);
   }
 
 }
@@ -162,14 +164,14 @@ export class _Set extends Value {
 
   public static _subtype = <any>null;
 
-  public static parse(data: any) {
-    return new Set(data);
-  }
-
-  public static from(type: any) {
+  public static of(type: any) {
     const set = class extends _Set {};
     set._subtype = type;
     return set;
+  }
+
+  public static from(data: any) {
+    return new Set(data);
   }
 
 }
@@ -179,14 +181,14 @@ export class _Array extends Value {
 
   public static _subtype = <any>null;
 
-  public static parse(data: any) {
-    return new Array(data);
-  }
-
-  public static from(type: any) {
+  public static of(type: any) {
     const array = class extends this {};
     array._subtype = type;
     return array;
+  }
+
+  public static from(data: any) {
+    return new Array(data);
   }
 
 }
@@ -197,21 +199,20 @@ export class _Map extends Value {
   public static _index   = <any>null;
   public static _subtype = <any>null;
 
-  public static parse(data: any) {
-    const map = new Map();
-    if (data == null) return map;
-    for (const [key, value] of data) {
-      debugger;
-      map.set(this._index.parse(key), this._subtype.parse(value));
-    }
-    return new Map(map);
-  }
-
-  public static from(index: any, value?: any) {
+  public static of(index: any, value?: any) {
     const map = class extends this {};
     map._index = index;
     map._subtype = value;
     return map;
+  }
+
+  public static from(data: any) {
+    const map = new Map();
+    if (data == null) return map;
+    for (const [key, value] of data) {
+      map.set(this._index.from(key), this._subtype.from(value));
+    }
+    return new Map(map);
   }
 
 }

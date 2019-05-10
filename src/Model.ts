@@ -41,7 +41,7 @@ export class _Boolean extends Value {
 export class _Number extends Value {
 
   public static from(value: any) {
-    if (value == null) return null;
+    if (value == null) return 0;
     return parseFloat(value);
   }
 
@@ -51,7 +51,7 @@ export class _Number extends Value {
 export class _String extends Value {
 
   public static from(value: any) {
-    if (value == null) return null;
+    if (value == null) return '';
     return String(value);
   }
 
@@ -79,7 +79,10 @@ export class Enum extends Value {
 export class _Date extends Value {
 
   public static from(value: any) {
-    return super.from(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value))
+      return String(value);
+    else
+      return '0000-00-00';
   }
 
 }
@@ -88,7 +91,10 @@ export class _Date extends Value {
 export class _Time extends Value {
 
   public static from(value: any) {
-    return super.from(value);
+    if (/^\d{2}-\d{2}-\d{2}(\.\d{3})?$/.test(value))
+      return String(value);
+    else
+      return '00:00:00';
   }
 
 }
@@ -174,6 +180,10 @@ export class _Set extends Value {
     return new Set(data);
   }
 
+  public static toJSON(this: Set<any>) {
+    return Array.from(this);
+  }
+
 }
 
 // Array
@@ -188,7 +198,14 @@ export class _Array extends Value {
   }
 
   public static from(data: any) {
-    return new Array(data);
+    if (data instanceof Array) {
+      const array = new Array(data.length);
+      for (let i = 0; i < data.length; i += 1)
+        array[i] = this._subtype.from(data[i]);
+      return array;
+    } else {
+      return [];
+    }
   }
 
 }
@@ -208,11 +225,15 @@ export class _Map extends Value {
 
   public static from(data: any) {
     const map = new Map();
+    map.toJSON = this.toJSON;
     if (data == null) return map;
-    for (const [key, value] of data) {
+    for (const [key, value] of data)
       map.set(this._index.from(key), this._subtype.from(value));
-    }
-    return new Map(map);
+    return map;
+  }
+
+  public static toJSON(this: Map<any, any>) {
+    return Array.from(this);
   }
 
 }

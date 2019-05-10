@@ -1,9 +1,8 @@
 import { v4 as uuid } from 'uuid';
-import { inspect }    from 'util';
 
 // Value
 export class Value {
-  public static _value = <Value>null;
+  public static _value = <typeof Value>null;
 
   public static Set() { return _Set.from(this); }
   public static Array() { return _Array.from(this); }
@@ -19,8 +18,12 @@ export class Value {
     }
   }
 
-  public static parse(data?: any) {
-    return data;
+  public static parse(data: any): any {
+    if (this._value && this._value.prototype instanceof Value) {
+      return this._value.parse(data);
+    } else {
+      return null;
+    }
   }
 
 }
@@ -29,7 +32,7 @@ export class Value {
 export class _Boolean extends Value {
 
   public static parse(value: any) {
-    return super.parse(!!value);
+    return !!value;
   }
 
 }
@@ -38,7 +41,7 @@ export class _Boolean extends Value {
 export class _Number extends Value {
 
   public static parse(value: any) {
-    return super.parse(parseFloat(value));
+    return parseFloat(value);
   }
 
 }
@@ -47,7 +50,7 @@ export class _Number extends Value {
 export class _String extends Value {
 
   public static parse(value: any) {
-    return super.parse('' + value);
+    return String(value);
   }
 
 }
@@ -55,10 +58,11 @@ export class _String extends Value {
 // Enum
 export class Enum extends Value {
 
-  public static _either = <Set<any>>null;
+  public static _either = new Set();
 
   public static parse(value: any) {
-    super.parse(value);
+    if (this._either.has(value)) return value;
+    return null;
   }
 
   public static from(...args: any[]) {
@@ -87,13 +91,79 @@ export class _Time extends Value {
 
 }
 
+//----------------------------------------------------------
+
+// Record
+interface CRecord {
+  new (...a: any[]): Record;
+  _object: { [name: string]: typeof Value };
+}
+
+export class Record extends Value {
+
+  public static _object = <{ [name: string]: typeof Value }>{};
+
+  public static from<T extends CRecord>(this: T, model: any): T {
+    const object = class extends this {};
+    object._object = {};
+    for (const field in model) {
+      if (model[field] instanceof Array)
+        object._object[field] = Value.from(...model[field]);
+      else
+        object._object[field] = Value.from(model[field]);
+    }
+    return object;
+  }
+
+  public static add<T extends CRecord>(this: T, field: string, ...args: any[]): T {
+    const object = class extends this {};
+    object._object = { ...this._object };
+    object._object[field] = Value.from(...args);
+    return object;
+  }
+
+  public static parse(data: any) {
+    if (!(data && data instanceof Object)) data = {};
+    const record = <any>new this();
+    for (const field in this._object)
+      record[field] = this._object[field].parse(data[field]);
+    return record;
+  }
+
+}
+
+// Entity
+
+export class Entity extends Record {
+
+  public static _object = <{ [name: string]: typeof Value }>{ ID: _String };
+
+  public static ID() { return _String; }
+
+  public ID: string;
+
+  public static parse(data: any) {
+    if (data == null) data = {};
+    if (data.ID == null) data.ID = uuid();
+    return super.parse(data);
+  }
+
+}
+
+// Aggregate
+export class Aggregate extends Entity {
+
+}
+
+// ------------------------------------------
+
 // Set
 export class _Set extends Value {
 
   public static _subtype = <any>null;
 
-  public static parse(value: any) {
-    return super.parse(new Set(value));
+  public static parse(data: any) {
+    return new Set(data);
   }
 
   public static from(type: any) {
@@ -109,8 +179,8 @@ export class _Array extends Value {
 
   public static _subtype = <any>null;
 
-  public static parse(array: any) {
-    return super.parse(new Array(array));
+  public static parse(data: any) {
+    return new Array(data);
   }
 
   public static from(type: any) {
@@ -124,11 +194,17 @@ export class _Array extends Value {
 // Map
 export class _Map extends Value {
 
-  public static _index = <any>null;
-  public static _subtype  = <any>null;
+  public static _index   = <any>null;
+  public static _subtype = <any>null;
 
-  public static  parse(data?: any) {
-    return super.parse(new Map(data));
+  public static parse(data: any) {
+    const map = new Map();
+    if (data == null) return map;
+    for (const [key, value] of data) {
+      debugger;
+      map.set(this._index.parse(key), this._subtype.parse(value));
+    }
+    return new Map(map);
   }
 
   public static from(index: any, value?: any) {
@@ -139,101 +215,3 @@ export class _Map extends Value {
   }
 
 }
-
-
-//----------------------------------------------------------
-// Record
-class RecordInstance {
-
-  constructor(data?: any) {
-    const self   = <typeof Record>this.constructor;
-    const object = self._object;
-    for (const field in object) {
-      if (object[field].prototype instanceof Value) {
-        this[field] = (<typeof Value>object[field]).parse(data[field]);
-      } else {
-        this[field] = (new (<typeof Record>object[field])(data[field]));
-      }
-    }
-  }
-
-}
-
-export class Record extends RecordInstance {
-
-  public static _object = <{ [name: string]: typeof Value | typeof Record }>{};
-
-  public static Set() { return _Set.from(this); }
-  public static Array() { return _Array.from(this); }
-  public static Map(index: any) { return _Map.from(index, this); }
-
-  public static from(model: any): typeof Record {
-    const object = class extends this {};
-    object._object = {};
-    for (const name in model)
-      object._object[name] = Value.from(model[name]);
-    return object;
-  }
-
-  public static add(field: string, ...args: any[]): typeof Record {
-    const object = class extends this {};
-    object._object = { ...this._object };
-    object._object[field] = Value.from(...args);
-    return object;
-  }
-
-}
-
-// Entity
-
-class EntityInstance extends RecordInstance {
-  public ID: string;
-
-  constructor(data?: any) {
-    if (data == null) data = {};
-    if (data.ID == null) data.ID = uuid();
-    super(data);
-  }
-
-}
-
-export class Entity extends EntityInstance {
-
-  public static _object = <{ [name: string]: Value }>{ ID: <any>_String };
-
-  public static ID() { return _String; }
-  public static Set() { return _Set.from(this); }
-  public static Array() { return _Array.from(this); }
-  public static Map(index: any) { return _Map.from(index, this); }
-
-  public static from(model: any): typeof Entity {
-    return Record.from.call(this, model);
-  }
-
-  public static add(field: string, ...args: any[]): typeof Entity {
-    debugger;
-    return Record.add.call(this, field, ...args);
-  }
-
-}
-
-// Aggregate
-class AggregateInstance extends EntityInstance {
-
-}
-
-export class Aggregate extends AggregateInstance {
-  public static _object = <{ [name: string]: Value }>{ ID: <any>_String };
-
-  public static ID() { return _String; }
-
-  public static from(model: any): typeof Aggregate {
-    return Entity.from.call(this, model);
-  }
-
-  public static add(field: string, ...args: any[]): typeof Aggregate {
-    return Entity.add.call(this, field, ...args);
-  }
-
-}
-

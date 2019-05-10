@@ -9,7 +9,7 @@ export interface props extends Component.props {
 export interface children extends Component.children {}
 
 interface EventHandler {
-  (id: string, revision: number, event: Array<Event<any>>): Promise<void>
+  (id: string, revision: number, event: Array<Event<any>>, date: number): Promise<void>
 }
 
 export class EventBus extends Component.Component {
@@ -32,7 +32,7 @@ export class EventBus extends Component.Component {
     this.logger.log('%green %s', 'Subscribe', stream);
     return this.es.subscribe(stream, async (id, revision, date, payload) => {
       const events = EventBus.parse(payload.toString());
-      return handler(id, revision, events);
+      return handler(id, revision, events, date);
     }, position);
   }
 
@@ -40,7 +40,7 @@ export class EventBus extends Component.Component {
     this.logger.log('%green %s.%s', 'PSubscribe', stream, name);
     return this.es.psubscribe(name, stream, async (id, revision, date, payload) => {
       const events = EventBus.parse(payload.toString());
-      return handler(id, revision, events);
+      return handler(id, revision, events, date);
     });
   }
 

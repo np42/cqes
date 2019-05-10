@@ -19,7 +19,7 @@ export class Gateway extends Service.Service {
 
   public async start() {
     if (this.factory == null) {
-      this.bus.event.psubscribe(this.name, this.context, async (id, revision, events) => {
+      this.bus.event.psubscribe(this.name, this.context, async (id, revision, events, date) => {
         const state = new S(id, -1, null);
         for (const event of events) {
           const type = this.events[event.name];
@@ -28,6 +28,7 @@ export class Gateway extends Service.Service {
             throw new Error('Event type is missing');
           } else {
             event.data = deserialize(type, event.data);
+            event.meta = { createdAt: new Date(date), ...event.meta };
             return this.on(state, event)
           }
         }

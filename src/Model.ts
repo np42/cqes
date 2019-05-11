@@ -1,6 +1,25 @@
 import { v4 as uuid } from 'uuid';
 
 // Value
+interface CValue {
+  new (...a: any[]): Value;
+  _value   : typeof Value;
+  _optional: boolean;
+  _checks  : Array<{ test: (a: any) => boolean }>;
+  _cleaners: Array<(a: any) => any>;
+  Set: _Set;
+  Array: _Array;
+  Map(index: any): _Map;
+  clone(): this;
+  of(...a: any[]): this;
+  opt: this;
+  addCleaner(...a: any[]): this;
+  addCheck(...a: any[]): this;
+  default(...a: any[]): any;
+  validate(...a: any[]): any;
+  from(a: any): any;
+}
+
 export class Value {
   public static _value    = <typeof Value>null;
   public static _optional = false;
@@ -21,7 +40,7 @@ export class Value {
     }
   }
 
-  public static clone() {
+  public static clone<T extends CValue>(this: T) {
     const value = class extends this {};
     value._value    = this._value;
     value._optional = this._optional;
@@ -30,19 +49,19 @@ export class Value {
     return value;
   }
 
-  public static get opt() {
+  public static get opt(): CValue {
     const value = this.clone();
     value._optional = true;
     return value;
   }
 
-  public static addClener(cleaner: (a: any) => any) {
+  public static addCleaner<T extends CValue>(this: T, cleaner: (a: any) => any): T {
     const value = this.clone();
     value._cleaners.push(cleaner);
     return value;
   }
 
-  public static addCheck(check: any) {
+  public static addCheck<T extends CValue>(this: T, check: any): T {
     const value = this.clone();
     if (typeof check === 'function')
       value._checks.push({ test: check });
@@ -187,18 +206,25 @@ export class Enum extends Value {
 //----------------------------------------------------------
 
 // Record
-interface CRecord {
+
+interface CRecord extends CValue {
   new (...a: any[]): Record;
   _object: { [name: string]: typeof Value };
+  add(field: string, type: any): this;
 }
 
 export class Record extends Value {
 
   public static _object = <{ [name: string]: typeof Value }>{};
 
-  public static of<T extends CRecord>(this: T, model: any): T {
-    const object = class extends this {};
-    object._object = {};
+  public static clone<T extends CRecord>(this: T): T {
+    const record = super.clone();
+    record._object = { ...this._object };
+    return record;
+  }
+
+  public static of(model: any) {
+    const object = this.clone();
     for (const field in model) {
       if (model[field] instanceof Array)
         object._object[field] = Value.of(...model[field]);
@@ -209,8 +235,7 @@ export class Record extends Value {
   }
 
   public static add<T extends CRecord>(this: T, field: string, type: any): T {
-    const object = class extends this {};
-    object._object = { ...this._object };
+    const object = this.clone();
     object._object[field] = Value.of(type);
     return object;
   }
@@ -246,6 +271,11 @@ export class Entity extends Record {
 
 // Aggregate
 export class Aggregate extends Entity {
+
+  public static get Set(): never { throw new Error('Forbidden'); }
+  public static get Array(): never { throw new Error('Forbidden'); }
+  public static Map(index: any): never { throw new Error('Forbidden'); }
+  public static get ByID(): never { throw new Error('Forbidden'); }
 
 }
 

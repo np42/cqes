@@ -16,6 +16,8 @@ const PROJECT_DEFAULT = { libpath: 'dist', servicepath: '%r/%l/%s/%t.js', servic
 const SERVICE_DEFAULT = { name: 'World' };
 const AMQP_DEFAULT    = 'amqp://guest:guest@localhost/';
 
+function exit() { process.exit() }
+
 export class Process extends Component.Component {
   protected config:      any;
   protected rootpath:    string;
@@ -134,11 +136,13 @@ export class Process extends Component.Component {
     if (process == null)
       return this.logger.error('Process group "%s" not found', group);
     for (const name in process) {
+      if (name == '_all') continue ;
       const serviceConfig   = process[name];
       const serviceName     = serviceConfig.service || name;
       const project         = merge(PROJECT_DEFAULT, this.config.Project, MERGE_OPTIONS);
       const serviceTemplate = { name, service: serviceName, ...this.config.Service[serviceName] };
-      const config = <any>merge.all( [SERVICE_DEFAULT, project, serviceTemplate, serviceConfig]
+      const common = process._all;
+      const config = <any>merge.all( [SERVICE_DEFAULT, project, serviceTemplate, common, serviceConfig]
                                    , MERGE_OPTIONS
                                    );
       this.logger.log('%s Loading Custom Service: %cyan', group, name);

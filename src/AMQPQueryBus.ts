@@ -84,9 +84,10 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus implements QueryBus {
   }
 
   public query(request: OutQuery, timeout = 30): Promise<Reply> {
+    const prefix  = this.props.ns ? this.props.ns + '.' : '';
     const options = { queue: this.id, replyTo: this.id, correlationId: uuid.v4(), persistent: false };
     const offset  = request.view.indexOf('-');
-    const topic   = offset > 0 ? request.view.substr(0, offset) : request.view;
+    const topic   = prefix + (offset > 0 ? request.view.substr(0, offset) : request.view);
     const promise = new Promise(resolve => {
       const session = { expiresAt: Date.now() + (timeout * 1000), resolve };
       (<any>options).expiration = String(timeout * 1000);

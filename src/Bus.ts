@@ -15,9 +15,10 @@ import { Query, InQuery, OutQuery }              from './Query';
 import { Reply }                                 from './Reply';
 
 export interface Props {
-  name: string;
-  Command: CommandBusConfig;
-  Query: QueryBusConfig;
+  name:     string;
+  Command:  CommandBusConfig;
+  Query:    QueryBusConfig;
+  Service?: { ns?: string };
 }
 
 export interface Children {}
@@ -29,8 +30,9 @@ export class Bus {
 
   constructor(props: Props, children: Children) {
     this.logger     = new Logger(props.name + '.Bus', 'white');
-    this.commandBus = new xCommandBus({ name: props.name, ...props.Command });
-    this.queryBus   = new xQueryBus({ name: props.name, ...props.Query });
+    const ns = props.Service && props.Service.ns || '';
+    this.commandBus = new xCommandBus({ name: props.name, ...props.Command, ns });
+    this.queryBus   = new xQueryBus({ name: props.name, ...props.Query, ns });
   }
 
   public async start() {

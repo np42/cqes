@@ -11,6 +11,7 @@ import { Query, InQuery }                 from './Query';
 import { Reply }                          from './Reply';
 
 export interface Props extends Component.Props {
+  ns?:         string;
   listen?:     Array<string>;
   serve?:      Array<string>;
   Debouncer?:  Debouncer.Props;
@@ -58,7 +59,10 @@ export class Service extends Component.Component {
       const hasHandleMethod = handlerProps.filter(m => /^handle([A-Z]|$)/.test(m)).length > 0;
       if (hasHandleMethod) {
         const variants = (this.props.listen || []).map((variant: string) => this.props.name + '.' + variant);
-        [this.props.name].concat(variants).forEach((channel: string) => {
+        [this.props.name].concat(variants).map((channel: string) => {
+          if (this.props.ns != null) return this.props.ns + '.' + channel;
+          return channel;
+        }).forEach((channel: string) => {
           this.logger.log('Listening %s.Command', channel);
           this.bus.listen(channel, async (command: InCommand) => {
             this.debouncer.satisfy(command, command => {
@@ -74,7 +78,10 @@ export class Service extends Component.Component {
       const hasResolveMethod = handlerProps.filter(m => /^resolve([A-Z]|$)/.test(m)).length > 0;
       if (hasResolveMethod) {
         const variants = (this.props.serve || []).map((variant: string) => this.props.name + '.' + variant);
-        [this.props.name].concat(variants).forEach((channel: string) => {
+        [this.props.name].concat(variants).map((channel: string) => {
+          if (this.props.ns != null) return this.props.ns + '.' + channel;
+          return channel;
+        }).forEach((channel: string) => {
           this.logger.log('Serving %s.Query', this.props.name);
           this.bus.serve(this.props.name, async (query: InQuery) => {
             this.throttler.satisfy(query, query => {

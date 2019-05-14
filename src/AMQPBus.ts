@@ -14,6 +14,7 @@ type FxChannel = Fx<amqp.Connection, amqp.Channel>;
 export interface Props {
   name: string;
   url: string;
+  ns: string;
   consumer?: { channel: PropsChannel, queue: PropsQueue };
   replier?: PropsReplier
 };

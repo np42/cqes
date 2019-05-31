@@ -1,361 +1,428 @@
 import { v4 as uuid } from 'uuid';
 
+const xModel = Symbol('Model');
+
 // Value
-interface CValue {
-  new (...a: any[]): Value;
-  _value   : typeof Value;
+export interface IValue {
+  new (): this;
+  (): void;
+  _value: any;
   _optional: boolean;
-  _checks  : Array<{ test: (a: any) => boolean }>;
-  _cleaners: Array<(a: any) => any>;
-  Set: _Set;
-  Array: _Array;
-  Map(index: any): _Map;
-  clone(): this;
+  _checks: Array<any>;
+  _cleaners: Array<any>;
+  Set: ISet;
+  __get_Set(): ISet;
+  Array: IArray;
+  __get_Array: IArray;
+  Map(index: any): IMap;
+  extends(type: Function): this;
   of(...a: any[]): this;
-  opt: this;
-  addCleaner(...a: any[]): this;
-  addCheck(...a: any[]): this;
-  default(...a: any[]): any;
-  validate(...a: any[]): any;
-  from(a: any): any;
+  addCheck(check: any): this;
+  opt(): this;
+  from(data: any): any;
 }
 
-export class Value {
-  public static _value    = <typeof Value>null;
-  public static _optional = false;
-  public static _checks   = <Array<{ test: (a: any) => boolean }>>[];
-  public static _cleaners = <Array<(a: any) => any>>[];
+export const Value = <IValue>function Value() {};
+Value[xModel]   = true;
+Value._value    = null;
+Value._optional = false;
+Value._checks   = <any[]>new Array();
+Value._cleaners = <any[]>new Array();
 
-  public static get Set() { return _Set.of(this); }
-  public static get Array() { return _Array.of(this); }
-  public static Map(index: any) { return _Map.of(index, this); }
+Object.defineProperty(Value, 'Set', { get: function () {
+  return this.__get_Set();
+}, enumerable: true });
+Object.defineProperty(Value, '__get_Set', { value: function () {
+  return _Set.of(this);
+}, enumerable: true, writable: true });
 
-  public static of(model?: any, ...rest: any[]) {
-    if (model && model.prototype instanceof Value) {
-      return model;
+Object.defineProperty(Value, 'Array', { get: function () {
+  return this.__get_Array();
+}, enumerable: true });
+Object.defineProperty(Value, '__get_Array', { value: function () {
+  return _Array.of(this);
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Value, 'Map', { value: function (index: any) {
+  return _Map.of(index, this);
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Value, 'extends', { value: function (constructor: Function) {
+  const value = constructor;
+  value[xModel] = true;
+  for (let key in this) {
+    const property = Object.getOwnPropertyDescriptor(this, key);
+    if ('value' in property) {
+      switch (Object.prototype.toString.call(property.value)) {
+      case '[object Array]': { value[key] = Array.from(this[key]); } break ;
+      case '[object Set]':   { value[key] = new Set(this[key]); } break ;
+      case '[object Map]':   { value[key] = new Map(this[key]); } break ;
+      default: { Object.defineProperty(value, key, property); } break ;
+      }
     } else {
-      const value = class extends this {};
-      value._value = model;
-      return value;
+      Object.defineProperty(value, key, property);
     }
   }
+  return value;
+}, enumerable: true, writable: true });
 
-  public static clone<T extends CValue>(this: T) {
-    const value = class extends this {};
-    value._value    = this._value;
-    value._optional = this._optional;
-    value._checks   = Array.from(this._checks);
-    value._cleaners = Array.from(this._cleaners);
-    return value;
-  }
+Object.defineProperty(Value, 'clone', { value: function (modifier?: (a: any) => any) {
+  const holder = { [this.name]: function () {} };
+  const value = this.extends(holder[this.name]);
+  if (modifier) modifier(value);
+  return value;
+}, enumerable: true, writable: true });
 
-  public static get opt(): CValue {
-    const value = this.clone();
-    value._optional = true;
-    return value;
-  }
+Object.defineProperty(Value, 'of', { value: function (model?: any, ...rest: any[]) {
+  if (model && model[xModel]) return model;
+  return this.clone((value: IValue) => value._value = model);
+}, enumerable: true, writable: true });
 
-  public static addCleaner<T extends CValue>(this: T, cleaner: (a: any) => any): T {
-    const value = this.clone();
-    value._cleaners.push(cleaner);
-    return value;
-  }
+Object.defineProperty(Value, 'opt', { value: function () {
+  return this.clone((value: IValue) => value._optional = true);
+}, enumerable: true, writable: true });
 
-  public static addCheck<T extends CValue>(this: T, check: any): T {
-    const value = this.clone();
+Object.defineProperty(Value, 'addCleaner', { value: function (cleaner: (a: any) => any) {
+  return this.clone((value: IValue) => value._cleaners.push(cleaner));
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Value, 'addCheck', { value: function (check: any) {
+  return this.clone((value: IValue) => {
     if (typeof check === 'function')
       value._checks.push({ test: check });
     else if (check && typeof check.test === 'function')
       value._checks.push(check);
     else
-      value._checks.push({ test: value => value === check });
-    return value;
-  }
+      value._checks.push({ test: (value: any) => value === check });
+  });
+}, enumerable: true, writable: true });
 
-  public static from(data: any): any {
-    if (this._value && this._value.prototype instanceof Value) {
-      return this._value.from(data);
-    } else {
-      return null;
-    }
+Object.defineProperty(Value, 'from', { value: function (value: any) {
+  if (this._value && this._value instanceof Value) {
+    return this._value.from(value)
+  } else {
+    return null;
   }
+}, enumerable: true, writable: true });
 
-  public static default(value?: () => any) {
-    return this._optional ? null : value && value();
+Object.defineProperty(Value, 'default', { value: function (value?: () => any) {
+  return this._optional ? null : (value || null) && value();
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Value, 'validate', { value:  function (value: any) {
+  for (let i = 0; i < this._cleaners.length; i += 1)
+    value = this._cleaners[i].call(this, value);
+  for (let i = 0; i < this._checks.length; i += 1) {
+    if (!this._checks[i].test(value))
+      throw new Error('value "' + value + '"do not satisfy checks');
   }
-
-  public static validate(value: any) {
-    for (let i = 0; i < this._cleaners.length; i += 1)
-      value = this._cleaners[i].call(this, value);
-    for (let i = 0; i < this._checks.length; i += 1) {
-      if (!this._checks[i].test(value))
-        throw new Error('value "' + value + '"do not satisfy checks');
-    }
-    return value;
-  }
-
-}
+  return value;
+}, enumerable: true, writable: true });
 
 // Boolean
-export class _Boolean extends Value.addCheck((v: any) => v === !!v)
-{
-  public static _true = new Set(['y', 'yes', 'true']);
-  public static _false = new Set(['n', 'no', 'false']);
-
-  public static from(value: any) {
-    if (value == null) return this.default(() => false);
-    switch (typeof value) {
-    case 'string': {
-      if (this._true.has(value.toLowerCase())) return this.validate(true);
-      if (this._false.has(value.toLowerCase())) return this.validate(false);
-    } break ;
-    case 'number': {
-      return this.validate(!isNaN(value) && value !== 0);
-    } break ;
-    default: {
-      return this.validate(value);
-    } break ;
-    }
-  }
-
+export interface IBoolean extends IValue {
+  _true: Set<string>;
+  _false: Set<string>;
 }
+
+export const _Boolean = <IBoolean>Value.extends(function Boolean() {})
+  .addCheck((v: any) => v === !!v);
+_Boolean._true  = new Set(['y', 'yes', 'true']);
+_Boolean._false = new Set(['n', 'no', 'false']);
+
+Object.defineProperty(_Boolean, 'from', { value: function (value: any) {
+  if (value == null) return this.default(() => false);
+  switch (typeof value) {
+  case 'string': {
+    if (this._true.has(value.toLowerCase())) return this.validate(true);
+    if (this._false.has(value.toLowerCase())) return this.validate(false);
+  } break ;
+  case 'number': {
+    return this.validate(!isNaN(value) && value !== 0);
+  } break ;
+  default: {
+    return this.validate(value);
+  } break ;
+  }
+}, enumerable: true });
 
 // Number
-export class _Number extends Value {
+export interface INumber extends IValue {}
 
-  public static from(value: any) {
-    if (value == null) return this.default(() => 0);
-    return this.validate(parseFloat(value));
-  }
+export const _Number = <INumber>Value.extends(function Number() {});
 
-}
+Object.defineProperty(_Number, 'from', { value: function (value: any) {
+  if (value == null) return this.default(() => 0);
+  return this.validate(parseFloat(value));
+}, enumerable: true });
 
 // String
-export class _String extends Value {
+export interface IString extends IValue {}
 
-  public static from(value: any) {
+export const _String = <IString>Value.extends(function String() {});
+
+Object.defineProperty(_String, 'from', { value: function (value: any) {
     if (value == null) return this.default();
     return this.validate(String(value));
-  }
+}, enumerable: true });
 
-  public static default() {
-    return super.default(() => "");
-  }
-}
+Object.defineProperty(_String, 'default', { value: function () {
+  return '';
+}, enumerable: true });
 
-export class Email extends _String.addCheck(/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/) {}
 
-// ID
-export class ID extends Value {
+// Email
+export interface IEmail extends IString {}
 
-  public static from(value: any): number | string {
-    if (typeof value === 'number' && value > 0) return this.validate(value);
-    if (typeof value === 'string' && value.length > 0) return this.validate(value);
-    if (value && value.ID) return this.from(value.ID);
-    return this.default(() => uuid());
-  }
-
-}
+export const _Email = <IEmail>_String.extends(function Email() {})
+  .addCheck(/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/);
 
 // Date
-export class _Date extends Value {
+export interface IDate extends IString {}
 
-  public static from(value: any) {
-    if (value instanceof Date)
-      return this.validate(value.toISOString().substr(0, 10));
-    else if (/^\d{4}-\d{2}-\d{2}$/.test(value))
-      return this.validate(String(value));
-    else
-      return this.default(() => '0000-00-00');
-  }
+export const _Date = <IDate>_String.extends(function Date() {});
 
-}
+Object.defineProperty(_Date, 'from', { value: function (value: any) {
+  if (value instanceof Date)
+    return this.validate(value.toISOString().substr(0, 10));
+  else if (/^\d{4}-\d{2}-\d{2}$/.test(value))
+    return this.validate(String(value));
+  else
+    return this.default();
+}, enumerable: true, writable: true });
+
+Object.defineProperty(_Date, 'default', { value: function () {
+  return '0000-00-00';
+}, enumerable: true, writable: true });
 
 // Time
-export class _Time extends Value {
+export interface ITime extends IString {}
 
-  public static from(value: any) {
-    if (value instanceof Date)
-      return this.validate(value.toISOString().substr(11, 12));
-    if (/^\d{2}-\d{2}-\d{2}(\.\d{3})?$/.test(value))
-      return this.validate(String(value));
-    else
-      return this.default(() => '00:00:00');
-  }
+export const _Time = <ITime>_String.extends(function Time() {});
 
-}
-
-// Enum
-export class Enum extends Value {
-
-  public static _either = new Set();
-
-  public static of(...args: any[]) {
-    const _enum = class extends this {};
-    _enum._either = new Set(args);
-    return _enum;
-  }
-
-  public static from(value: any) {
-    if (this._either.has(value)) return this.validate(value);
-    return this.default(() => this._either.values().next().value);
-  }
-
-}
+Object.defineProperty(_Time, 'from', { value: function (value: any) {
+  if (value instanceof Date)
+    return this.validate(value.toISOString().substr(11, 12));
+  if (/^\d{2}-\d{2}-\d{2}(\.\d{3})?$/.test(value))
+    return this.validate(String(value));
+  else
+    return this.default();
+}, enumerable: true, writable: true });
+Object.defineProperty(_Date, 'default', { value: function () {
+  return '00:00:00';
+}, enumerable: true, writable: true });
 
 //----------------------------------------------------------
 
-// Record
+// ID
+export interface IID extends IValue {}
 
-interface CRecord extends CValue {
-  new (...a: any[]): Record;
-  _object: { [name: string]: typeof Value };
+export const ID = <IID>Value.extends(function ID() {});
+
+Object.defineProperty(ID, 'from', { value: function (value: any) {
+  if (typeof value === 'number' && value > 0) return this.validate(value);
+  if (typeof value === 'string' && value.length > 0) return this.validate(value);
+  if (value && value.ID) return this.from(value.ID);
+  return this.default(() => uuid());
+}, enumerable: true, writable: true });
+
+// Enum
+export interface IEnum extends IValue {
+  _either: Set<IValue>;
+}
+
+export const Enum = <IEnum>Value.extends(function Enum() {});
+Enum._either = new Set();
+
+Object.defineProperty(Enum, 'of', { value: function (...args: any[]) {
+  return this.clone((value: IEnum) => value._either = new Set(args));
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Enum, 'from', { value: function (value: any) {
+  if (this._either.has(value)) return this.validate(value);
+  return this.default(() => this._either.values().next().value);
+}, enumerable: true, writable: true });
+
+// Record
+export interface IRecord extends IValue {
+  _object: Map<string, IValue>;
   add(field: string, type: any): this;
 }
 
-export class Record extends Value {
+export const Record = <IRecord>Value.extends(function Record() {});
+Record._object = new Map();
 
-  public static _object = <{ [name: string]: typeof Value }>{};
-
-  public static clone<T extends CRecord>(this: T): T {
-    const record = super.clone();
-    record._object = { ...this._object };
-    return record;
+Object.defineProperty(Record, 'of', { value: function (model: { [name: string]: any }) {
+  const record = this.clone();
+  for (const field in model) {
+    if (model[field] instanceof Array)
+      record._object.set(field, Value.of(...model[field]));
+    else
+      record._object.set(field, Value.of(model[field]));
   }
+  return record;
+}, enumerable: true, writable: true });
 
-  public static of(model: any) {
-    const object = this.clone();
-    for (const field in model) {
-      if (model[field] instanceof Array)
-        object._object[field] = Value.of(...model[field]);
-      else
-        object._object[field] = Value.of(model[field]);
-    }
-    return object;
+Object.defineProperty(Record, 'add', { value: function (field: string, type: any) {
+  const record = this.clone();
+  record._object.set(field, Value.of(type));
+  return record;
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Record, 'from', { value: function (data: any) {
+  if (data && data instanceof Object) {
+    const record = <any>{};
+    for (const [name, type] of this._object)
+      record[name] = type.from(data[name]);
+    return this.validate(record);
+  } else {
+    return this.default();
   }
+}, enumerable: true, writable: true });
 
-  public static add<T extends CRecord>(this: T, field: string, type: any): T {
-    const object = this.clone();
-    object._object[field] = Value.of(type);
-    return object;
-  }
-
-  public static from(data: any): Record {
-    if (data && data instanceof Object) {
-      const record = new this();
-      for (const field in this._object)
-        record[field] = this._object[field].from(data[field]);
-      return this.validate(record);
-    } else {
-      return this.default(() => this.from({}));
-    }
-  }
-
-}
+Object.defineProperty(Record, 'default', { value: function () {
+  return this.from({});
+}, enumerable: true, writable: true });
 
 // Entity
-export class Entity extends Record {
-
-  public static _object = <{ [name: string]: typeof Value }>{ ID };
-
-  public static get ID() { return ID; }
-  public static get ByID() { return _Map.of(this.ID, this); }
-
-  public ID: string;
-
-  public static from(data: any) {
-    return super.from(data);
-  }
-
+export interface IEntity extends IRecord {
+  ID: IID;
+  __get_ID(): IID;
+  ByID: IMap;
+  __get_ByID(): IMap;
 }
+
+export const Entity = <IEntity>Record.extends(function Entity() {})
+  .add('ID', ID);
+
+Object.defineProperty(Entity, 'ID', { get: function () {
+  return this.__get_ID();
+}, enumerable: true });
+Object.defineProperty(Entity, '__get_ID', { value: function () {
+  return ID;
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Entity, 'ByID', { get: function () {
+  return this.__get_ByID();
+}, enumerable: true });
+Object.defineProperty(Entity, '__get_ByID', { value: function () {
+  return _Map.of(this.ID, this);
+}, enumerable: true, writable: true });
 
 // Aggregate
-export class Aggregate extends Entity {
+export interface IAggregate extends IEntity {}
 
-  public static get Set(): never { throw new Error('Forbidden'); }
-  public static get Array(): never { throw new Error('Forbidden'); }
-  public static Map(index: any): never { throw new Error('Forbidden'); }
-  public static get ByID(): never { throw new Error('Forbidden'); }
+export const Aggregate = <IAggregate>Entity.extends(function Aggregate() {});
 
-}
+Object.defineProperty(Aggregate, '__get_Set', { value: function () {
+  throw new Error('Forbidden');
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Aggregate, '__get_Array', { value: function () {
+  throw new Error('Forbidden');
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Aggregate, 'Map', { value: function (index: any) {
+  throw new Error('Forbidden');
+}, enumerable: true, writable: true });
+
+Object.defineProperty(Aggregate, '__get_ByID', { value: function () {
+  throw new Error('Forbidden');
+}, enumerable: true, writable: true });
 
 // ------------------------------------------
 
 // Set
-export class _Set extends Value {
-
-  public static _subtype = <any>null;
-
-  public static of(type: any) {
-    const set = class extends _Set {};
-    set._subtype = type;
-    return set;
-  }
-
-  public static from(data: any) {
-    if (data != null) {
-      const set = new Set(data);
-      set.toJSON = this.toJSON;
-      return this.validate(set);
-    } else {
-      return this.default(() => new Set());
-    }
-  }
-
-  public static toJSON(this: Set<any>) {
-    return Array.from(this);
-  }
-
+export interface ISet extends IValue {
+  _subtype: IValue;
 }
 
-// Array
-export class _Array extends Value {
+export const _Set = <ISet>Value.extends(function Set() {});
+_Set._subtype = <IValue>null;
 
-  public static _subtype = <any>null;
+Object.defineProperty(_Set, 'of', { value: function (type: any) {
+  return this.clone((value: ISet) => value._subtype = Value.of(type));
+}, enumerable: true, writable: true });
 
-  public static of(type: any) {
-    const array = class extends this {};
-    array._subtype = type;
-    return array;
+Object.defineProperty(_Set, 'from', { value: function (data: any) {
+  if (data != null) {
+    const set = new Set(data);
+    set.toJSON = this.toJSON;
+    return this.validate(set);
+  } else {
+    return this.default();
   }
+}, enumerable: true, writable: true });
 
-  public static from(data: any) {
+Object.defineProperty(_Set, 'default', { value: function () {
+  const set = new Set();
+  set.toJSON = this.toJSON;
+  return set;
+}, enumerable: true, writable: true });
+
+Object.defineProperty(_Set, 'toJSON', { value: function () {
+  return Array.from(this);
+}, enumerable: true, writable: true });
+
+// Array
+export interface IArray extends IValue {
+  _subtype: IValue;
+}
+
+export const _Array = <IArray>Value.extends(function Array() {});
+_Array._subtype = null;
+
+Object.defineProperty(_Array, 'of', { value: function (type: any) {
+  return this.clone((value: IArray) => value._subtype = Value.of(type));
+}, enumerable: true, writable: true });
+
+Object.defineProperty(_Array, 'from', { value: function (data: any) {
     if (data instanceof Array) {
       const array = new Array(data.length);
       for (let i = 0; i < data.length; i += 1)
         array[i] = this._subtype.from(data[i]);
       return this.validate(array);
     } else {
-      return this.default(() => []);
+      return this.default();
     }
-  }
+}, enumerable: true, writable: true });
 
-}
+Object.defineProperty(_Array, 'default', { value: function () {
+  return new Array();
+}, enumerable: true, writable: true });
 
 // Map
-export class _Map extends Value {
-
-  public static _index   = <any>null;
-  public static _subtype = <any>null;
-
-  public static of(index: any, value?: any) {
-    const map = class extends this {};
-    map._index = index;
-    map._subtype = value;
-    return map;
-  }
-
-  public static from(data: any) {
-    const map = new Map();
-    map.toJSON = this.toJSON;
-    if (data == null) return this.default(() => map);
-    for (const [key, value] of data)
-      map.set(this._index.from(key), this._subtype.from(value));
-    return this.validate(map);
-  }
-
-  public static toJSON(this: Map<any, any>) {
-    return Array.from(this);
-  }
-
+export interface IMap extends IValue {
+  _index: IValue;
+  _subtype: IValue;
 }
+
+export const _Map = <IMap>Value.extends(function Map() {});
+_Map._index   = null;
+_Map._subtype = null;
+
+Object.defineProperty(_Map, 'of', { value: function (index: any, type: any) {
+  return this.clone((value: IMap) => {
+    value._index = Value.of(index);
+    value._subtype = Value.of(type);
+  });
+}, enumerable: true, writable: true });
+
+Object.defineProperty(_Map, 'from', { value: function (data: any) {
+  const map = new Map();
+  map.toJSON = this.toJSON;
+  if (data == null) return this.default();
+  for (const [key, value] of data)
+    map.set(this._index.from(key), this._subtype.from(value));
+  return this.validate(map);
+}, enumerable: true, writable: true });
+
+Object.defineProperty(_Map, 'default', { value: function () {
+  const map = new Map();
+  map.toJSON = this.toJSON;
+  return map;
+}, enumerable: true, writable: true });
+
+Object.defineProperty(_Map, 'toJSON', { value: function () {
+  return Array.from(this);
+}, enumerable: true, writable: true });

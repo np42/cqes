@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 
-const xModel = Symbol('Model');
+const model_t = Symbol('Model');
 
 // Value
 export interface IValue {
@@ -10,10 +10,9 @@ export interface IValue {
   _optional: boolean;
   _checks: Array<any>;
   _cleaners: Array<any>;
+  defineProperty(name: string, value: any, isGetter?: boolean): void;
   Set: ISet;
-  __get_Set(): ISet;
   Array: IArray;
-  __get_Array: IArray;
   Map(index: any): IMap;
   extends(type: Function): this;
   of(...a: any[]): this;
@@ -23,33 +22,39 @@ export interface IValue {
 }
 
 export const Value = <IValue>function Value() {};
-Value[xModel]   = true;
-Value._value    = null;
-Value._optional = false;
-Value._checks   = <any[]>new Array();
-Value._cleaners = <any[]>new Array();
+Value[model_t] = true;
+Value.defineProperty = function (name: string, value: any, isGetter?: boolean) {
+  if (isGetter) {
+    if (typeof value === 'function' && value.length === 0) {
+      const indirection = '__get_' + name;
+      Object.defineProperty(this, indirection, { value, enumerable: true, writable: true });
+      if (!(name in this)) {
+        Object.defineProperty(this, name, { get: function () {
+          return this[indirection]();
+        }, enumerable: true });
+      }
+    } else {
+      throw new Error('Getters must be function without argument');
+    }
+  } else {
+    Object.defineProperty(this, name, { value, enumerable: true, writable: true });
+  }
+}
 
-Object.defineProperty(Value, 'Set', { get: function () {
-  return this.__get_Set();
-}, enumerable: true });
-Object.defineProperty(Value, '__get_Set', { value: function () {
-  return _Set.of(this);
-}, enumerable: true, writable: true });
+Value.defineProperty('_value', null);
+Value.defineProperty('_optional', false);
+Value.defineProperty('_checks', new Array());
+Value.defineProperty('_cleaners', new Array());
 
-Object.defineProperty(Value, 'Array', { get: function () {
-  return this.__get_Array();
-}, enumerable: true });
-Object.defineProperty(Value, '__get_Array', { value: function () {
-  return _Array.of(this);
-}, enumerable: true, writable: true });
-
-Object.defineProperty(Value, 'Map', { value: function (index: any) {
+Value.defineProperty('Set', function () { return _Set.of(this) }, true);
+Value.defineProperty('Array', function () { return _Array.of(this) }, true);
+Value.defineProperty('Map', function (index: any) {
   return _Map.of(index, this);
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'extends', { value: function (constructor: Function) {
+Value.defineProperty('extends', function (constructor: Function) {
   const value = constructor;
-  value[xModel] = true;
+  value[model_t] = true;
   for (let key in this) {
     const property = Object.getOwnPropertyDescriptor(this, key);
     if ('value' in property) {
@@ -64,29 +69,29 @@ Object.defineProperty(Value, 'extends', { value: function (constructor: Function
     }
   }
   return value;
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'clone', { value: function (modifier?: (a: any) => any) {
+Value.defineProperty('clone',  function (modifier?: (a: any) => any) {
   const holder = { [this.name]: function () {} };
   const value = this.extends(holder[this.name]);
   if (modifier) modifier(value);
   return value;
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'of', { value: function (model?: any, ...rest: any[]) {
-  if (model && model[xModel]) return model;
+Value.defineProperty('of', function (model?: any, ...rest: any[]) {
+  if (model && model[model_t]) return model;
   return this.clone((value: IValue) => value._value = model);
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'opt', { value: function () {
+Value.defineProperty('opt', function () {
   return this.clone((value: IValue) => value._optional = true);
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'addCleaner', { value: function (cleaner: (a: any) => any) {
+Value.defineProperty('addCleaner', function (cleaner: (a: any) => any) {
   return this.clone((value: IValue) => value._cleaners.push(cleaner));
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'addCheck', { value: function (check: any) {
+Value.defineProperty('addCheck', function (check: any) {
   return this.clone((value: IValue) => {
     if (typeof check === 'function')
       value._checks.push({ test: check });
@@ -95,21 +100,17 @@ Object.defineProperty(Value, 'addCheck', { value: function (check: any) {
     else
       value._checks.push({ test: (value: any) => value === check });
   });
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'from', { value: function (value: any) {
-  if (this._value && this._value instanceof Value) {
-    return this._value.from(value)
-  } else {
-    return null;
-  }
-}, enumerable: true, writable: true });
+Value.defineProperty('from', function (value: any) {
+  return this._value ? this._value.from(value) : null;
+});
 
-Object.defineProperty(Value, 'default', { value: function (value?: () => any) {
+Value.defineProperty('default', function (value?: () => any) {
   return this._optional ? null : (value || null) && value();
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Value, 'validate', { value:  function (value: any) {
+Value.defineProperty('validate', function (value: any) {
   for (let i = 0; i < this._cleaners.length; i += 1)
     value = this._cleaners[i].call(this, value);
   for (let i = 0; i < this._checks.length; i += 1) {
@@ -117,7 +118,7 @@ Object.defineProperty(Value, 'validate', { value:  function (value: any) {
       throw new Error('value "' + value + '"do not satisfy checks');
   }
   return value;
-}, enumerable: true, writable: true });
+});
 
 // Boolean
 export interface IBoolean extends IValue {
@@ -127,10 +128,10 @@ export interface IBoolean extends IValue {
 
 export const _Boolean = <IBoolean>Value.extends(function Boolean() {})
   .addCheck((v: any) => v === !!v);
-_Boolean._true  = new Set(['y', 'yes', 'true']);
-_Boolean._false = new Set(['n', 'no', 'false']);
+_Boolean.defineProperty('_true', new Set(['y', 'yes', 'true']));
+_Boolean.defineProperty('_false', new Set(['n', 'no', 'false']));
 
-Object.defineProperty(_Boolean, 'from', { value: function (value: any) {
+_Boolean.defineProperty('from', function (value: any) {
   if (value == null) return this.default(() => false);
   switch (typeof value) {
   case 'string': {
@@ -144,32 +145,31 @@ Object.defineProperty(_Boolean, 'from', { value: function (value: any) {
     return this.validate(value);
   } break ;
   }
-}, enumerable: true });
+});
 
 // Number
 export interface INumber extends IValue {}
 
 export const _Number = <INumber>Value.extends(function Number() {});
 
-Object.defineProperty(_Number, 'from', { value: function (value: any) {
+_Number.defineProperty('from', function (value: any) {
   if (value == null) return this.default(() => 0);
   return this.validate(parseFloat(value));
-}, enumerable: true });
+});
 
 // String
 export interface IString extends IValue {}
 
 export const _String = <IString>Value.extends(function String() {});
 
-Object.defineProperty(_String, 'from', { value: function (value: any) {
+_String.defineProperty('from', function (value: any) {
     if (value == null) return this.default();
     return this.validate(String(value));
-}, enumerable: true });
+});
 
-Object.defineProperty(_String, 'default', { value: function () {
+_String.defineProperty('default', function () {
   return '';
-}, enumerable: true });
-
+});
 
 // Email
 export interface IEmail extends IString {}
@@ -180,37 +180,38 @@ export const _Email = <IEmail>_String.extends(function Email() {})
 // Date
 export interface IDate extends IString {}
 
-export const _Date = <IDate>_String.extends(function Date() {});
+export const _Date = <IDate>_String.extends(function Date() {})
 
-Object.defineProperty(_Date, 'from', { value: function (value: any) {
+_Date.defineProperty('from', function (value: any) {
   if (value instanceof Date)
     return this.validate(value.toISOString().substr(0, 10));
   else if (/^\d{4}-\d{2}-\d{2}$/.test(value))
     return this.validate(String(value));
   else
     return this.default();
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Date, 'default', { value: function () {
+_Date.defineProperty('default', function () {
   return '0000-00-00';
-}, enumerable: true, writable: true });
+});
 
 // Time
 export interface ITime extends IString {}
 
 export const _Time = <ITime>_String.extends(function Time() {});
 
-Object.defineProperty(_Time, 'from', { value: function (value: any) {
+_Time.defineProperty('from', function (value: any) {
   if (value instanceof Date)
     return this.validate(value.toISOString().substr(11, 12));
   if (/^\d{2}-\d{2}-\d{2}(\.\d{3})?$/.test(value))
     return this.validate(String(value));
   else
     return this.default();
-}, enumerable: true, writable: true });
-Object.defineProperty(_Date, 'default', { value: function () {
+});
+
+_Time.defineProperty('default', function () {
   return '00:00:00';
-}, enumerable: true, writable: true });
+});
 
 //----------------------------------------------------------
 
@@ -219,12 +220,12 @@ export interface IID extends IValue {}
 
 export const ID = <IID>Value.extends(function ID() {});
 
-Object.defineProperty(ID, 'from', { value: function (value: any) {
+ID.defineProperty('from', function (value: any) {
   if (typeof value === 'number' && value > 0) return this.validate(value);
   if (typeof value === 'string' && value.length > 0) return this.validate(value);
   if (value && value.ID) return this.from(value.ID);
   return this.default(() => uuid());
-}, enumerable: true, writable: true });
+});
 
 // Enum
 export interface IEnum extends IValue {
@@ -232,16 +233,16 @@ export interface IEnum extends IValue {
 }
 
 export const Enum = <IEnum>Value.extends(function Enum() {});
-Enum._either = new Set();
+Enum.defineProperty('_either', new Set());
 
-Object.defineProperty(Enum, 'of', { value: function (...args: any[]) {
+Enum.defineProperty('of', function (...args: any[]) {
   return this.clone((value: IEnum) => value._either = new Set(args));
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Enum, 'from', { value: function (value: any) {
+Enum.defineProperty('from', function (value: any) {
   if (this._either.has(value)) return this.validate(value);
   return this.default(() => this._either.values().next().value);
-}, enumerable: true, writable: true });
+});
 
 // Record
 export interface IRecord extends IValue {
@@ -252,7 +253,7 @@ export interface IRecord extends IValue {
 export const Record = <IRecord>Value.extends(function Record() {});
 Record._object = new Map();
 
-Object.defineProperty(Record, 'of', { value: function (model: { [name: string]: any }) {
+Record.defineProperty('of', function (model: { [name: string]: any }) {
   const record = this.clone();
   for (const field in model) {
     if (model[field] instanceof Array)
@@ -261,15 +262,15 @@ Object.defineProperty(Record, 'of', { value: function (model: { [name: string]: 
       record._object.set(field, Value.of(model[field]));
   }
   return record;
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Record, 'add', { value: function (field: string, type: any) {
+Record.defineProperty('add', function (field: string, type: any) {
   const record = this.clone();
   record._object.set(field, Value.of(type));
   return record;
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Record, 'from', { value: function (data: any) {
+Record.defineProperty('from', function (data: any) {
   if (data && data instanceof Object) {
     const record = <any>{};
     for (const [name, type] of this._object)
@@ -278,57 +279,33 @@ Object.defineProperty(Record, 'from', { value: function (data: any) {
   } else {
     return this.default();
   }
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(Record, 'default', { value: function () {
+Record.defineProperty('default', function () {
   return this.from({});
-}, enumerable: true, writable: true });
+});
 
 // Entity
 export interface IEntity extends IRecord {
   ID: IID;
-  __get_ID(): IID;
   ByID: IMap;
-  __get_ByID(): IMap;
 }
 
 export const Entity = <IEntity>Record.extends(function Entity() {})
   .add('ID', ID);
 
-Object.defineProperty(Entity, 'ID', { get: function () {
-  return this.__get_ID();
-}, enumerable: true });
-Object.defineProperty(Entity, '__get_ID', { value: function () {
-  return ID;
-}, enumerable: true, writable: true });
-
-Object.defineProperty(Entity, 'ByID', { get: function () {
-  return this.__get_ByID();
-}, enumerable: true });
-Object.defineProperty(Entity, '__get_ByID', { value: function () {
-  return _Map.of(this.ID, this);
-}, enumerable: true, writable: true });
+Entity.defineProperty('ID', () => ID, true);
+Entity.defineProperty('ByID', function () { return _Map.of(this.ID, this); }, true);
 
 // Aggregate
 export interface IAggregate extends IEntity {}
 
 export const Aggregate = <IAggregate>Entity.extends(function Aggregate() {});
 
-Object.defineProperty(Aggregate, '__get_Set', { value: function () {
-  throw new Error('Forbidden');
-}, enumerable: true, writable: true });
-
-Object.defineProperty(Aggregate, '__get_Array', { value: function () {
-  throw new Error('Forbidden');
-}, enumerable: true, writable: true });
-
-Object.defineProperty(Aggregate, 'Map', { value: function (index: any) {
-  throw new Error('Forbidden');
-}, enumerable: true, writable: true });
-
-Object.defineProperty(Aggregate, '__get_ByID', { value: function () {
-  throw new Error('Forbidden');
-}, enumerable: true, writable: true });
+Aggregate.defineProperty('Set',   () => { throw new Error('Forbidden') }, true);
+Aggregate.defineProperty('Array', () => { throw new Error('Forbidden') }, true);
+Aggregate.defineProperty('Map',   (index: any) => { throw new Error('Forbidden') });
+Aggregate.defineProperty('ByID',  () => { throw new Error('Forbidden') }, true);
 
 // ------------------------------------------
 
@@ -338,13 +315,13 @@ export interface ISet extends IValue {
 }
 
 export const _Set = <ISet>Value.extends(function Set() {});
-_Set._subtype = <IValue>null;
+_Set.defineProperty('_subtype', null);
 
-Object.defineProperty(_Set, 'of', { value: function (type: any) {
+_Set.defineProperty('of', function (type: any) {
   return this.clone((value: ISet) => value._subtype = Value.of(type));
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Set, 'from', { value: function (data: any) {
+_Set.defineProperty('from', function (data: any) {
   if (data != null) {
     const set = new Set(data);
     set.toJSON = this.toJSON;
@@ -352,17 +329,17 @@ Object.defineProperty(_Set, 'from', { value: function (data: any) {
   } else {
     return this.default();
   }
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Set, 'default', { value: function () {
+_Set.defineProperty('default', function () {
   const set = new Set();
   set.toJSON = this.toJSON;
   return set;
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Set, 'toJSON', { value: function () {
+_Set.defineProperty('toJSON', function () {
   return Array.from(this);
-}, enumerable: true, writable: true });
+});
 
 // Array
 export interface IArray extends IValue {
@@ -370,13 +347,13 @@ export interface IArray extends IValue {
 }
 
 export const _Array = <IArray>Value.extends(function Array() {});
-_Array._subtype = null;
+_Array.defineProperty('_subtype', null);
 
-Object.defineProperty(_Array, 'of', { value: function (type: any) {
+_Array.defineProperty('of', function (type: any) {
   return this.clone((value: IArray) => value._subtype = Value.of(type));
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Array, 'from', { value: function (data: any) {
+_Array.defineProperty('from', function (data: any) {
     if (data instanceof Array) {
       const array = new Array(data.length);
       for (let i = 0; i < data.length; i += 1)
@@ -385,11 +362,9 @@ Object.defineProperty(_Array, 'from', { value: function (data: any) {
     } else {
       return this.default();
     }
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Array, 'default', { value: function () {
-  return new Array();
-}, enumerable: true, writable: true });
+_Array.defineProperty('default', () => new Array());
 
 // Map
 export interface IMap extends IValue {
@@ -398,31 +373,31 @@ export interface IMap extends IValue {
 }
 
 export const _Map = <IMap>Value.extends(function Map() {});
-_Map._index   = null;
-_Map._subtype = null;
+_Map.defineProperty('_index', null);
+_Map.defineProperty('_subtype', null);
 
-Object.defineProperty(_Map, 'of', { value: function (index: any, type: any) {
+_Map.defineProperty('of', function (index: any, type: any) {
   return this.clone((value: IMap) => {
     value._index = Value.of(index);
     value._subtype = Value.of(type);
   });
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Map, 'from', { value: function (data: any) {
+_Map.defineProperty('from', function (data: any) {
   const map = new Map();
   map.toJSON = this.toJSON;
   if (data == null) return this.default();
   for (const [key, value] of data)
     map.set(this._index.from(key), this._subtype.from(value));
   return this.validate(map);
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Map, 'default', { value: function () {
+_Map.defineProperty('default', function () {
   const map = new Map();
   map.toJSON = this.toJSON;
   return map;
-}, enumerable: true, writable: true });
+});
 
-Object.defineProperty(_Map, 'toJSON', { value: function () {
+_Map.defineProperty('toJSON', function () {
   return Array.from(this);
-}, enumerable: true, writable: true });
+});

@@ -1,12 +1,12 @@
 import { v4 as uuid } from 'uuid';
 
 export class query<A = any> {
-  public view:      string;
-  public id:        string;
-  public method:    string;
-  public createdAt: Date;
-  public data:      any;
-  public meta:      any;
+  public view:      string; // Repository Name
+  public id:        string; // Partition ID
+  public method:    string; // Procedure Name
+  public createdAt: Date;   // Requested Date
+  public data:      any;    // Payload
+  public meta:      any;    // Meta Data
 
   constructor(view: string, id: string, method: string, data: A, meta?: any) {
     this.view      = view;

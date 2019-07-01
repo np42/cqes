@@ -1,5 +1,4 @@
 import * as Service from './Service';
-import { deserialize } from "serializer.ts/Serializer";
 
 import { event as E }  from './event';
 import { state as S }  from './state';
@@ -20,14 +19,14 @@ export class Gateway extends Service.Service {
   public async start() {
     if (this.factory == null) {
       this.bus.event.psubscribe(this.name, this.context, async (id, revision, events, date) => {
-        const state = new S(id, -1, null);
+        const state = new S(this.context, id, -1, null);
         for (const event of events) {
           const type = this.events[event.name];
           if (type == null) {
             this.logger.error('No type for %j', event);
             throw new Error('Event type is missing');
           } else {
-            event.data = deserialize(type, event.data);
+            event.data = new type(event.data);
             event.meta = { createdAt: new Date(date), ...event.meta };
             return this.on(state, event)
           }

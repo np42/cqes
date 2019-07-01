@@ -16,5 +16,7 @@
   , "sourceMap": true
   }
 , "include": [ "index.ts", "process.ts" ]
+//, "include": ["test/test-model.ts"]
+//, "include": ["toto/Model.ts"]
 , "exclude": [ "node_modules", "**/*.spec.ts" ]
 }

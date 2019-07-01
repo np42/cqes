@@ -20,18 +20,11 @@ export { reply as R }   from './src/reply';
 export { event as E }   from './src/event';
 export { state as S }   from './src/state';
 
-import * as Fx           from './src/Fx';
-import * as Lx           from './src/Lx';
+import * as Model        from './src/Model';
+export { Model };
+
 import * as Mx           from './src/Mx';
 import * as Qx           from './src/Qx';
 import { Px }            from './src/Px';
 
-export { Type }        from 'serializer.ts/Decorators';
-import { deserialize } from "serializer.ts/Serializer";
-export class Serializable<T> {
-  constructor(data: any) {
-    return deserialize<T>(this.constructor, data);
-  }
-}
-
-export { Fx, Mx, Qx, Lx, Px };
+export { Qx, Mx, Px };

@@ -170,9 +170,9 @@ export class Process extends Component.Component {
   }
 
   private getModuleService(context: string, name: string): any {
-    return [ [['CommandHandler', 'Factory'], ['commands', 'state']]
-           , [['Repository', 'Factory'], ['queries', 'replies', 'state']]
-           , [['Gateway', 'Factory'], ['state']]
+    return [ [['CommandHandler', 'Factory'], ['commands', name]]
+           , [['Repository'], ['queries', 'replies']]
+           , [['Gateway'], []]
            ].reduce((children, types) => {
       if (children != null) return children;
       const result = types[0].reduce((children, type, index) => {
@@ -191,7 +191,10 @@ export class Process extends Component.Component {
       return ['../events'].concat(types[1]).reduce((ios, io) => {
         const path = join(this.rootpath, context, name, io);
         const types = Process.safeRequire(path);
-        if (types) ios[basename(io)] = types;
+        if (types) {
+          if (io === name) ios.state = types[name];
+          else ios[basename(io)] = types;
+        }
         return ios;
       }, result);
     }, null);

@@ -1,6 +1,5 @@
 import * as Service from './Service';
 import * as Factory from './Factory';
-import { deserialize } from "serializer.ts/Serializer";
 
 import { state as S }    from './state';
 import { command as C }  from './command';
@@ -32,14 +31,14 @@ export class CommandHandler extends Service.Service {
       this.bus.command.listen(topic, async command => {
         const type = this.commands[command.order];
         if (type == null) return this.bus.command.relocate(command, topic + '.untyped');
-        command.data = deserialize(type, command.data);
+        command.data = new type(command.data);
         const state = await this.factory.get(command.id);
         try {
           const events = await this.handle(state, command);
           if (events.length === 0) {
             this.bus.command.discard(command);
           } else {
-            const stream = this.name
+            const stream = this.name;
             const id = command.id;
             const expectedRevision = state.revision + 1;
             try {

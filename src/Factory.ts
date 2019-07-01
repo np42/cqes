@@ -1,5 +1,4 @@
 import * as Component  from './Component';
-import { deserialize } from "serializer.ts/Serializer";
 
 import * as Bus        from './Bus';
 import { Queue }       from './Queue';
@@ -9,7 +8,7 @@ import { state as S }  from './state';
 
 export interface props extends Component.props {
   bus:    Bus.Bus
-  state:  { [name: string]: { new (data: any): any } };
+  state:  { new (data: any): any };
   events: { [name: string]: { new (data: any): any } };
 }
 
@@ -19,7 +18,7 @@ type events = Array<E>;
 
 export class Factory extends Component.Component {
   protected bus:     Bus.Bus;
-  protected state:   { [name: string]: { new (data: any): any } };
+  protected state:   { new (data: any): any };
   protected events:  { [name: string]: { new (data: any): any } };
   protected states:  Map<string, S>;
   protected queue:   Queue;
@@ -27,7 +26,7 @@ export class Factory extends Component.Component {
   constructor(props: props, children: children) {
     super({ ...props, type: 'factory', color: 'green' }, children);
     this.bus     = props.bus;
-    this.state   = props.state  || {};
+    this.state   = props.state  || Object;
     this.events  = props.events || {};
     this.states  = new Map();
     this.queue   = new Queue();
@@ -42,7 +41,7 @@ export class Factory extends Component.Component {
           this.logger.error('No type for %j', event);
           throw new Error('Event type is missing');
         } else {
-          event.data = deserialize(type, event.data);
+          event.data = new type(event.data);
           return this.apply(state, event)
         }
       }, curState);
@@ -56,7 +55,7 @@ export class Factory extends Component.Component {
   /**************************/
 
   public create(id: string) {
-    return new S(id, -1, new this.state.State(null));
+    return new S(this.context, id, -1, new this.state({ ID: id }));
   }
 
   public get(id: string): Promise<S> {

@@ -1,5 +1,4 @@
 import * as Gateway from './Gateway';
-import { deserialize } from "serializer.ts/Serializer";
 
 import { query as Q } from './query';
 import { reply as R } from './reply';
@@ -30,8 +29,8 @@ export class Repository extends Gateway.Gateway {
         return this.bus.query.reply(query, reply);
       } else {
         const id = query.id;
-        query.data = deserialize(qtype, query.data);
-        const state = this.factory ? await this.factory.get(id) : new S(id, -1, null);
+        query.data = new qtype(query.data);
+        const state = this.factory ? await this.factory.get(id) : new S(this.context, id, -1, null);
         const reply = await this.resolve(state, query);
         return this.bus.query.reply(query, reply);
       }

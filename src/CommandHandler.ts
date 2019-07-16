@@ -26,6 +26,7 @@ export class CommandHandler extends Service.Service {
   }
 
   public async start() {
+    if (this.running) return true;
     this.topics.forEach((topic: string) => {
       this.bus.command.listen(topic, async command => {
         const type = this.commands[command.order];
@@ -56,6 +57,11 @@ export class CommandHandler extends Service.Service {
       });
     });
     return super.start();
+  }
+
+  public async stop(): Promise<void> {
+    if (!this.running) return ;
+    return super.stop();
   }
 
   public async handle(state: S, command: C): Promise<Array<E>> {

@@ -12,6 +12,7 @@ export class Gateway extends Service.Service {
   }
 
   public async start() {
+    if (this.running) return true;
     this.bus.event.psubscribe(this.service, this.module, async (id, revision, events, date) => {
       const state = this.factory ? await this.factory.get(id) : new S(this.context, id, -1, null);
       for (const event of events) {
@@ -27,6 +28,11 @@ export class Gateway extends Service.Service {
       }
     });
     return super.start();
+  }
+
+  public async stop(): Promise<void> {
+    if (!this.running) return ;
+    return super.stop();
   }
 
   public async on(state: S, event: E) {

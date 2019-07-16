@@ -27,6 +27,7 @@ export class Factory extends Component.Component {
   }
 
   public async start(): Promise<boolean> {
+    if (this.running) return ;
     this.bus.event.subscribe(this.module, async (id: string, revision: number, events: events) => {
       const curState = this.states.get(id) || this.create(id);
       const newState = events.reduce((state, event) => {
@@ -44,6 +45,11 @@ export class Factory extends Component.Component {
       this.queue.resume();
     });
     return true;
+  }
+
+  public stop(): Promise<void> {
+    if (!this.running) return ;
+    return super.stop();
   }
 
   /**************************/

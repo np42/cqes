@@ -19,12 +19,15 @@ export class Service extends Component.Component {
     this.factory = props.factory || new Factory.Factory(props);
   }
 
-  public start(): Promise<boolean> {
-    if (this.factory) return this.factory.start();
+  public async start(): Promise<boolean> {
+    if (this.running) return true;
+    if (this.factory) await this.factory.start();
     return super.start();
   }
 
-  public stop(): Promise<void> {
+  public async stop(): Promise<void> {
+    if (!this.running) return ;
+    if (this.factory) await this.factory.stop();
     return super.stop();
   }
 

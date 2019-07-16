@@ -19,6 +19,7 @@ export class Repository extends Gateway.Gateway {
   }
 
   public async start() {
+    if (this.running) return true;
     this.bus.query.serve(this.context + '.' + this.module, async query => {
       const qtype = this.queries[query.method];
       if (qtype == null) {
@@ -32,6 +33,11 @@ export class Repository extends Gateway.Gateway {
       }
     });
     return super.start();
+  }
+
+  public async stop(): Promise<void> {
+    if (!this.running) return ;
+    return super.stop();
   }
 
   public async resolve(query: Q): Promise<R> {

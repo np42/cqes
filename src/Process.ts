@@ -188,7 +188,7 @@ export class Process extends Element.Element {
       const serviceProps   = { context: contextName, module: moduleName, service: serviceFullName
                              , bus: props.bus, logger
                              };
-      const moduleProps    = walk(props[serviceFullName], (key, value) => {
+      const serviceDeps = walk(props[serviceFullName], (key, value) => {
         if (value instanceof Object && '$' in value) {
           if (!/^[a-z]/.test(key)) logger.warn('should have dependency "%s" in lowercase', key);
           const dependencyPath = value.$;
@@ -227,7 +227,9 @@ export class Process extends Element.Element {
           serviceProps[resourceName] = iface;
         }
       })
-      module[serviceFullName] = (props: any) => new Service[className]({ ...props, ...serviceProps });
+      module[serviceFullName] = (props: any) => {
+        return new Service[className]({ ...props, ...serviceProps, ...serviceDeps });
+      };
     }
     // Instanciate services
     const instances = {};
@@ -249,6 +251,7 @@ export class Process extends Element.Element {
 
   public async start() {
     this.logger.log('%yellow', '==========  Starting  Services  ==========');
+    const promises = [];
     for (const contextName in this.contexts) {
       const context = this.contexts[contextName];
       for (const moduleName in context.modules) {
@@ -256,11 +259,12 @@ export class Process extends Element.Element {
         for (const serviceName in module) {
           const service = module[serviceName];
           this.logger.log('Starting %yellow.%cyan.%magenta', contextName, moduleName, serviceName);
-          await service.start();
+          promises.push(service.start());
         }
       }
-      await context.bus.start();
+      promises.push(context.bus.start());
     }
+    await Promise.all(promises);
     this.logger.log('%green',  '========== All Services started ==========');
     return true;
   }

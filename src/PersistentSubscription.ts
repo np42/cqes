@@ -1,18 +1,16 @@
-import * as Component from './Component';
+import * as Element from './Element';
 
 import * as fs        from 'fs';
 
-interface props extends Component.props {
+interface props extends Element.props {
   db:    string;
   pname: string;
 }
 
-interface children extends Component.children {}
-
 const MAX_SIZE = 8192;
 const NOOP = () => {};
 
-export class PersistentSubscription extends Component.Component {
+export class PersistentSubscription extends Element.Element {
   public    cursor:   number;
   protected filename: string;
   protected length:   number;
@@ -22,8 +20,8 @@ export class PersistentSubscription extends Component.Component {
   protected pending:  number;
   protected writing:  number;
 
-  constructor(props: props, children: children) {
-    super(props, children);
+  constructor(props: props) {
+    super(props);
     this.filename = props.db + '.' + props.pname + '.sub';
     this.cursor   = 0;
     this.length   = 0;
@@ -32,7 +30,7 @@ export class PersistentSubscription extends Component.Component {
     this.pending  = 0;
   }
 
-  public start() {
+  public start(): Promise<boolean> {
     return new Promise((resolve, reject) => {
       fs.open(this.filename, 'a+', (err, fd) => {
         if (err) return reject(err);

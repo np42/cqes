@@ -1,16 +1,16 @@
 import { Fx }           from './Fx';
-import * as Component   from './Component'
+import * as Element     from './Element'
 import * as amqp        from 'amqplib';
-import merge            from './merge';
+import { merge }        from './merge';
 
 export type FxConnection = Fx<any, amqp.Connection>;
 type FxChannel = Fx<amqp.Connection, amqp.Channel>;
 
-export interface props extends Component.props {
+export interface props extends Element.props {
   url: string;
   consumer?: { channel: PropsChannel, queue: PropsQueue };
   replier?: PropsReplier
-};
+}
 
 interface PropsChannel {
   prefetch: number;
@@ -30,15 +30,18 @@ const CONSUMER_CHANNEL_DEFAULT = { prefetch: 10 }
 const CONSUMER_QUEUE_DEFAULT = {}
 const CONSUMER_DEFAULT = { queue: CONSUMER_QUEUE_DEFAULT, channel: CONSUMER_CHANNEL_DEFAULT };
 
-export class AMQPBus extends Component.Component {
+export class AMQPBus extends Element.Element {
   protected props:    props;
+  protected context:  string;
   private url:        string;
   private connection: FxConnection;
   private channels:   Map<string, FxChannel>;
   private consumers:  Set<any>;
 
   constructor(props: props) {
-    super(props, {});
+    super(props);
+    this.props          = props;
+    this.context        = props.context;
     this.url            = props.url;
     this.props.consumer = merge(CONSUMER_DEFAULT, props.consumer || {});
     this.channels       = new Map();

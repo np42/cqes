@@ -1,6 +1,13 @@
 import clone from './clone';
 
-function merge<S, T>(left: S, right: T): any {
+export function merge(...args: any[]) {
+  let result = args.length > 0 ? clone(args[0]) : null;
+  for (let i = 1; i < args.length; i++)
+    result = mergeTwo(result, args[i])
+  return result;
+}
+
+function mergeTwo<S, T>(left: S, right: T): any {
   switch (typeof right) {
   case 'object':
     if (right === null) return null;
@@ -26,4 +33,3 @@ function mergeObject<S, T>(left: S, right: T): T {
   return result;
 }
 
-export default merge;

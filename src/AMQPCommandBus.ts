@@ -4,12 +4,11 @@ import { Channel, Message }         from 'amqplib';
 import * as uuid                    from 'uuid';
 
 export interface props extends AMQPBus.props {}
-//export interface children extends AMQPBus.children {}
 
 export class AMQPCommandBus extends AMQPBus.AMQPBus {
 
   constructor(props: props) {
-    super({ ...props, type: 'amqp' });
+    super(props);
   }
 
   public async start() {

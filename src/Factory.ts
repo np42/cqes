@@ -1,31 +1,25 @@
 import * as Component  from './Component';
 
-import * as Bus        from './Bus';
 import { Queue }       from './Queue';
 
 import { event as E }  from './event';
 import { state as S }  from './state';
 
 export interface props extends Component.props {
-  bus:    Bus.Bus
-  state:  { new (data: any): any };
-  events: { [name: string]: { new (data: any): any } };
+  state?:  { new (data: any): any };
+  events?: { [name: string]: { new (data: any): any } };
 }
-
-export interface children extends Component.children {}
 
 type events = Array<E>;
 
 export class Factory extends Component.Component {
-  protected bus:     Bus.Bus;
   protected state:   { new (data: any): any };
   protected events:  { [name: string]: { new (data: any): any } };
   protected states:  Map<string, S>;
   protected queue:   Queue;
 
-  constructor(props: props, children: children) {
-    super({ ...props, type: 'factory', color: 'green' }, children);
-    this.bus     = props.bus;
+  constructor(props: props) {
+    super(props);
     this.state   = props.state  || Object;
     this.events  = props.events || {};
     this.states  = new Map();
@@ -33,7 +27,7 @@ export class Factory extends Component.Component {
   }
 
   public async start(): Promise<boolean> {
-    this.bus.event.subscribe(this.context, async (id: string, revision: number, events: events) => {
+    this.bus.event.subscribe(this.module, async (id: string, revision: number, events: events) => {
       const curState = this.states.get(id) || this.create(id);
       const newState = events.reduce((state, event) => {
         const type = this.events[event.name];
@@ -55,7 +49,7 @@ export class Factory extends Component.Component {
   /**************************/
 
   public create(id: string) {
-    return new S(this.context, id, -1, new this.state({ ID: id }));
+    return new S(this.module, id, -1, new this.state({ ID: id }));
   }
 
   public get(id: string): Promise<S> {

@@ -1,33 +1,32 @@
 import * as Service from './Service';
-import * as Factory from './Factory';
 
-import { state as S }    from './state';
+import { state   as S }  from './state';
 import { command as C }  from './command';
-import { query as Q }    from './query';
-import { reply as R }    from './reply';
-import { event as E }    from './event';
+import { query   as Q }  from './query';
+import { reply   as R }  from './reply';
+import { event   as E }  from './event';
 
 export interface props extends Service.props {
   commands?: { [name: string]: { new (data: any): any } }
+  topics?: Array<string>;
 }
-export interface children extends Service.children {}
 
 export class CommandHandler extends Service.Service {
   protected commands: { [name: string]: { new (data: any): any } };
+  protected topics:   Array<string>;
 
   static noop(): Array<E> {
     return [];
   }
 
-  constructor(props: props, children: children) {
-    super( { ...props, type: 'command-handler', color: 'magenta' }
-         , { Factory: Factory.Factory, ...children });
+  constructor(props: props) {
+    super(props);
     this.commands = props.commands || {};
+    this.topics   = props.topics   || [this.context + '.' + this.module];
   }
 
   public async start() {
-    const topics = this.props.topics || [this.name];
-    topics.forEach((topic: string) => {
+    this.topics.forEach((topic: string) => {
       this.bus.command.listen(topic, async command => {
         const type = this.commands[command.order];
         if (type == null) return this.bus.command.relocate(command, topic + '.untyped');
@@ -38,7 +37,7 @@ export class CommandHandler extends Service.Service {
           if (events.length === 0) {
             this.bus.command.discard(command);
           } else {
-            const stream = this.name;
+            const stream = this.module;
             const id = command.id;
             const expectedRevision = state.revision + 1;
             try {
@@ -51,6 +50,7 @@ export class CommandHandler extends Service.Service {
           }
         } catch (e) {
           this.logger.error(e);
+          command.meta.error = e;
           this.bus.command.relocate(command, topic + '.failed');
         }
       });

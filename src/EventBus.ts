@@ -1,18 +1,18 @@
-import * as Component         from './Component';
-import { event as Event }     from './event';
-import * as EventStore        from './EventStore';
-import { v4 as uuid }         from 'uuid';
+import * as Element         from './Element';
+import { event as Event }   from './event';
+import * as EventStore      from './EventStore';
+import { v4 as uuid }       from 'uuid';
 
-export interface props extends Component.props {
+export interface props extends Element.props {
   EventStore?: EventStore.props
 }
-export interface children extends Component.children {}
 
 interface EventHandler {
   (id: string, revision: number, event: Array<Event<any>>, date: number): Promise<void>
 }
 
-export class EventBus extends Component.Component {
+export class EventBus extends Element.Element {
+  protected props: props;
   protected es: EventStore.EventStore;
 
   static parse(data: string) {
@@ -23,9 +23,11 @@ export class EventBus extends Component.Component {
     return JSON.stringify(data);
   }
 
-  constructor(props: props, children: children) {
-    super({ ...props, type: 'event-bus', color: 'green' }, children);
-    this.es = new EventStore.EventStore({ ...this.props, ...props.EventStore }, {});
+  constructor(props: props) {
+    super(props);
+    this.props = props;
+    const childProps = { context: props.context };
+    this.es = new EventStore.EventStore({ ...childProps, ...props.EventStore });
   }
 
   public subscribe(stream: string, handler: EventHandler, position: number): Promise<void> {
@@ -50,13 +52,21 @@ export class EventBus extends Component.Component {
 
   //--
 
-  public start(): Promise<boolean> {
-    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
-    return this.es.start();
+  public async start(): Promise<boolean> {
+    if (this.props.EventStore) {
+      this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
+      return this.es.start();
+    } else {
+      return true;
+    }
   }
 
   public stop(): Promise<void> {
-    return this.es.stop();
+    if (this.props.EventStore) {
+      return this.es.stop();
+    } else {
+      return ;
+    }
   }
 
 }

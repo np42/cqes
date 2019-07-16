@@ -6,23 +6,20 @@ import { query as Q }          from './query';
 import { reply as R }          from './reply';
 import * as uuid               from 'uuid';
 
-export interface Config {
-  name: string;
-  url: string;
+export interface props extends AMQPBus.props {
+  handler(id: string, reply: R): void;
 }
-
-export interface props extends AMQPBus.props {}
 
 function rand() {
   return process.pid + '.' + Math.floor(Math.random() * 1000);
 }
 
 export class AMQPQueryBus extends AMQPBus.AMQPBus {
-
   private id:         string;
   private response:   AMQPBus.FxConnection;
+  protected props:    props;
 
-  constructor(props: AMQPBus.props) {
+  constructor(props: props) {
     super(props);
     this.id       = [this.context, 'reply', rand()].join('.');
     this.response = null;
@@ -53,7 +50,7 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
     return this.consume(queue, (message: Message) => {
       const payload = JSON.parse(message.content.toString());
       const meta    = {};
-      const query   = new Q(payload.view, null, payload.method, payload.data, meta);
+      const query   = new Q(payload.view, payload.method, payload.data, meta);
       Object.defineProperty(meta, 'amqp', { value: message });
       handler(query);
     }, options);

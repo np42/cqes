@@ -1,16 +1,12 @@
-import { Logger }          from './src/Logger';
-
 import * as Process        from './src/Process';
 import * as Component      from './src/Component';
-import * as Bus            from './src/Bus';
-import * as Interface      from './src/Interface';
 
 import * as CommandHandler from './src/CommandHandler';
 import * as Repository     from './src/Repository';
 import * as Gateway        from './src/Gateway';
 import * as Factory        from './src/Factory';
 
-export { Logger, Process, Component, Bus, Interface
+export { Process, Component
        , Gateway, CommandHandler, Factory, Repository
        };
 

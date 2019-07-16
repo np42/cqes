@@ -1,19 +1,19 @@
-import * as Component         from './Component';
+import * as Element           from './Element';
 import { command as Command } from './command';
 import * as AMQPCommandBus    from './AMQPCommandBus';
 import { v4 as uuid }         from 'uuid';
 
-export interface props extends Component.props {
+export interface props extends Element.props {
   AMQP?: AMQPCommandBus.props
 }
-export interface children extends Component.children {}
 
-export class CommandBus extends Component.Component {
+export class CommandBus extends Element.Element {
   protected amqp:   AMQPCommandBus.AMQPCommandBus;
 
-  constructor(props: props, children: children) {
-    super({ ...props, type: 'command-bus', color: 'red' }, children);
-    this.amqp = new AMQPCommandBus.AMQPCommandBus({ ...this.props, ...props.AMQP });
+  constructor(props: props) {
+    super(props);
+    const childProps = { context: props.context };
+    this.amqp = new AMQPCommandBus.AMQPCommandBus({ ...childProps, ...props.AMQP });
   }
 
   public listen(topic: string, handler: (command: Command<any>) => void): boolean {

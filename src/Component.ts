@@ -1,57 +1,24 @@
-import { Logger } from './Logger';
+import * as Element from './Element';
+import { Bus }      from './Bus';
 
-export interface props {
-  context?:         string;
-  name:             string;
-  type:             string;
-  color?:           string;
-  [others: string]: any;
+export interface props extends Element.props {
+  bus?: Bus;
 }
 
-export interface children {}
+export class Component extends Element.Element {
+  protected bus:     Bus;
 
-export class Component {
-  protected context:  string;
-  protected name:     string;
-  protected type:     string;
-  protected props:    props;
-  protected children: children;
-  protected logger:   Logger;
-
-  constructor(props: props, children: children) {
-    this.context  = props.context || 'Hive';
-    this.name     = props.name;
-    this.type     = props.type;
-    this.props    = props;
-    this.children = children;
-    this.logger   = new Logger(props.name + '.' + props.type, props.color);
+  constructor(props: props) {
+    super(props);
+    this.bus = props.bus;
   }
 
-  sprout(name: string, alternative: any, extra?: any) {
-    const childProps = this.props[name] || {};
-    const props = { ...childProps, ...extra };
-    for (const key in this.props) {
-      if (key[0] === key[0].toUpperCase() && key !== name && props[key] == null)
-        props[key] = this.props[key];
-      if (key[0] === key[0].toLowerCase() && props[key] == null)
-        props[key] = this.props[key];
-    }
-    if (props.name == null) props.name = this.props.name;
-    if (this.children[name] instanceof Function) {
-      const component = this.children[name];
-      if (typeof component != 'function')
-        throw new Error(this.props.name + '.' + name + ': must be a constructor');
-      const instance = new component(props, this.children);
-      this.children[name] = instance;
-      return instance;
-    } else if (this.children[name] instanceof Component) {
-      return this.children[name];
-    } else if (alternative != null) {
-      const instance = new alternative[name](props, this.children);
-      this.children[name] = instance;
-      return instance;
-    }
-    throw new Error('Unable to sprout ' + name);
+  public start(): Promise<boolean> {
+    return Promise.resolve(true);
+  }
+
+  public stop(): Promise<void> {
+    return Promise.resolve();
   }
 
 }

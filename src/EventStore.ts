@@ -1,7 +1,8 @@
-import * as Component             from './Component';
+import * as Element               from './Element';
 import { PersistentSubscription } from './PersistentSubscription';
 import { Queue }                  from './Queue';
 
+import { join }       from 'path';
 import * as net       from 'net';
 import * as fs        from 'fs';
 import { createHash } from 'crypto';
@@ -9,12 +10,11 @@ import { v4 as uuid } from 'uuid';
 
 // TODO: implement BTree (ex: https://github.com/oscarlab/betrfs)
 
-export interface props extends Component.props {
+export interface props extends Element.props {
   net?:     { allowHalfOpen?: boolean, pauseOnConnect?: boolean };
-  address?: string | number;
+  address?: string;
   db?:      string;
-};
-export interface children extends Component.children {};
+}
 
 export enum Mode { Server = 'S', Client = 'C' };
 
@@ -74,8 +74,9 @@ const EOL       = Buffer.from('\n');
 const SEPARATOR = Buffer.from(' ');
 const EMPTY     = Buffer.from('');
 
-export class EventStore extends Component.Component {
+export class EventStore extends Element.Element {
   public    mode:     Mode;
+  protected props:    props;
   protected server:   net.Server;
   protected client:   net.Socket;
   protected sessions: Map<string, { date: number, resolve: any, reject: any }>
@@ -89,13 +90,13 @@ export class EventStore extends Component.Component {
     return createHash('md5').update(payload).digest('hex').substr(0, 4);
   }
 
-  constructor(props: props, children: children) {
-    if (props.db == null) props = { ...props, db: './' + props.name };
-    super({ ...props, type: 'event-store' }, children);
+  constructor(props: props) {
+    if (props.db == null) props = { ...props, db: join('.', props.context, 'store') };
+    super(props);
+    this.props    = props;
     this.streams  = {};
     this.queue    = new Queue();
     this.sessions = new Map();
-    process.on('exit', () => this.onExit());
     process.on('SIGINT', () => this.onExit());
   }
 
@@ -291,8 +292,8 @@ export class EventStore extends Component.Component {
 
   protected async addPSubscription(name: string, stream: string, handler: SubscriptionHandler) {
     const subscription = this.createSubscription(stream, name, handler, SubscriptionStatus.Updating);
-    const props = { name: this.name, type: 'psubscription', db: this.props.db, pname: name };
-    subscription.persistent = new PersistentSubscription(props, {});
+    const props = { context: this.context, logger: this.logger, db: this.props.db, pname: name };
+    subscription.persistent = new PersistentSubscription(props);
     await subscription.persistent.start();
     if (await this.updatePSubscription(stream, subscription)) {
       this.logger.log('PSubscription %s ready', name);
@@ -327,7 +328,7 @@ export class EventStore extends Component.Component {
         this.client = net.createConnection(this.props.address)
       } else if (/^(\d+\.){3}\d+:\d+$/.test(this.props.address)) {
         const [ip, port] = this.props.address.split(':');
-        this.client = net.createConnection(port, ip)
+        this.client = net.createConnection(Number(port), ip)
       }
       let rest = EMPTY;
       this.client.on('connect', () => {

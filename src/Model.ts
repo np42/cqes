@@ -20,6 +20,7 @@ export interface IValue {
   addCheck(check: any):      this;
   addCleaner(cleaner: (a: any) => any): this;
   opt():                     this;
+  init(a: any):              this;
 
   Set:             ISet;
   Array:           IArray;
@@ -97,6 +98,13 @@ Value.defineProperty('of', function of(model?: any, ...rest: any[]) {
 
 Value.defineProperty('opt', function opt() {
   return this.clone((value: IValue) => value._optional = true);
+});
+
+Value.defineProperty('init', function init(defValue: any) {
+  return this.clone((value: IValue) => {
+    value._optional = false;
+    value._default  = typeof defValue === 'function' ? defValue : () => defValue;
+  });
 });
 
 Value.defineProperty('addCleaner', function addCleaner(cleaner: (a: any) => any) {

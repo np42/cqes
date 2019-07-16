@@ -1,57 +1,36 @@
-import * as Component    from './Component';
+import * as Element                from './Element';
+import { Component }               from './Component';
+import { Bus }                     from './Bus';
+import { Logger }                  from './Logger';
 
-import { Bus }            from './Bus';
-
-import { Module }         from './Module';
-import * as Interface     from './Interface';
-
-import { CommandHandler } from './CommandHandler';
-import { Gateway }        from './Gateway';
-import { Repository }     from './Repository';
-import { Factory }        from './Factory';
+import { merge }                   from './merge';
+import { walk }                    from './walk';
 
 import { hostname, userInfo }      from 'os';
 import { readFile }                from 'fs';
 import * as fs                     from 'fs';
 import { join, dirname, basename } from 'path';
-import merge                       from './merge';
 
-const yaml                    = require('js-yaml');
+const yaml                         = require('js-yaml');
 
-export interface props extends Component.props {
+export interface props extends Element.props {
   root:    string;
   config?: string;
+  name:    string;
 }
-
-export interface children extends Component.children {}
 
 interface Contexts { [context: string]: Context }
-interface Context {
-  props:        { [module: string]: any };
-  children:     { [module: string]: Child };
-  dependencies: { [module: string]: { [name: string]: IFace } };
-  bus:          Bus;
-}
+interface Context  { bus: any; logger: any; [name: string]: Module; }
+interface Module   { [service: string]: Component }
 
-interface ChildManager    { type: 'CommandHandler', CommandHandler: CommandHandler; Factory?: Factory }
-interface ChildRepository { type: 'Repository', Repository: Repository; Factory?: Factory }
-interface ChildGateway    { type: 'Gateway', Gateway: Gateway; Factory?: Factory }
-
-type Child = ChildManager | ChildRepository | ChildGateway;
-interface IFace {
-  context: string;
-  name:    string;
-  iface:   { [iface: string]: { new (props: Interface.props): Interface.Interface } };
-}
-
-export class Process extends Component.Component {
-  protected contexts:    Contexts;
-  protected modules:     Map<string, Module>;
+export class Process extends Element.Element {
+  protected name:        string;
   protected rootpath:    string;
   protected environment: string;
   protected hostname:    string;
   protected procuser:    string;
   protected launcher:    string;
+  protected contexts:    Contexts;
 
   static safeRequire(path: string) {
     try {
@@ -64,13 +43,13 @@ export class Process extends Component.Component {
     }
   }
 
-  constructor(props: props, children: children) {
+  constructor(props: props) {
     process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
     process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
-    super(props, children);
+    super({ ...props, logger: new Logger('Process') });
+    this.name     = props.name;
     this.rootpath = props.root;
     this.contexts = {};
-    this.modules  = new Map();
     this.loadConstant();
   }
 
@@ -85,45 +64,6 @@ export class Process extends Component.Component {
     this.procuser    = userInfo().username;
     this.launcher    = process.stdin.isTTY ? 'console' : 'daemon';
     this.environment = environ;
-  }
-
-  private async loadContexts(): Promise<void> {
-    const filename  = 'cqes.yml';
-    const directory = this.rootpath;
-    const filepath  = join(directory, filename);
-    const processes = await this.readYaml(filepath);
-    const contexts  = processes[this.name] || {};
-    for (const context in contexts)
-      this.contexts[context] = { props: contexts[context], children: {}, dependencies: {}, bus: null };
-  }
-
-  private async loadProps(): Promise<void> {
-    for (const context in this.contexts) {
-      const directory = join(this.rootpath, context);
-      const props = await this.getProps(directory, context) || {};
-      this.contexts[context].props = merge(props, this.contexts[context].props);
-    }
-  }
-
-  private async getProps(directory: string, name: string): Promise<any> {
-    const files = this.getPropsFileList();
-    let config = {};
-    for (const file of files) {
-      const filepath = join(directory, file);
-      const layer = await this.readYaml(filepath);
-      config = merge(config, layer);
-    }
-    return config;
-  }
-
-  private  getPropsFileList(): Array<string> {
-    const extension = '.yml';
-    const list = ['Process' + extension];
-    list.push('Process.env-' + this.environment + extension);
-    list.push('Process.host-' + this.hostname + extension);
-    list.push('Process.user-' + this.procuser + extension);
-    list.push('Process.mode-' + this.launcher + extension);
-    return list;
   }
 
   private readYaml(filepath: string) {
@@ -143,137 +83,201 @@ export class Process extends Component.Component {
     });
   }
 
-  /******************************/
-
-  private async loadModules() {
-    for (const ctx in this.contexts) {
-      const context = this.contexts[ctx];
-      const modules = Object.keys(context.props).filter(n => /^[A-Z0-9]/.test(n))
-      modules.forEach((name: string) => {
-        const config = context.props[name];
-        const props = <Component.props>merge(context.props.$all, context.props[name]);
-        if (props.name == null) props.name = name;
-        this.logger.log('Module %s.%s loading', ctx, name);
-        const module = this.getModuleService(ctx, name);
-        if (module == null) return this.logger.error('Unable to load %s.%s', ctx, name);
-        for (const key in config)
-          if (key[0] === '_') {
-            const depname = key.substr(1);
-            const dependency = this.getDependency(config[key].context, config[key].name);
-            config[key].iface = dependency;
-            if (context.dependencies[name] == null) context.dependencies[name] = {};
-            context.dependencies[name][depname] = config[key];
-          }
-        context.children[name] = module;
-      });
+  private async loadContexts(): Promise<void> {
+    const filename  = 'cqes.yml';
+    const directory = this.rootpath;
+    const filepath  = join(directory, filename);
+    const processes = await this.readYaml(filepath);
+    this.contexts   = processes[this.name] || {};
+    for (const name in this.contexts) {
+      const context = this.contexts[name]
+      if (!(name in context)) context[name] = {};
     }
   }
 
-  private getModuleService(context: string, name: string): any {
-    return [ [['CommandHandler', 'Factory'], ['commands', name]]
-           , [['Repository'], ['queries', 'replies']]
-           , [['Gateway'], []]
-           ].reduce((children, types) => {
-      if (children != null) return children;
-      const result = types[0].reduce((children, type, index) => {
-        if (index > 0 && children == null) return null;
-        const path = join(this.rootpath, context, name, type);
-        const part = Process.safeRequire(path);
-        if (part == null) return children;
-        if (part[name + type] == null) {
-          this.logger.warn('Missing %s in %s', name + type, path);
-          return children;
+  private async loadModules(): Promise<void> {
+    for (const contextName in this.contexts) {
+      const context   = this.contexts[contextName];
+      const directory = join(this.rootpath, contextName);
+      const props     = await this.getProps(directory, contextName) || {};
+      debugger;
+      context.logger = new Logger(contextName);
+      const busProps = { context: contextName, logger: context.logger, ...props.bus };
+      context.bus    = new Bus(busProps);
+      for (const key in props) {
+        if (!/^[A-Z]/.test(key)) continue ;
+        if (!(key in context)) context[key] = {};
+      }
+      for (const moduleName in context) {
+        if (/^[A-Z]/.test(moduleName)) {
+          const directory    = join(this.rootpath, contextName, moduleName);
+          const mergedProps  = merge(context[moduleName], props[moduleName]);
+          const moduleProps = { context: contextName, module: moduleName, directory
+                              , bus: context.bus, logger: context.logger
+                              , ...mergedProps };
+          context[moduleName] = this.getModule(moduleProps);
+        } else {
+          this.logger.warn('[%s] Skip module %s', contextName, moduleName);
         }
-        if (index === 0) return { type, [type]: part[name + type] };
-        else return { ...<any>children, [type]: part[name + type] };
-      }, null);
-      if (result == null) return result;
-      return ['../events'].concat(types[1]).reduce((ios, io) => {
-        const path = join(this.rootpath, context, name, io);
-        const types = Process.safeRequire(path);
-        if (types) {
-          if (io === name) ios.state = types[name];
-          else ios[basename(io)] = types;
-        }
-        return ios;
-      }, result);
-    }, null);
-  }
-
-  private getDependency(context: string, name: string) {
-    const path = join(this.rootpath, context, name);
-    const module = Process.safeRequire(path);
-    return module && module[name + 'Index'] || null;
-  }
-
-  private createInstances() {
-    for (const context in this.contexts) {
-      const ns = this.contexts[context];
-      ns.bus = new Bus({ context, name: context, ...ns.props.$Bus }, {});
-      for (const name in ns.children) {
-        const children = ns.children[name];
-        const props    = { context, name, ...ns.props[name], bus: ns.bus };
-        const module   = new Module(props, <any>children);
-        this.modules.set(context + '.' + name, module);
       }
     }
   }
 
-  private injectDependencies() {
-    for (const context in this.contexts) {
-      const ns = this.contexts[context];
-      for (const module in ns.dependencies) {
-        const dependencies = ns.dependencies[module];
-        for (const dependency in dependencies) {
-          const depConfig = dependencies[dependency];
-          const depContext = this.contexts[depConfig.context];
-          if (depConfig.iface == null) {
-            this.logger.error('Missing iface %s.%s :: %s', context, module, dependency);
-            continue ;
-          }
-          if (depContext == null || depContext.bus == null) {
-            this.logger.error('Missing bus %s.%s :: %s', context, module, dependency);
+  private async getProps(directory: string, name: string): Promise<any> {
+    const files = this.getPropsFileList();
+    let config = <any>{};
+    for (const file of files) {
+      const filepath = join(directory, file);
+      const layer = await this.readYaml(filepath);
+      config = merge(config, layer);
+    }
+    const result = <any>{};
+    Object.keys(config).forEach(key => {
+      if (~key.indexOf('/')) {
+        const offset = key.indexOf('/');
+        const module = key.substr(0, offset);
+        const component = key.substr(offset + 1);
+        if (!(module in result)) result[module] = {};
+        result[module][component] = config[key];
+      } else {
+        result[key] = config[key];
+      }
+    });
+    return result;
+  }
+
+  private  getPropsFileList(): Array<string> {
+    const extension = '.yml';
+    const list = ['context' + extension];
+    list.push('context.env-' + this.environment + extension);
+    list.push('context.host-' + this.hostname + extension);
+    list.push('context.user-' + this.procuser + extension);
+    list.push('context.mode-' + this.launcher + extension);
+    return list;
+  }
+
+  private getModule(props: any) {
+    const directory   = props.directory;
+    const contextName = props.context;
+    const moduleName  = props.module;
+    const services =
+      { CommandHandler: ['commands', 'events', props.module]
+      , Factory:        ['events', props.module]
+      , Gateway:        ['events', props.module]
+      , Repository:     ['events', 'queries', 'replies', props.module]
+      };
+    for (const key in props) {
+      if (!/^(CommandHandler|Repository|Factory|Gateway)\./.test(key)) continue ;
+      const type = key.substr(0, key.indexOf('.'));
+      services[key] = services[type];
+    }
+    // Prepare module services constructors
+    const module = {};
+    for (const serviceFullName in services) {
+      // Retrieve service constructor
+      const path = join(directory, serviceFullName);
+      const Service = Process.safeRequire(path);
+      if (Service == null) continue ;
+      const logger = new Logger(contextName+'.'+moduleName+'.'+serviceFullName, 'yellow');
+      const serviceType = /^([^.]+)(?:\.|$)/.exec(serviceFullName)[1];
+      const serviceName = ~serviceFullName.indexOf('.') ? /\.(.+)$/.exec(serviceFullName)[1] : moduleName;
+      const className = serviceName + serviceType;
+      if (!(className in Service)) {
+        this.logger.warn('%s.%s Missing class %s in service found', contextName, moduleName, className);
+        continue ;
+      }
+      // Instanciate dependencies
+      const serviceProps   = { context: contextName, module: moduleName, service: serviceFullName
+                             , bus: props.bus, logger
+                             };
+      debugger;
+      const moduleProps    = walk(props[serviceFullName], (key, value) => {
+        if (value instanceof Object && '$' in value) {
+          if (!/^[a-z]/.test(key)) logger.warn('should have dependency "%s" in lowercase', key);
+          const dependencyPath = value.$;
+          const dependencyProps = { ...serviceProps, ...value };
+          if (/^[A-Z][^\/]*\/[A-Z][^\/]*$/.test(key)) {
+            // Import local shared module interface
+            const className = /([^\/]+)$/.exec(key)[1] + 'Index';
+            const path = join(this.rootpath, dependencyPath);
+            const dependency = Process.safeRequire(path);
+            if (dependency == null || !(className in dependency)) {
+              logger.warn('Missing dependency %s', key);
+            } else {
+              return new dependency[className](dependencyProps);
+            }
           } else {
-            const props = { bus: depContext.bus, name: depConfig.name, context: depConfig.context };
-            const dep = new (<any>depConfig.iface)(props);
-            const children = ns.children[module];
-            const node = children[children.type];
-            node[dependency] = dep;
+            // Import cqes module
+            const dependency = Process.safeRequire(dependencyPath);
+            if (dependency == null || !('default' in dependency)) {
+              logger.warn('Missing dependency %s', key);
+            } else {
+              return new dependency.default(dependencyProps);
+            }
           }
+        } else {
+          return value;
         }
-      }
+      });
+      debugger;
+      // Prepare shared data interface
+      services[serviceFullName].forEach((resourceName: string) => {
+        const path = join(directory, resourceName);
+        serviceProps[resourceName] = Process.safeRequire(path);
+      })
+      const Constructor = Service[className];
+      const makeService = instances => {
+        const instance = new Constructor(serviceProps);
+        debugger;
+        for (const dependecyName in dependencies)
+          instance[dependecyName] = dependencies[dependecyName];
+      };
+      module[serviceFullName] = makeService;
     }
+    // Instanciate services
+    const instances = {};
+    const order = ['Factory', 'CommandHandler', 'Repository', 'Gateway'].concat(Object.keys(module));
+    Array.from(new Set(order)).forEach(name => {
+      if (!(name in module)) return ;
+      instances[name] = module[name](instances);
+    });
+    return instances;
   }
 
   /*******************************************/
 
   public async run() {
     await this.loadContexts();
-    await this.loadProps();
     await this.loadModules();
-    this.createInstances();
-    this.injectDependencies();
     return this.start();
   }
 
   public async start() {
     this.logger.log('%yellow', '==========  Starting  Services  ==========');
     const promises = <Array<Promise<string>>>[];
-    this.modules.forEach((module, name) => {
-      this.logger.log('Starting %s', name);
-      return new Promise(resolve => module.start().then(started => resolve(started ? null : name)));
-    });
-    await Promise.all(promises).then(result => result.forEach(failed => {
-      if (failed) this.logger.error('Unable to start module %s', failed);
-    }));
-    await Promise.all(Object.keys(this.contexts).map(name => {
-      return this.contexts[name].bus.start();
-    }));
+    for (const contextName in this.contexts) {
+      const context = this.contexts[contextName];
+      for (const moduleName in context) {
+        const module = context[moduleName];
+        this.logger.log('Starting %s.%s', contextName, moduleName);
+        await module.start();
+      }
+      await context.bus.start();
+    }
     this.logger.log('%green',  '========== All Services started ==========');
+    return true;
   }
 
   public async stop() {
-    for (const [name, service] of this.modules) await service.stop();
+    for (const contextName in this.contexts) {
+      const context = this.contexts[contextName];
+      await context.bus.stop();
+      for (const moduleName in context) {
+        const module = context[moduleName];
+        this.logger.log('Stoping %s.%s', contextName, moduleName);
+        await module.stop();
+      }
+    }
     this.logger.log('%red',    '==========   Services stopped   ==========');
   }
 

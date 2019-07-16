@@ -1,6 +1,4 @@
-import { Logger }      from './Logger';
-
-import * as Component  from './Component';
+import * as Element    from './Element';
 import * as CommandBus from './CommandBus';
 import * as QueryBus   from './QueryBus';
 import * as EventBus   from './EventBus';
@@ -9,28 +7,26 @@ import { command }     from './command';
 import { query }       from './query';
 import { reply }       from './reply';
 
-export interface props extends Component.props {
-  CommandBus: CommandBus.props;
-  QueryBus:   QueryBus.props;
-  EventBus:   EventBus.props;
+export interface props extends Element.props {
+  command?:     CommandBus.CommandBus;
+  query?:       QueryBus.QueryBus;
+  event?:       EventBus.EventBus;
+  CommandBus?:  CommandBus.props;
+  QueryBus?:    QueryBus.props;
+  EventBus?:    EventBus.props;
 }
 
-export interface children extends Component.children {
-  CommandBus?: { new(props: CommandBus.props, children: CommandBus.children): CommandBus.CommandBus };
-  QueryBus?:   { new(props: QueryBus.props,   children: QueryBus.children):   QueryBus.QueryBus };
-  EventBus?:   { new(props: EventBus.props,   children: EventBus.children):   EventBus.EventBus };
-}
-
-export class Bus extends Component.Component {
+export class Bus extends Element.Element {
   public command: CommandBus.CommandBus;
   public query:   QueryBus.QueryBus;
   public event:   EventBus.EventBus;
 
-  constructor(props: props, children: children) {
-    super({ ...props, type: 'bus' }, children);
-    this.command = this.sprout('CommandBus', CommandBus, { context: this.context });
-    this.query   = this.sprout('QueryBus', QueryBus, { context: this.context });
-    this.event   = this.sprout('EventBus', EventBus, { context: this.context });
+  constructor(props: props) {
+    super(props);
+    const childProps = { context: props.context };
+    this.command = props.command || new CommandBus.CommandBus({ ...childProps, ...props.CommandBus });
+    this.query   = props.query   || new QueryBus.QueryBus({ ...childProps, ...props.QueryBus });
+    this.event   = props.event   || new EventBus.EventBus({ ...childProps, ...props.EventBus });
   }
 
   public async start() {

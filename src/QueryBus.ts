@@ -1,4 +1,4 @@
-import * as Component       from './Component';
+import * as Element         from './Element';
 import { query as Q }       from './query';
 import { reply as R }       from './reply';
 import * as AMQPQueryBus    from './AMQPQueryBus';
@@ -8,22 +8,24 @@ interface Session {
   resolve: (value: any) => void;
 }
 
-export interface props extends Component.props {
+export interface props extends Element.props {
   AMQP?: AMQPQueryBus.props
 }
-export interface children extends Component.children {}
 
-export class QueryBus extends Component.Component {
+export class QueryBus extends Element.Element {
+  protected context:    string;
   private   pending:    Map<string, Session>;
   private   gcInterval: NodeJS.Timer;
   protected amqp:       AMQPQueryBus.AMQPQueryBus;
 
-  constructor(props: props, children: children) {
-    super({ ...props, type: 'amqp', color: 'blue' }, children);
-    this.gcInterval = null;
-    this.pending    = new Map();
-    const handler   = (id: string, reply: R) => this.handleReply(id, reply);
-    this.amqp       = new AMQPQueryBus.AMQPQueryBus({ ...this.props, ...props.AMQP, handler });
+  constructor(props: props) {
+    super(props);
+    this.context     = props.context;
+    this.gcInterval  = null;
+    this.pending     = new Map();
+    const handler    = (id: string, reply: R) => this.handleReply(id, reply);
+    const childProps = { context: props.context }
+    this.amqp        = new AMQPQueryBus.AMQPQueryBus({ ...childProps, handler, ...props.AMQP });
   }
 
   public serve(view: string, handler: (query: Q) => void): boolean {
@@ -33,7 +35,7 @@ export class QueryBus extends Component.Component {
   }
 
   public async request(view: string, method: string, data: any, meta?: any): Promise<R> {
-    const request = new Q(view, null, method, data, meta);
+    const request = new Q(view, method, data, meta);
     const timeout = 30;
     this.logger.log('%blue %s -> %s %j', 'Query', view, method, data);
     const id = await this.amqp.query(request, timeout);

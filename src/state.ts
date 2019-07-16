@@ -1,5 +1,5 @@
 import { event }  from './event';
-import merge      from './merge';
+import { merge }  from './merge';
 
 export class state<A = any> {
   public type:      string;

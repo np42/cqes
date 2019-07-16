@@ -12,7 +12,7 @@ export class CommandBus extends Element.Element {
 
   constructor(props: props) {
     super(props);
-    const childProps = { context: props.context };
+    const childProps = { context: props.context, logger: props.logger };
     this.amqp = new AMQPCommandBus.AMQPCommandBus({ ...childProps, ...props.AMQP });
   }
 

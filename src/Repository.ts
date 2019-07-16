@@ -35,11 +35,10 @@ export class Repository extends Gateway.Gateway {
   }
 
   public async resolve(query: Q): Promise<R> {
-    const method = 'resolve' + query.method;
-    if (method in this) {
+    if (query.method in this) {
       this.logger.log('Resolving %s -> %s', query.view, query.method);
       try {
-        const reply = await this[method](query);
+        const reply = await this[query.method](query);
         if (reply instanceof R) return reply;
         return new R(reply.constructor.name, reply);
       } catch (error) {

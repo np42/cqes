@@ -24,7 +24,7 @@ export class QueryBus extends Element.Element {
     this.gcInterval  = null;
     this.pending     = new Map();
     const handler    = (id: string, reply: R) => this.handleReply(id, reply);
-    const childProps = { context: props.context }
+    const childProps = { context: props.context, logger: props.logger }
     this.amqp        = new AMQPQueryBus.AMQPQueryBus({ ...childProps, handler, ...props.AMQP });
   }
 

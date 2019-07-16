@@ -59,10 +59,9 @@ export class CommandHandler extends Service.Service {
   }
 
   public async handle(state: S, command: C): Promise<Array<E>> {
-    const method = 'handle' + command.order;
-    if (method in this) {
+    if (command.order in this) {
       this.logger.debug('Handle %s : %s %j', command.id, command.order, command.data);
-      let result = await this[method](state, command);
+      let result = await this[command.order](state, command);
       if (result == null) result = CommandHandler.noop();
       else if (!(result instanceof Array)) result = [result];
       return result.map((event: any) => {

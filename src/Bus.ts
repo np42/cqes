@@ -23,7 +23,7 @@ export class Bus extends Element.Element {
 
   constructor(props: props) {
     super(props);
-    const childProps = { context: props.context };
+    const childProps = { context: props.context, logger: props.logger };
     this.command = props.command || new CommandBus.CommandBus({ ...childProps, ...props.CommandBus });
     this.query   = props.query   || new QueryBus.QueryBus({ ...childProps, ...props.QueryBus });
     this.event   = props.event   || new EventBus.EventBus({ ...childProps, ...props.EventBus });

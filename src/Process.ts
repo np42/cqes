@@ -20,7 +20,7 @@ export interface props extends Element.props {
 }
 
 interface Contexts { [context: string]: Context }
-interface Context  { bus: any; logger: any; [name: string]: Module; }
+interface Context  { bus: Bus; logger: Logger; modules: { [name: string]: Module; } }
 interface Module   { [service: string]: Component }
 
 export class Process extends Element.Element {
@@ -90,8 +90,9 @@ export class Process extends Element.Element {
     const processes = await this.readYaml(filepath);
     this.contexts   = processes[this.name] || {};
     for (const name in this.contexts) {
-      const context = this.contexts[name]
-      if (!(name in context)) context[name] = {};
+      const context = this.contexts[name];
+      if (!('modules' in context)) context.modules = {};
+      if (!(name in context.modules)) context.modules[name] = {};
     }
   }
 
@@ -100,24 +101,21 @@ export class Process extends Element.Element {
       const context   = this.contexts[contextName];
       const directory = join(this.rootpath, contextName);
       const props     = await this.getProps(directory, contextName) || {};
-      debugger;
-      context.logger = new Logger(contextName);
-      const busProps = { context: contextName, logger: context.logger, ...props.bus };
-      context.bus    = new Bus(busProps);
+      context.logger  = new Logger('%yellow', contextName);
+      const busProps  = { context: contextName, logger: context.logger, ...props.bus };
+      context.bus     = new Bus(busProps);
       for (const key in props) {
         if (!/^[A-Z]/.test(key)) continue ;
-        if (!(key in context)) context[key] = {};
+        if (!(key in context.modules)) context.modules[key] = {};
       }
-      for (const moduleName in context) {
+      for (const moduleName in context.modules) {
         if (/^[A-Z]/.test(moduleName)) {
           const directory    = join(this.rootpath, contextName, moduleName);
-          const mergedProps  = merge(context[moduleName], props[moduleName]);
+          const mergedProps  = merge(context.modules[moduleName], props[moduleName]);
           const moduleProps = { context: contextName, module: moduleName, directory
                               , bus: context.bus, logger: context.logger
                               , ...mergedProps };
-          context[moduleName] = this.getModule(moduleProps);
-        } else {
-          this.logger.warn('[%s] Skip module %s', contextName, moduleName);
+          context.modules[moduleName] = this.getModule(moduleProps);
         }
       }
     }
@@ -178,27 +176,26 @@ export class Process extends Element.Element {
       const path = join(directory, serviceFullName);
       const Service = Process.safeRequire(path);
       if (Service == null) continue ;
-      const logger = new Logger(contextName+'.'+moduleName+'.'+serviceFullName, 'yellow');
+      const logger = new Logger('%yellow.%cyan.%magenta', contextName, moduleName, serviceFullName);
       const serviceType = /^([^.]+)(?:\.|$)/.exec(serviceFullName)[1];
       const serviceName = ~serviceFullName.indexOf('.') ? /\.(.+)$/.exec(serviceFullName)[1] : moduleName;
       const className = serviceName + serviceType;
       if (!(className in Service)) {
-        this.logger.warn('%s.%s Missing class %s in service found', contextName, moduleName, className);
+        logger.warn('Missing class %s in service found', className);
         continue ;
       }
       // Instanciate dependencies
       const serviceProps   = { context: contextName, module: moduleName, service: serviceFullName
                              , bus: props.bus, logger
                              };
-      debugger;
       const moduleProps    = walk(props[serviceFullName], (key, value) => {
         if (value instanceof Object && '$' in value) {
           if (!/^[a-z]/.test(key)) logger.warn('should have dependency "%s" in lowercase', key);
           const dependencyPath = value.$;
           const dependencyProps = { ...serviceProps, ...value };
-          if (/^[A-Z][^\/]*\/[A-Z][^\/]*$/.test(key)) {
+          if (/^[A-Z][^\/]*\/[A-Z][^\/]*$/.test(dependencyPath)) {
             // Import local shared module interface
-            const className = /([^\/]+)$/.exec(key)[1] + 'Index';
+            const className = /([^\/]+)$/.exec(dependencyPath)[1] + 'Index';
             const path = join(this.rootpath, dependencyPath);
             const dependency = Process.safeRequire(path);
             if (dependency == null || !(className in dependency)) {
@@ -219,27 +216,25 @@ export class Process extends Element.Element {
           return value;
         }
       });
-      debugger;
       // Prepare shared data interface
       services[serviceFullName].forEach((resourceName: string) => {
         const path = join(directory, resourceName);
-        serviceProps[resourceName] = Process.safeRequire(path);
+        const iface = Process.safeRequire(path);
+        if (iface == null) return ;
+        if (resourceName == props.module) {
+          serviceProps['state'] = iface[resourceName];
+        } else {
+          serviceProps[resourceName] = iface;
+        }
       })
-      const Constructor = Service[className];
-      const makeService = instances => {
-        const instance = new Constructor(serviceProps);
-        debugger;
-        for (const dependecyName in dependencies)
-          instance[dependecyName] = dependencies[dependecyName];
-      };
-      module[serviceFullName] = makeService;
+      module[serviceFullName] = (props: any) => new Service[className]({ ...props, ...serviceProps });
     }
     // Instanciate services
     const instances = {};
     const order = ['Factory', 'CommandHandler', 'Repository', 'Gateway'].concat(Object.keys(module));
     Array.from(new Set(order)).forEach(name => {
       if (!(name in module)) return ;
-      instances[name] = module[name](instances);
+      instances[name] = module[name]({ factory: instances['Factory'] });
     });
     return instances;
   }
@@ -254,13 +249,15 @@ export class Process extends Element.Element {
 
   public async start() {
     this.logger.log('%yellow', '==========  Starting  Services  ==========');
-    const promises = <Array<Promise<string>>>[];
     for (const contextName in this.contexts) {
       const context = this.contexts[contextName];
-      for (const moduleName in context) {
-        const module = context[moduleName];
-        this.logger.log('Starting %s.%s', contextName, moduleName);
-        await module.start();
+      for (const moduleName in context.modules) {
+        const module = context.modules[moduleName];
+        for (const serviceName in module) {
+          const service = module[serviceName];
+          this.logger.log('Starting %yellow.%cyan.%magenta', contextName, moduleName, serviceName);
+          await service.start();
+        }
       }
       await context.bus.start();
     }
@@ -272,10 +269,13 @@ export class Process extends Element.Element {
     for (const contextName in this.contexts) {
       const context = this.contexts[contextName];
       await context.bus.stop();
-      for (const moduleName in context) {
-        const module = context[moduleName];
-        this.logger.log('Stoping %s.%s', contextName, moduleName);
-        await module.stop();
+      for (const moduleName in context.modules) {
+        const module = context.modules[moduleName];
+        for (const serviceName in module) {
+          const service = module[serviceName];
+          this.logger.log('Stoping %yellow.%cyan.%magenta', contextName, moduleName, serviceName);
+          await service.stop();
+        }
       }
     }
     this.logger.log('%red',    '==========   Services stopped   ==========');

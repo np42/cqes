@@ -1,4 +1,5 @@
 import * as Process        from './src/Process';
+import * as Element        from './src/Element';
 import * as Component      from './src/Component';
 
 import * as CommandHandler from './src/CommandHandler';
@@ -6,8 +7,8 @@ import * as Repository     from './src/Repository';
 import * as Gateway        from './src/Gateway';
 import * as Factory        from './src/Factory';
 
-export { Process, Component
-       , Gateway, CommandHandler, Factory, Repository
+export { Element, Process
+       , Component, Gateway, CommandHandler, Factory, Repository
        };
 
 export { command as C } from './src/command';

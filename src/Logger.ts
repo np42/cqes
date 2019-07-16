@@ -13,13 +13,11 @@ export class Logger {
   }
 
   private name:       { toString: () => string };
-  private color:      string;
   private withColor:  boolean;
   private alerts:     { [key: string]: { last: number, times: number } };
 
-  constructor(name: string | { toString: () => string }, color: string = 'reset') {
-    this.name       = name;
-    this.color      = color;
+  constructor(pattern: string, ...args: Array<string>) {
+    this.name       = this._sprintf(pattern, args);
     this.withColor  = globalOptions.has('withColor') ? globalOptions.get('withColor') : isTTY;
   }
 
@@ -111,8 +109,7 @@ export class Logger {
   }
 
   _headers(tagName: string, ...modifiers: Array<string>) {
-    const name = this.withColor ? colors[String(this.color)](String(this.name)) : String(this.name);
-    return this._tag(tagName, modifiers) + ' ' + this._date() + ' ' + name;
+    return this._tag(tagName, modifiers) + ' ' + this._date() + ' ' + String(this.name);
   }
 
   _tag(name: string, modifiers: Array<string>) {

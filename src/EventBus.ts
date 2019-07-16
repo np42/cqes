@@ -26,7 +26,7 @@ export class EventBus extends Element.Element {
   constructor(props: props) {
     super(props);
     this.props = props;
-    const childProps = { context: props.context };
+    const childProps = { context: props.context, logger: props.logger };
     this.es = new EventStore.EventStore({ ...childProps, ...props.EventStore });
   }
 

@@ -18,21 +18,30 @@ export class Repository extends Gateway.Gateway {
     this.replies = props.replies || {};
   }
 
-  public async start() {
+  public async start(): Promise<boolean> {
     if (this.running) return true;
-    this.bus.query.serve(this.context + '.' + this.module, async query => {
-      const qtype = this.queries[query.method];
-      if (qtype == null) {
-        this.logger.error('No type for %j', query);
-        const reply = new R('Error', new Error('Query type is missing'));
-        return this.bus.query.reply(query, reply);
-      } else {
-        query.data = new qtype(query.data);
-        const reply = await this.resolve(query);
-        return this.bus.query.reply(query, reply);
+    return new Promise((resolve, reject) => super.start().then(() => {
+      if (!this.bus.query) {
+        this.logger.error('Query Bus not enabled');
+        return resolve(false);
       }
-    });
-    return super.start();
+      this.bus.query.serve(this.context + '.' + this.module, async query => {
+        const qtype = this.queries[query.method];
+        if (qtype == null) {
+          this.logger.error('No type for %j', query);
+          const reply = new R('Error', new Error('Query type is missing'));
+          return this.bus.query.reply(query, reply);
+        } else {
+          query.data = new qtype(query.data);
+          const reply = await this.resolve(query);
+          return this.bus.query.reply(query, reply);
+        }
+      }).then(() => resolve(true))
+        .catch(e => {
+          this.logger.error(e);
+          resolve(false);
+        });
+    }));
   }
 
   public async stop(): Promise<void> {

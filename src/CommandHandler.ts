@@ -25,38 +25,48 @@ export class CommandHandler extends Service.Service {
     this.topics   = props.topics   || [this.context + '.' + this.module];
   }
 
-  public async start() {
+  public async start(): Promise<boolean> {
     if (this.running) return true;
-    this.topics.forEach((topic: string) => {
-      this.bus.command.listen(topic, async command => {
-        const type = this.commands[command.order];
-        if (type == null) return this.bus.command.relocate(command, topic + '.untyped');
-        command.data = new type(command.data);
-        const state = await this.factory.get(command.id);
-        try {
-          const events = await this.handle(state, command);
-          if (events.length === 0) {
-            this.bus.command.discard(command);
-          } else {
-            const stream = this.module;
-            const id = command.id;
-            const expectedRevision = state.revision + 1;
-            try {
-              const position = await this.bus.event.emit(stream, id, expectedRevision, events);
+    return new Promise((resolve, reject) => super.start().then(() => {
+      if (!this.bus.command) {
+        this.logger.error('Command Bus not enabled');
+        return resolve(false);
+      }
+      Promise.all(this.topics.map((topic: string) => {
+        return this.bus.command.listen(topic, async command => {
+          const type = this.commands[command.order];
+          if (type == null) return this.bus.command.relocate(command, topic + '.untyped');
+          command.data = new type(command.data);
+          const state = await this.factory.get(command.id);
+          try {
+            const events = await this.handle(state, command);
+            if (events.length === 0) {
               this.bus.command.discard(command);
-            } catch (e) {
-              this.logger.warn(e);
-              this.bus.command.replay(command);
+            } else {
+              const stream = this.module;
+              const id = command.id;
+              const expectedRevision = state.revision + 1;
+              try {
+                const position = await this.bus.event.emit(stream, id, expectedRevision, events);
+                this.bus.command.discard(command);
+              } catch (e) {
+                this.logger.warn(e);
+                this.bus.command.replay(command);
+              }
             }
+          } catch (e) {
+            this.logger.error(e);
+            command.meta.error = e;
+            this.bus.command.relocate(command, topic + '.failed');
           }
-        } catch (e) {
+        })
+      }))
+        .then(() => resolve(true))
+        .catch(e => {
           this.logger.error(e);
-          command.meta.error = e;
-          this.bus.command.relocate(command, topic + '.failed');
-        }
-      });
-    });
-    return super.start();
+          resolve(false);
+        })
+    }));
   }
 
   public async stop(): Promise<void> {

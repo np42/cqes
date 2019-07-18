@@ -20,7 +20,7 @@ export interface props extends Element.props {
 }
 
 interface Contexts { [context: string]: Context }
-interface Context  { bus: Bus; logger: Logger; modules: { [name: string]: Module; } }
+interface Context  { bus?: Bus; logger?: Logger; modules?: { [name: string]: Module; } }
 interface Module   { [service: string]: Component }
 
 export class Process extends Element.Element {
@@ -236,6 +236,7 @@ export class Process extends Element.Element {
     const order = ['Factory', 'CommandHandler', 'Repository', 'Gateway'].concat(Object.keys(module));
     Array.from(new Set(order)).forEach(name => {
       if (!(name in module)) return ;
+      debugger;
       instances[name] = module[name]({ factory: instances['Factory'] });
     });
     return instances;
@@ -252,6 +253,7 @@ export class Process extends Element.Element {
   public async start() {
     this.logger.log('%yellow', '==========  Starting  Services  ==========');
     const promises = [];
+    const timeouts = <any>[];
     for (const contextName in this.contexts) {
       const context = this.contexts[contextName];
       for (const moduleName in context.modules) {
@@ -259,12 +261,19 @@ export class Process extends Element.Element {
         for (const serviceName in module) {
           const service = module[serviceName];
           this.logger.log('Starting %yellow.%cyan.%magenta', contextName, moduleName, serviceName);
+          timeouts.push(setTimeout(() => {
+            this.logger.error('%yellow.%cyan.%magenta won\'t start', contextName, moduleName, serviceName);
+            //process.exit(-1);
+          }, 10000));
           promises.push(service.start());
         }
       }
-      promises.push(context.bus.start());
+      await context.bus.start();
     }
-    await Promise.all(promises);
+    (await Promise.all(promises)).forEach((started, offset) => {
+      if (!started) process.exit(-1);
+      clearTimeout(timeouts[offset]);
+    });
     this.logger.log('%green',  '========== All Services started ==========');
     return true;
   }

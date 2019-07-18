@@ -7,27 +7,32 @@ export interface props extends Service.props {}
 
 export class Gateway extends Service.Service {
 
-  constructor(props: props) {
-    super(props);
-  }
-
-  public async start() {
+  public async start(): Promise<boolean> {
     if (this.running) return true;
-    this.bus.event.psubscribe(this.service, this.module, async (id, revision, events, date) => {
-      const state = this.factory ? await this.factory.get(id) : new S(this.context, id, -1, null);
-      for (const event of events) {
-        const type = this.events[event.name];
-        if (type == null) {
-          this.logger.error('No type for %j', event);
-          throw new Error('Event type is missing');
-        } else {
-          event.data = new type(event.data);
-          event.meta = { createdAt: new Date(date), ...event.meta };
-          return this.on(state, event)
-        }
+    return new Promise((resolve, reject) => super.start().then(() => {
+      if (!this.bus.event) {
+        this.logger.error('Event Bus not enabled');
+        return resolve(false);
       }
-    });
-    return super.start();
+      this.bus.event.psubscribe(this.service, this.module, async (id, revision, events, date) => {
+        const state = this.factory ? await this.factory.get(id) : new S(this.context, id, -1, null);
+        for (const event of events) {
+          const type = this.events[event.name];
+          if (type == null) {
+            this.logger.error('No type for %j', event);
+            throw new Error('Event type is missing');
+          } else {
+            event.data = new type(event.data);
+            event.meta = { createdAt: new Date(date), ...event.meta };
+            return this.on(state, event)
+          }
+        }
+      }).then(() => resolve(true))
+        .catch(e => {
+          this.logger.error(e);
+          resolve(false);
+        });
+    }));
   }
 
   public async stop(): Promise<void> {

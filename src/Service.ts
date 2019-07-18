@@ -16,7 +16,7 @@ export class Service extends Component.Component {
     super(props);
     this.events  = props.events  || {};
     this.state   = props.state   || Object;
-    this.factory = props.factory || new Factory.Factory(props);
+    this.factory = props.factory || null;
   }
 
   public async start(): Promise<boolean> {

@@ -28,10 +28,9 @@ export class QueryBus extends Element.Element {
     this.amqp        = new AMQPQueryBus.AMQPQueryBus({ ...childProps, handler, ...props.AMQP });
   }
 
-  public serve(view: string, handler: (query: Q) => void): boolean {
+  public serve(view: string, handler: (query: Q) => void): Promise<any> {
     this.logger.log('%blue %s', 'Serve', view);
-    this.amqp.serve(view, handler);
-    return true;
+    return this.amqp.serve(view, handler);
   }
 
   public async request(view: string, method: string, data: any, meta?: any): Promise<R> {

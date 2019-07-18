@@ -27,28 +27,36 @@ export class Factory extends Component.Component {
   }
 
   public async start(): Promise<boolean> {
-    if (this.running) return ;
-    this.bus.event.subscribe(this.module, async (id: string, revision: number, events: events) => {
-      const curState = this.states.get(id) || this.create(id);
-      const newState = events.reduce((state, event) => {
-        const type = this.events[event.name];
-        if (type == null) {
-          this.logger.error('No type for %j', event);
-          throw new Error('Event type is missing');
-        } else {
-          event.data = new type(event.data);
-          return this.apply(state, event)
-        }
-      }, curState);
-      this.states.set(id, newState);
-    }, 0).then(() => {
-      this.queue.resume();
-    });
-    return true;
+    if (this.running) return Promise.resolve(true);
+    return new Promise((resolve, reject) => super.start().then(() => {
+      if (!this.bus.event) {
+        this.logger.error('Event Bus not enabled');
+        return resolve(false);
+      }
+      this.bus.event.subscribe(this.module, async (id: string, revision: number, events: events) => {
+        const curState = this.states.get(id) || this.create(id);
+        let failed = false;
+        const newState = events.reduce((state, event) => {
+          const type = this.events[event.name];
+          if (type == null) {
+            this.logger.error('No type for %j', event);
+            failed = true;
+            return state;
+          } else {
+            event.data = new type(event.data);
+            return this.apply(state, event);
+          }
+        }, curState);
+        if (failed) throw new Error('Subscription failed');
+        this.states.set(id, newState);
+      }, 0).then(() => {
+        resolve(true);
+        this.queue.resume();
+      }).catch(reject);
+    }));
   }
 
   public stop(): Promise<void> {
-    if (!this.running) return ;
     return super.stop();
   }
 

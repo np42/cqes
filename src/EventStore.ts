@@ -97,7 +97,8 @@ export class EventStore extends Element.Element {
     this.streams  = {};
     this.queue    = new Queue();
     this.sessions = new Map();
-    process.on('SIGINT', () => this.onExit());
+    process.on('SIGINT', () => this.onExit(false));
+    process.on('exit', () => this.onExit(true));
   }
 
   public async start(): Promise<boolean> {
@@ -125,9 +126,9 @@ export class EventStore extends Element.Element {
     });
   }
 
-  public async onExit() {
-    await this.stop();
-    process.exit();
+  public async onExit(exit: boolean) {
+    if (exit) await this.stop();
+    else process.exit();
   }
 
   /*******************************/

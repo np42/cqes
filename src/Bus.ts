@@ -24,25 +24,28 @@ export class Bus extends Element.Element {
   constructor(props: props) {
     super(props);
     const childProps = { context: props.context, logger: props.logger };
-    this.command = props.command || new CommandBus.CommandBus({ ...childProps, ...props.CommandBus });
-    this.query   = props.query   || new QueryBus.QueryBus({ ...childProps, ...props.QueryBus });
-    this.event   = props.event   || new EventBus.EventBus({ ...childProps, ...props.EventBus });
+    if (props.CommandBus)
+      this.command = props.command || new CommandBus.CommandBus({ ...childProps, ...props.CommandBus });
+    if (props.QueryBus)
+      this.query   = props.query   || new QueryBus.QueryBus({ ...childProps, ...props.QueryBus });
+    if (props.EventBus)
+      this.event   = props.event   || new EventBus.EventBus({ ...childProps, ...props.EventBus });
   }
 
   public async start() {
     this.logger.debug('Starting QueryBus', this.context);
-    if (await this.query.start()) {
+    if (!this.query || await this.query.start()) {
       this.logger.debug('Starting EventBus', this.context);
-      if (await this.event.start()) {
+      if (!this.event || await this.event.start()) {
         this.logger.debug('Starting CommandBus', this.context);
-        if (await this.command.start()) {
+        if (!this.command || await this.command.start()) {
           return true;
         } else {
-          await this.event.stop();
-          await this.query.stop();
+          if (this.event) await this.event.stop();
+          if (this.query) await this.query.stop();
         }
       } else {
-        await this.query.stop();
+        if (this.query) await this.query.stop();
       }
       return false;
     }
@@ -50,9 +53,9 @@ export class Bus extends Element.Element {
   }
 
   public async stop() {
-    await this.command.stop();
-    await this.event.stop();
-    await this.query.stop();
+    if (this.command) await this.command.stop();
+    if (this.event)   await this.event.stop();
+    if (this.query)   await this.query.stop();
   }
 
 }

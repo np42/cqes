@@ -27,4 +27,4 @@ function cloneDate(item: Date) {
   return new Date(item.getTime());
 }
 
-export default clone;
+export { clone };

@@ -36,12 +36,12 @@ export class CommandBus extends Element.Element {
   }
 
   public replay(command: Command<any>): Promise<void> {
-    this.logger.todo();
+    this.logger.todo('Replay %j', command);
     return Promise.resolve();
   }
 
   public relocate(command: Command<any>, topic: string): Promise<void> {
-    this.logger.todo();
+    this.logger.todo('Relocate %s %j', topic, command);
     return Promise.resolve();
   }
 

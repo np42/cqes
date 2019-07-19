@@ -135,8 +135,10 @@ Value.defineProperty('validate', function validate(value: any) {
   for (let i = 0; i < this._cleaners.length; i += 1)
     value = this._cleaners[i].call(this, value);
   for (let i = 0; i < this._checks.length; i += 1) {
-    if (!this._checks[i].test(value))
-      throw new Error('value "' + value + '" do not satisfy checks');
+    if (!this._checks[i].test(value)) {
+      if (this._optional) return null;
+      else throw new Error('value "' + value + '" do not satisfy checks');
+    }
   }
   return value;
 });
@@ -266,8 +268,12 @@ Record.defineProperty('from', function from(data: any) {
     if (this._constructor == null)
       this._constructor = eval('(function ' + this._name + '() {})');
     const record = <any>new this._constructor();
-    for (const [name, type] of this._object)
-      record[name] = type.from(data[name]);
+    for (const [name, type] of this._object) {
+      try { record[name] = type.from(data[name]); }
+      catch (e) {
+        throw new Error('Failed on field: ' + name + ': ' + JSON.stringify(data[name]) + '\n' + String(e));
+      }
+    }
     return this.validate(record);
   } else {
     return this.default();

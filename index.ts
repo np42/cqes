@@ -1,13 +1,14 @@
 import * as Process        from './src/Process';
 import * as Element        from './src/Element';
 import * as Component      from './src/Component';
+import * as Index          from './src/Index';
 
 import * as CommandHandler from './src/CommandHandler';
 import * as Repository     from './src/Repository';
 import * as Gateway        from './src/Gateway';
 import * as Factory        from './src/Factory';
 
-export { Element, Process
+export { Element, Process, Index
        , Component, Gateway, CommandHandler, Factory, Repository
        };
 

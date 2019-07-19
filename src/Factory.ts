@@ -76,7 +76,7 @@ export class Factory extends Component.Component {
 
   public apply(state: S, event: E) {
     const revision = state.revision;
-    const applier = this['apply' + event.name];
+    const applier = this[event.name];
     let newState = state;
     if (applier) {
       this.logger.log('%s apply %s: %j', state.key, event.name, event.data);

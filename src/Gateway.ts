@@ -1,11 +1,18 @@
-import * as Service from './Service';
+import * as Component from './Component';
 
 import { event as E }  from './event';
-import { state as S }  from './state';
 
-export interface props extends Service.props {}
+export interface props extends Component.props {
+  events?: { [name: string]: { new (data: any): any } }
+}
 
-export class Gateway extends Service.Service {
+export class Gateway extends Component.Component {
+  protected events: { [name: string]: { new (data: any): any } };
+
+  constructor(props: props) {
+    super(props);
+    this.events = props.events || {};
+  }
 
   public async start(): Promise<boolean> {
     if (this.running) return true;
@@ -15,7 +22,6 @@ export class Gateway extends Service.Service {
         return resolve(false);
       }
       this.bus.event.psubscribe(this.service, this.module, async (id, revision, events, date) => {
-        const state = this.factory ? await this.factory.get(id) : new S(this.context, id, -1, null);
         for (const event of events) {
           const type = this.events[event.name];
           if (type == null) {
@@ -24,7 +30,7 @@ export class Gateway extends Service.Service {
           } else {
             event.data = new type(event.data);
             event.meta = { createdAt: new Date(date), ...event.meta };
-            return this.on(state, event)
+            return this.on(event)
           }
         }
       }).then(() => resolve(true))
@@ -40,9 +46,9 @@ export class Gateway extends Service.Service {
     return super.stop();
   }
 
-  public async on(state: S, event: E) {
+  public async on(event: E) {
     if (!(event.name in this)) throw new Error('Missing handler: ' + event.name);
-    return await this[event.name](state, event);
+    return await this[event.name](event);
   }
 
 }

@@ -1,4 +1,4 @@
-import clone from './clone';
+import { clone } from './clone';
 
 export function merge(...args: any[]) {
   let result = args.length > 0 ? clone(args[0]) : null;

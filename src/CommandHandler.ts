@@ -1,18 +1,21 @@
-import * as Service from './Service';
+import * as Component    from './Component';
+import * as Factory      from './Factory';
 
 import { state   as S }  from './state';
 import { command as C }  from './command';
-import { query   as Q }  from './query';
-import { reply   as R }  from './reply';
 import { event   as E }  from './event';
 
-export interface props extends Service.props {
+export interface props extends Component.props {
+  events?:   { [name: string]: { new (data: any): any } }
   commands?: { [name: string]: { new (data: any): any } }
-  topics?: Array<string>;
+  factory?:  Factory.Factory;
+  topics?:   Array<string>;
 }
 
-export class CommandHandler extends Service.Service {
+export class CommandHandler extends Component.Component {
+  protected events:   { [name: string]: { new (data: any): any } };
   protected commands: { [name: string]: { new (data: any): any } };
+  protected factory:  Factory.Factory;
   protected topics:   Array<string>;
 
   static noop(): Array<E> {
@@ -22,6 +25,7 @@ export class CommandHandler extends Service.Service {
   constructor(props: props) {
     super(props);
     this.commands = props.commands || {};
+    this.events   = props.events   || {};
     this.topics   = props.topics   || [this.context + '.' + this.module];
   }
 

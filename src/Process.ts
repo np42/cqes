@@ -24,6 +24,7 @@ interface Contexts { [context: string]: Context }
 interface Context  { bus?: Bus; logger?: Logger; modules?: { [name: string]: Module; } }
 interface Module   { [service: string]: Component }
 interface Dependency { service: string
+                     , local?: boolean
                      , resources: Array<string>
                      , dependencies?: { [name: string]: Dependency }
                      }
@@ -109,7 +110,8 @@ export class Process extends Element.Element {
       const directory = join(this.rootpath, contextName);
       const props     = await this.getProps(directory, contextName) || {};
       context.logger  = new Logger('%yellow', contextName);
-      const busProps  = { context: contextName, logger: context.logger, ...props.bus };
+      const busProps  = { context: contextName, logger: context.logger };
+      Object.assign(busProps, this.getPropsDependencies(props.bus, busProps));
       context.bus     = new Bus(busProps);
       for (const key in props) {
         if (!/^[A-Z]/.test(key)) continue ;
@@ -151,7 +153,7 @@ export class Process extends Element.Element {
     return result;
   }
 
-  private  getPropsFileList(): Array<string> {
+  private getPropsFileList(): Array<string> {
     const extension = '.yml';
     const list = ['context' + extension];
     list.push('context.env-' + this.environment + extension);
@@ -161,19 +163,64 @@ export class Process extends Element.Element {
     return list;
   }
 
+  private getPropsDependencies(props: any, commonProps: any) {
+    const logger = commonProps.logger;
+    return walk(props || {}, (key, value) => {
+      if (value instanceof Object && '$' in value) {
+        if (!/(^[a-z])|\//.test(key)) logger.warn('should have dependency "%s" in lowercase', key);
+        const dependencyPath = value.$;
+        const dependencyProps = { ...commonProps, ...value };
+        if (/^[A-Z][^\/]*\/[A-Z][^\/]*$/.test(dependencyPath)) {
+          // Import local shared module interface
+          const [_, depContextName, depModuleName] = /^([^\/]*)\/(.*)$/.exec(dependencyPath);
+          const className = depModuleName + 'Index';
+          const path = join(this.rootpath, dependencyPath);
+          const dependency = Process.safeRequire(path);
+          if (dependency == null || !(className in dependency)) {
+            logger.warn('Missing dependency %s', key);
+          } else {
+            ['commands', 'queries', 'replies'].forEach(ifaceName => {
+              const path  = join(this.rootpath, dependencyPath, ifaceName);
+              const iface = Process.safeRequire(path);
+              if (iface == null) return ;
+              dependencyProps[ifaceName] = iface;
+            });
+            dependencyProps.name = depContextName + '.' + depModuleName;
+            return new dependency[className](dependencyProps);
+          }
+        } else {
+          // Import cqes module
+          const dependency = Process.safeRequire(dependencyPath);
+          if (dependency == null || !('default' in dependency)) {
+            logger.warn('Missing dependency %s', key);
+          } else {
+            return new dependency.default(dependencyProps);
+          }
+        }
+      } else {
+        return value;
+      }
+    });
+  }
+
   private getModule(props: any) {
     const directory   = props.directory;
     const contextName = props.context;
     const moduleName  = props.module;
     const services: { [service: string]: Dependency } =
-      { commandHandler: { service: 'CommandHandler'
-                        , resources: ['commands', 'events']
-                        , dependencies:
-                          { factory: { service: 'Factory'
-                                     , resources: ['events', props.module]
-                                     }
-                          }
-                        }
+      { commandHandler:
+        { service: 'CommandHandler'
+        , resources: ['commands', 'events']
+        , dependencies:
+          { buffer:
+            { service: 'Buffer', local: true
+            , resources: ['state']
+            , dependencies:
+              { factory: { service: 'Factory', resources: ['events'] }
+              }
+            }
+          }
+        }
       , gateway:    { service: 'Gateway', resources: ['events'] }
       , repository: { service: 'Repository', resources: ['events', 'queries', 'replies'] }
       };
@@ -186,6 +233,7 @@ export class Process extends Element.Element {
       service.service = key;
       services[name] = service;
     }
+    debugger;
     // Prepare module services constructors
     const module = {};
     for (const serviceKey in services) {
@@ -194,76 +242,46 @@ export class Process extends Element.Element {
       const path = join(directory, serviceFullName);
       const Service = Process.safeRequire(path);
       if (Service == null) continue ;
-      const logger = new Logger(LOG_FORMAT, contextName, moduleName, serviceFullName);
       const serviceType = /^([^.]+)(?:\.|$)/.exec(serviceFullName)[1];
       const serviceName = ~serviceFullName.indexOf('.') ? /\.(.+)$/.exec(serviceFullName)[1] : moduleName;
       const className = serviceName + serviceType;
       if (!(className in Service)) {
-        logger.warn('Missing class %s in service found', className);
+        this.logger.warn('%s.%s Missing class %s', moduleName, serviceName, className);
         continue ;
       }
       // Instanciate custom dependencies
+      debugger;
+      const logger = new Logger(LOG_FORMAT, contextName, moduleName, serviceFullName);
       const serviceProps = { context: contextName, module: moduleName, service: serviceFullName
                            , bus: props.bus, logger
                            };
-      const serviceDeps = walk(props[serviceFullName] || {}, (key, value) => {
-        if (value instanceof Object && '$' in value) {
-          if (!/(^[a-z])|\//.test(key)) logger.warn('should have dependency "%s" in lowercase', key);
-          const dependencyPath = value.$;
-          const dependencyProps = { ...serviceProps, ...value };
-          if (/^[A-Z][^\/]*\/[A-Z][^\/]*$/.test(dependencyPath)) {
-            // Import local shared module interface
-            const [_, depContextName, depModuleName] = /^([^\/]*)\/(.*)$/.exec(dependencyPath);
-            const className = depModuleName + 'Index';
-            const path = join(this.rootpath, dependencyPath);
-            const dependency = Process.safeRequire(path);
-            if (dependency == null || !(className in dependency)) {
-              logger.warn('Missing dependency %s', key);
-            } else {
-              ['commands', 'queries', 'replies'].forEach(ifaceName => {
-                const path  = join(this.rootpath, dependencyPath, ifaceName);
-                const iface = Process.safeRequire(path);
-                if (iface == null) return ;
-                dependencyProps[ifaceName] = iface;
-              });
-              dependencyProps.name = depContextName + '.' + depModuleName;
-              return new dependency[className](dependencyProps);
-            }
-          } else {
-            // Import cqes module
-            const dependency = Process.safeRequire(dependencyPath);
-            if (dependency == null || !('default' in dependency)) {
-              logger.warn('Missing dependency %s', key);
-            } else {
-              return new dependency.default(dependencyProps);
-            }
-          }
-        } else {
-          return value;
-        }
-      });
-      (function loop(service: Dependency, serviceProps: any, serviceDeps: any) {
+      Object.assign(serviceProps, this.getPropsDependencies(props[serviceFullName], serviceProps));
+      (function loop(service: Dependency, serviceProps: any) {
         // Prepare shared data interface
         service.resources.forEach(resourceName => {
           const path = join(directory, resourceName);
           const iface = Process.safeRequire(path);
           if (iface == null) return ;
-          if (resourceName == props.module) {
-            serviceProps['state'] = iface[resourceName];
+          if (resourceName === 'state') {
+            serviceProps['state'] = iface[props.module];
           } else {
             serviceProps[resourceName] = iface;
           }
         })
         // Preprare known dependencies
         if (service.dependencies) {
-          const knownDependecies = service.dependencies;
-          Object.keys(knownDependecies).forEach(fieldName => {
-            const dependency = knownDependecies[fieldName];
-            const path = join(this.rootpath, contextName, moduleName, dependency.service);
+          const knownDependencies = service.dependencies;
+          Object.keys(knownDependencies).forEach(fieldName => {
+            const dependency = knownDependencies[fieldName];
+            const path = dependency.local
+              ? './' + dependency.service
+              : join(this.rootpath, contextName, moduleName, dependency.service);
+            const className = dependency.local
+              ? dependency.service
+              : moduleName + dependency.service;
             const dependencyPackage = Process.safeRequire(path);
             if (dependencyPackage == null) return ;
             const logger = new Logger(LOG_FORMAT, contextName, moduleName, dependency.service);
-            const className = moduleName + dependency.service;
             if (!(className in dependencyPackage)) {
               logger.warn('Dependency %s not found', className);
               return ;
@@ -272,15 +290,14 @@ export class Process extends Element.Element {
               { context: contextName, module: moduleName, service: dependency.service
               , bus: serviceProps.bus, logger
               };
-            loop.call(this, dependency, dependencyProps, dependencyProps);
-            serviceDeps[fieldName] = new dependencyPackage[className](dependencyProps);
+            loop.call(this, dependency, dependencyProps);
+            serviceProps[fieldName] = new dependencyPackage[className](dependencyProps);
           });
         }
-      }).call(this, services[serviceKey], serviceProps, serviceDeps);
+      }).call(this, services[serviceKey], serviceProps);
       // Instanciate service
-      module[serviceKey] = new Service[className]({ ...props, ...serviceProps, ...serviceDeps });
+      module[serviceKey] = new Service[className](serviceProps);
     }
-    debugger;
     return module;
   }
 

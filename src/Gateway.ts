@@ -8,10 +8,12 @@ export interface props extends Component.props {
 
 export class Gateway extends Component.Component {
   protected events: { [name: string]: { new (data: any): any } };
+  protected stream: string;
 
   constructor(props: props) {
     super(props);
     this.events = props.events || {};
+    this.stream = this.context + '.' + this.module;
   }
 
   public async start(): Promise<boolean> {
@@ -21,17 +23,14 @@ export class Gateway extends Component.Component {
         this.logger.error('Event Bus not enabled');
         return resolve(false);
       }
-      this.bus.event.psubscribe(this.service, this.module, async (id, revision, events, date) => {
-        for (const event of events) {
-          const type = this.events[event.name];
-          if (type == null) {
-            this.logger.error('No type for %j', event);
-            throw new Error('Event type is missing');
-          } else {
-            event.data = new type(event.data);
-            event.meta = { createdAt: new Date(date), ...event.meta };
-            return this.on(event)
-          }
+      this.bus.event.psubscribe(this.service, this.stream, async event => {
+        const type = this.events[event.name];
+        if (type == null) {
+          this.logger.error('No type for %j', event);
+          throw new Error('Event type is missing');
+        } else {
+          event.data = new type(event.data);
+          return this.on(event)
         }
       }).then(() => resolve(true))
         .catch(e => {

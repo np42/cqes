@@ -1,5 +1,5 @@
 import * as Component    from './Component';
-import * as Factory      from './Factory';
+import * as Buffer       from './Buffer';
 
 import { state   as S }  from './state';
 import { command as C }  from './command';
@@ -8,14 +8,13 @@ import { event   as E }  from './event';
 export interface props extends Component.props {
   events?:   { [name: string]: { new (data: any): any } }
   commands?: { [name: string]: { new (data: any): any } }
-  factory?:  Factory.Factory;
   topics?:   Array<string>;
 }
 
 export class CommandHandler extends Component.Component {
   protected events:   { [name: string]: { new (data: any): any } };
   protected commands: { [name: string]: { new (data: any): any } };
-  protected factory:  Factory.Factory;
+  protected buffer:   Buffer.Buffer;
   protected topics:   Array<string>;
 
   static noop(): Array<E> {
@@ -41,17 +40,14 @@ export class CommandHandler extends Component.Component {
           const type = this.commands[command.order];
           if (type == null) return this.bus.command.relocate(command, topic + '.untyped');
           command.data = new type(command.data);
-          const state = await this.factory.get(command.id);
+          const state = await this.buffer.get(command.id);
           try {
             const events = await this.handle(state, command);
             if (events.length === 0) {
               this.bus.command.discard(command);
             } else {
-              const stream = this.module;
-              const id = command.id;
-              const expectedRevision = state.revision + 1;
               try {
-                const position = await this.bus.event.emit(stream, id, expectedRevision, events);
+                await this.bus.event.save(events);
                 this.bus.command.discard(command);
               } catch (e) {
                 this.logger.warn(e);
@@ -84,9 +80,13 @@ export class CommandHandler extends Component.Component {
       let result = await this[command.order](state, command);
       if (result == null) result = CommandHandler.noop();
       else if (!(result instanceof Array)) result = [result];
-      return result.map((event: any) => {
+      return result.map((event: any, index: number) => {
         if (event instanceof E) return event;
-        return new E(event.constructor.name, event);
+        const stream = this.context + '.' + this.module;
+        const id     = command.id;
+        const number = state.revision + index + 1;
+        const name   = event.constructor.name
+        return new E(stream, id, number, name, event, command.meta);
       });
     } else {
       this.logger.log('Skip %s : %s %j', command.id, command.order, command.data);

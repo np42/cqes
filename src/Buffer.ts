@@ -1,60 +1,117 @@
 import * as Component   from './Component';
-
-import { state }        from './state';
+import * as Factory     from './Factory';
+import { state as S }   from './state';
+import { event as E }   from './event';
 
 const CachingMap = require('caching-map');
 
 export interface props extends Component.props {
+  state:    { new (a: any): any };
   size?:    number;
   ttl?:     number;
-  storage?: string;
+  factory?: Factory.Factory;
 }
-
-export interface children extends Component.children {}
 
 interface CachingMap<K, V> {
   set(key: K, value: V, options?: { ttl?: number }): void;
   get(key: K): V;
   has(key: K): boolean;
   delete(key: K): void;
+  clear(): void;
 }
 
-type PendingQueue = Array<(state: state<any>) => void>;
+type PromiseHandler = { resolve: (a: any) => void, reject: (e: Error) => void };
 
 export class Buffer extends Component.Component {
-  protected cache:      CachingMap<string, state<any>>;
-  protected ttl:        number;
+  protected state:        { new (a: any): any };
+  protected stream:       string;
+  protected cache:        CachingMap<string, S<any>>;
+  protected ttl:          number;
+  protected factory:      Factory.Factory;
+  protected pending:      Map<string, Array<PromiseHandler>>;
+  protected subscription: { abort(): void };
 
-  constructor(props: props, children: children) {
-    super({ type: 'buffer', ...props }, children);
-    this.cache = new CachingMap('size' in props ? props.size : 100);
-    this.ttl   = props.ttl > 0 ? props.ttl : null;
+  constructor(props: props) {
+    super(props);
+    this.state  = props.state;
+    this.stream = this.context + '.' + this.module;
+    this.cache  = new CachingMap('size' in props ? props.size : 100);
+    this.ttl    = props.ttl > 0 ? props.ttl : null;
   }
 
-  public get(id: string) {
-    return this.cache.get(id);
+  //--
+
+  public async start(): Promise<boolean> {
+    return new Promise(resolve => super.start().then(() => {
+      this.subscription = this.bus.event.subscribe(this.stream, async event => {
+        const state = this.cache.get(event.id);
+        if (state == null) return ;
+        if (state.revision + 1 != event.number) {
+          this.clear(event.id);
+        } else {
+          const newState = this.factory.apply(state, event);
+          this.set(event.id, state);
+        }
+      });
+      return resolve(true);
+    }));
   }
 
-  public has(id: string) {
-    return this.cache.has(id);
+  public async stop(): Promise<void> {
+    return new Promise(resolve => super.stop().then(async () => {
+      await this.subscription.abort();
+      this.cache.clear();
+      return resolve();
+    }));
   }
 
-  public setnx(id: string, state: state<any>): void {
-    if (this.cache.has(id)) throw new Error('State already loaded');
+  //--
+
+  public get(id: string): Promise<S> {
+    return new Promise((resolve, reject) => {
+      const localState = this.cache.get(id);
+      if (localState != null) return resolve(localState);
+      const pending = this.pending.get(id);
+      if (pending != null) {
+        pending.push({ resolve, reject });
+      } else {
+        this.pending.set(id, [{ resolve, reject }]);
+        this.resolve(id);
+      }
+    });
+  }
+
+  public clear(id: string) {
+    this.cache.delete(id);
+    const pending = this.pending.get(id);
+    if (pending == null) return ;
+    while (pending.length > 0)
+      pending.pop().reject(new Error('Cleared'));
+  }
+
+  protected async resolve(id: string) {
+    const snapshot = await this.bus.state.fetch(this.stream, id);
+    let state      = snapshot || new S(this.stream, id, -1, null);
+    state.data     = new this.state(state.data);
+    await this.bus.event.readFrom(this.stream, id, state.revision, async event => {
+      state = this.factory.apply(state, event);
+    })
+    this.set(id, state);
+  }
+
+  protected set(id: string, state: S) {
     this.cache.set(id, state, { ttl: this.ttl });
-  }
-
-  public update(state: state<any>): Promise<void> {
-    const revision = state.revision;
-    const count = state.events.length;
-    if (!(revision > -1)) return Promise.reject('Bad revision');
-    if (state == null) return Promise.reject('Missing state');
-    const oldState = this.cache.get(state.id);
-    if (oldState == null) return Promise.reject('State lost');
-    if (oldState.revision + count != revision) return Promise.reject('Revision missmatch');
-    if (oldState === state && revision !== state.revision) return Promise.reject('Update forbidden');
-    this.cache.set(state.id, state, { ttl: this.ttl });
-    return Promise.resolve();
+    const pending = this.pending.get(id);
+    if (pending == null) {
+      if (state.ahead > 10) {
+        this.bus.state.save(state);
+        state.ahead = 0;
+      }
+    } else {
+      this.pending.delete(id);
+      while (pending.length > 0)
+        pending.pop().resolve(state);
+    }
   }
 
 }

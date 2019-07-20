@@ -1,60 +1,58 @@
 import * as Element    from './Element';
+
 import * as CommandBus from './CommandBus';
 import * as QueryBus   from './QueryBus';
 import * as EventBus   from './EventBus';
-
-import { command }     from './command';
-import { query }       from './query';
-import { reply }       from './reply';
+import * as StateBus   from './StateBus';
 
 export interface props extends Element.props {
-  command?:     CommandBus.CommandBus;
-  query?:       QueryBus.QueryBus;
-  event?:       EventBus.EventBus;
-  CommandBus?:  CommandBus.props;
-  QueryBus?:    QueryBus.props;
-  EventBus?:    EventBus.props;
+  command?:  CommandBus.props;
+  event?:    EventBus.props;
+  query?:    QueryBus.props;
+  state?:    StateBus.props;
 }
 
 export class Bus extends Element.Element {
   public command: CommandBus.CommandBus;
   public query:   QueryBus.QueryBus;
   public event:   EventBus.EventBus;
+  public state:   StateBus.StateBus;
 
   constructor(props: props) {
     super(props);
     const childProps = { context: props.context, logger: props.logger };
-    if (props.CommandBus)
-      this.command = props.command || new CommandBus.CommandBus({ ...childProps, ...props.CommandBus });
-    if (props.QueryBus)
-      this.query   = props.query   || new QueryBus.QueryBus({ ...childProps, ...props.QueryBus });
-    if (props.EventBus)
-      this.event   = props.event   || new EventBus.EventBus({ ...childProps, ...props.EventBus });
+    this.command = new CommandBus.CommandBus({ ...childProps, ...props.command });
+    this.query   = new QueryBus.QueryBus({ ...childProps, ...props.query });
+    this.event   = new EventBus.EventBus({ ...childProps, ...props.event });
+    this.state   = new StateBus.StateBus({ ...childProps, ...props.state });
   }
 
   public async start() {
-    this.logger.debug('Starting QueryBus', this.context);
-    if (!this.query || await this.query.start()) {
-      this.logger.debug('Starting EventBus', this.context);
-      if (!this.event || await this.event.start()) {
-        this.logger.debug('Starting CommandBus', this.context);
-        if (!this.command || await this.command.start()) {
-          return true;
-        } else {
-          if (this.event) await this.event.stop();
-          if (this.query) await this.query.stop();
-        }
-      } else {
-        if (this.query) await this.query.stop();
-      }
-      return false;
+    let result = true;
+    if (result && this.query) {
+      this.logger.debug('Starting QueryBus');
+      result = await this.query.start();
     }
-    return false;
+    if (result && this.state) {
+      this.logger.debug('Starting StateBus');
+      result = await this.state.start();
+    }
+    if (result && this.event) {
+      this.logger.debug('Starting EventBus');
+      result = await this.event.start();
+    }
+    if (result && this.command) {
+      this.logger.debug('Starting CommandBus');
+      result = await this.command.start();
+    }
+    if (!result) this.stop();
+    return result;
   }
 
   public async stop() {
     if (this.command) await this.command.stop();
     if (this.event)   await this.event.stop();
+    if (this.state)   await this.state.stop();
     if (this.query)   await this.query.stop();
   }
 

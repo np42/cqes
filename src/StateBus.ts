@@ -21,7 +21,7 @@ export class StateBus extends Element.Element {
 
   public async fetch(stream: string, id: string): Promise<S> {
     const query = [ 'SELECT `revision`, `payload` FROM `@states`'
-                  , 'WHERE `streamName` = ? AMD `streamId` = ?' ].join(' ');
+                  , 'WHERE `streamName` = ? AND `streamId` = ?' ].join(' ');
     const result = await this.mysql.request(query, [stream, id]);
     if (result.length == 0) return null;
     const row = result[0];

@@ -233,7 +233,6 @@ export class Process extends Element.Element {
       service.service = key;
       services[name] = service;
     }
-    debugger;
     // Prepare module services constructors
     const module = {};
     for (const serviceKey in services) {
@@ -250,7 +249,6 @@ export class Process extends Element.Element {
         continue ;
       }
       // Instanciate custom dependencies
-      debugger;
       const logger = new Logger(LOG_FORMAT, contextName, moduleName, serviceFullName);
       const serviceProps = { context: contextName, module: moduleName, service: serviceFullName
                            , bus: props.bus, logger
@@ -322,7 +320,7 @@ export class Process extends Element.Element {
           this.logger.log('Starting ' + LOG_FORMAT, contextName, moduleName, serviceName);
           timeouts.push(setTimeout(() => {
             this.logger.error(LOG_FORMAT + ' won\'t start', contextName, moduleName, serviceName);
-            process.exit(-1);
+            //process.exit(-1);
           }, 10000));
           promises.push(service.start());
         }

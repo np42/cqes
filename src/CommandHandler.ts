@@ -50,7 +50,7 @@ export class CommandHandler extends Component.Component {
                 await this.bus.event.save(events);
                 this.bus.command.discard(command);
               } catch (e) {
-                this.logger.warn(e);
+                this.logger.warn(String(e));
                 this.bus.command.replay(command);
               }
             }

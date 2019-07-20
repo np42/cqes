@@ -6,12 +6,17 @@ export interface props extends Element.props {
   mysql: MySQL;
 }
 
-export type Subscription = { abort: () => void };
+export interface Subscription {
+  abort():  void;
+  handler:  EventHandler;
+  queue:    Array<E>;
+  draining: boolean;
+}
 export type EventHandler = (event: E) => Promise<void>;
 
 export class EventBus extends Element.Element {
   protected mysql:         MySQL;
-  protected subscriptions: Map<string, Array<EventHandler>>;
+  protected subscriptions: Map<string, Array<Subscription>>;
 
   constructor(props: props) {
     super(props);
@@ -24,7 +29,7 @@ export class EventBus extends Element.Element {
       [ 'INSERT INTO `@events`'
       ,   '(`streamName`, `streamId`, `number`, `eventName`, `date`, `payload`, `meta`)'
       , 'VALUES '
-      ];
+      ].join(' ');
     const params = <Array<any>>[];
     const rows = <Array<any>>[];
     events.forEach(event => {
@@ -34,25 +39,16 @@ export class EventBus extends Element.Element {
                  );
     });
     if (events.length > 1) this.logger.todo('make transaction if several events');
-    const result = await this.mysql.request(query + rows.join(', '), params);
-    debugger;
-    // return false;
+    // Will throws an error on duplicate key
+    const result = <any>await this.mysql.request(query + rows.join(', '), params);
+    events.forEach((event, offset) => event.position = result.insertId + offset);
     const first = events[0];
-    const subscription = this.subscriptions.get(first.stream);
-    if (subscription) {
-      for (let i = 0; i < events.length; i += 1) {
-        const event = events[i];
-        const promises = <Array<Promise<void>>>[];
-        subscription.forEach(handler => {
-          try {
-            const promise = handler(event);
-            if (promise instanceof Promise) promises.push(promise);
-          } catch (e) {
-            this.unsubscribe(event.stream, handler);
-          }
-        });
-        await Promise.all(promises);
-      }
+    const subscriptions = this.subscriptions.get(first.stream);
+    if (subscriptions) {
+      subscriptions.forEach(subscription => {
+        Array.prototype.push.apply(subscription.queue, events);
+        this.drainStream(first.stream);
+      });
     }
     return true;
   }
@@ -62,7 +58,7 @@ export class EventBus extends Element.Element {
       this.mysql.getConnection((err, connection) => {
         if (err) return reject(err);
         const query =
-          [ 'SELECT `number`, `eventName`, `date`, `payload`, `meta`'
+          [ 'SELECT `eventId`, `number`, `eventName`, `date`, `payload`, `meta`'
           , 'FROM `@events`'
           , 'WHERE `streamName` = ? AND `streamId` = ? AND `number` > ?'
           ].join(' ');
@@ -76,6 +72,7 @@ export class EventBus extends Element.Element {
             const data = JSON.parse(row.payload);
             const meta = { createdAt: row.date, ...JSON.parse(row.meta) };
             const event = new E(stream, id, row.number, row.eventName, data, meta);
+            event.position = row.eventId;
             handler(event);
           })
           .on('end', () => {
@@ -87,19 +84,23 @@ export class EventBus extends Element.Element {
   }
 
   public subscribe(stream: string, handler: EventHandler): Subscription {
+    const subscription: Subscription =
+      { handler, queue: [], draining: false
+      , abort: () => this.unsubscribe(stream, subscription.handler)
+      }
     if (this.subscriptions.has(stream)) {
-      this.subscriptions.get(stream).push(handler);
+      this.subscriptions.get(stream).push(subscription);
     } else {
-      this.subscriptions.set(stream, [handler]);
+      this.subscriptions.set(stream, [subscription]);
     }
-    return { abort: () => this.unsubscribe(stream, handler) }
+    return subscription
   }
 
   public unsubscribe(stream: string, handler: EventHandler): number {
     const subscriptions = this.subscriptions.get(stream);
     let removed = 0;
     for (let i = 0; i < subscriptions.length; ) {
-      if (subscriptions[i] === handler) {
+      if (subscriptions[i].handler === handler) {
         subscriptions.splice(i, 1);
         removed += 1;
       } else {
@@ -111,7 +112,32 @@ export class EventBus extends Element.Element {
     return removed;
   }
 
+  protected drainStream(stream: string) {
+    const subscriptions = this.subscriptions.get(stream);
+    if (subscriptions == null) return ;
+    subscriptions.forEach(subscription => {
+      if (subscription.draining) return ;
+      this.drainSubscription(subscription);
+    });
+  }
+
+  protected drainSubscription(subscription: Subscription) {
+    if (subscription.queue.length == 0) {
+      subscription.draining = false;
+    } else {
+      subscription.draining = true;
+      const event = subscription.queue.shift();
+      subscription.handler(event).then(() => {
+        this.drainSubscription(subscription);
+      }).catch(e => {
+        this.logger.error(e);
+        subscription.abort();
+      });
+    }
+  }
+
   public async psubscribe(name: string, stream: string, handler: EventHandler): Promise<Subscription> {
+    this.logger.log('New %green [%s] => %s', 'Persistent Subscription', name, stream);
     return new Promise(async (resolve, reject) => {
       let position = await this.getPSubscriptionPosition(name, stream);
       const newEvents = <Array<E>>[];
@@ -120,7 +146,7 @@ export class EventBus extends Element.Element {
       this.mysql.getConnection((err, connection) => {
         if (err) return reject(err);
         const query =
-          [ 'SELECT `streamId`, `number`, `eventName`, `date`, `payload`, `meta`'
+          [ 'SELECT `eventId`, `streamId`, `number`, `eventName`, `date`, `payload`, `meta`'
           , 'FROM `@events`'
           , 'WHERE `eventId` > ? AND `streamName` = ?'
           ].join(' ');
@@ -135,10 +161,11 @@ export class EventBus extends Element.Element {
             const meta = { createdAt: row.date, ...JSON.parse(row.meta) };
             const data = JSON.parse(row.payload);
             const event = new E(stream, row.streamId, row.number, row.eventName, data, meta);
+            event.position = row.eventId;
             try {
               await handler(event);
               position = event.number;
-              await this.upsertPSubscriptionPosition(name, stream, row.number);
+              await this.upsertPSubscriptionPosition(name, stream, event.position);
               connection.resume();
             } catch (e) {
               subscription.abort();
@@ -153,7 +180,7 @@ export class EventBus extends Element.Element {
                 try {
                   await handler(event);
                   position = event.number;
-                  await this.upsertPSubscriptionPosition(name, stream, event.number);
+                  await this.upsertPSubscriptionPosition(name, stream, event.position);
                 } catch (e) {
                   subscription.abort();
                   connection.release();
@@ -163,7 +190,7 @@ export class EventBus extends Element.Element {
             }
             subscriptionHandler = async event => {
               await handler(event);
-              await this.upsertPSubscriptionPosition(name, stream, event.number)
+              await this.upsertPSubscriptionPosition(name, stream, event.position)
             };
             connection.release();
             return resolve(subscription);
@@ -182,6 +209,7 @@ export class EventBus extends Element.Element {
   }
 
   protected async upsertPSubscriptionPosition(name: string, stream: string, position: number) {
+    if (position == null) return this.logger.debugger('Can not update psubscription without position');
     const query = [ 'INSERT INTO `@subscriptions` (`subscriptionName`, `streamName`, `position`)'
                   , 'VALUES (?, ?, ?)'
                   , 'ON DUPLICATE KEY UPDATE `postion` = ?'

@@ -33,10 +33,11 @@ export class Buffer extends Component.Component {
 
   constructor(props: props) {
     super(props);
-    this.state  = props.state;
-    this.stream = this.context + '.' + this.module;
-    this.cache  = new CachingMap('size' in props ? props.size : 100);
-    this.ttl    = props.ttl > 0 ? props.ttl : null;
+    this.state   = props.state;
+    this.stream  = this.context + '.' + this.module;
+    this.cache   = new CachingMap('size' in props ? props.size : 100);
+    this.ttl     = props.ttl > 0 ? props.ttl : null;
+    this.pending = new Map();
   }
 
   //--
@@ -50,6 +51,7 @@ export class Buffer extends Component.Component {
           this.clear(event.id);
         } else {
           const newState = this.factory.apply(state, event);
+          newState.data = new this.state(newState.data);
           this.set(event.id, state);
         }
       });

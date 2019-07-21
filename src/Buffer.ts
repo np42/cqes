@@ -52,7 +52,7 @@ export class Buffer extends Component.Component {
         } else {
           const newState = this.factory.apply(state, event);
           newState.data = new this.state(newState.data);
-          this.set(event.id, state);
+          this.set(event.id, newState);
         }
       });
       return resolve(true);

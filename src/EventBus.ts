@@ -61,8 +61,9 @@ export class EventBus extends Element.Element {
           [ 'SELECT `eventId`, `number`, `eventName`, `date`, `payload`, `meta`'
           , 'FROM `@events`'
           , 'WHERE `streamName` = ? AND `streamId` = ? AND `number` > ?'
+          , 'ORDER BY `number` ASC'
           ].join(' ');
-        connection.query(query, [stream, id, number])
+        const request = connection.query(query, [stream, id, number])
           .on('error', err => {
             if (err && err.fatal) connection.destroy();
             else connection.release();
@@ -76,6 +77,7 @@ export class EventBus extends Element.Element {
             handler(event);
           })
           .on('end', () => {
+            this.logger.log(request.sql);
             connection.release();
             resolve()
           });
@@ -149,8 +151,9 @@ export class EventBus extends Element.Element {
           [ 'SELECT `eventId`, `streamId`, `number`, `eventName`, `date`, `payload`, `meta`'
           , 'FROM `@events`'
           , 'WHERE `eventId` > ? AND `streamName` = ?'
+          , 'ORDER BY `eventID` ASC'
           ].join(' ');
-        connection.query(query, [position, stream])
+        const request = connection.query(query, [position, stream])
           .on('error', err => {
             if (err && err.fatal) connection.destroy();
             else connection.release();
@@ -170,10 +173,12 @@ export class EventBus extends Element.Element {
             } catch (e) {
               subscription.abort();
               connection.release();
+              this.logger.error(e);
               return reject(e);
             }
           })
           .on('end', async () => {
+            this.logger.log(request.sql);
             while (newEvents.length > 0) {
               const event = newEvents.pop();
               if (event.number == position + 1) {
@@ -184,6 +189,7 @@ export class EventBus extends Element.Element {
                 } catch (e) {
                   subscription.abort();
                   connection.release();
+                  this.logger.error(e);
                   return reject(e);
                 }
               }
@@ -212,9 +218,12 @@ export class EventBus extends Element.Element {
     if (position == null) return this.logger.debugger('Can not update psubscription without position');
     const query = [ 'INSERT INTO `@subscriptions` (`subscriptionName`, `streamName`, `position`)'
                   , 'VALUES (?, ?, ?)'
-                  , 'ON DUPLICATE KEY UPDATE `postion` = ?'
+                  , 'ON DUPLICATE KEY UPDATE `position` = ?'
                   ].join(' ');
-    const result = await this.mysql.request(query, [name, stream, position, position]);
-    debugger;
+    try {
+      await this.mysql.request(query, [name, stream, position, position]);
+    } catch (e) {
+      this.logger.error(e);
+    }
   }
 }

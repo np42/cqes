@@ -377,10 +377,14 @@ export interface IDateTime extends IString {
 
 export const _DateTime = <IDateTime>_String.extends(function DateTime() {})
   .addCleaner(function (value: string) {
-    const date  = new Date(value);
-    if (date.toString() == 'Invalid Date') return this.default();
-    const idate = date.toISOString();
-    return idate.substr(0, 10) + ' ' + idate.substr(11, 12);
+    const date = /^\d{4}(-\d\d){2}( |T)(\d\d)(:\d\d){2}(\.\d{3})?(Z|[+\-]\d+)?$/.exec(value);
+    if (!date) return this.default();
+    if (date[6] && date[6] != 'Z') {
+      const idate = new Date(value).toISOString();
+      return idate.substr(0, 10) + ' ' + idate.substr(11, 12);
+    } else {
+      return value.substr(0, 10) + ' ' + value.substr(11, 12);
+    }
   });
 
 _DateTime.defineProperty('_default', () => '0000-00-00 00:00:00');

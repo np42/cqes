@@ -25,7 +25,7 @@ export class Repository extends Gateway.Gateway {
         this.logger.error('Query Bus not enabled');
         return resolve(false);
       }
-      this.bus.query.serve(this.context + '.' + this.module, async query => {
+      this.bus.query.serve(this.stream, async query => {
         const qtype = this.queries[query.method];
         if (qtype == null) {
           this.logger.error('No type for %j', query);

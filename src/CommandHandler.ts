@@ -57,7 +57,11 @@ export class CommandHandler extends Component.Component {
           } catch (e) {
             this.logger.error(e);
             command.meta.error = e;
-            this.bus.command.relocate(command, topic + '.failed');
+            if ((<any>e).code) {
+              this.bus.command.relocate(command, topic + '.' + (<any>e).code);
+            } else {
+              this.bus.command.relocate(command, topic + '.failed');
+            }
           }
         })
       }))
@@ -89,8 +93,9 @@ export class CommandHandler extends Component.Component {
         return new E(stream, id, number, name, event, command.meta);
       });
     } else {
-      this.logger.log('Skip %s : %s %j', command.id, command.order, command.data);
-      return CommandHandler.noop();
+      const error = <any>new Error('Unhandled command: ' + command.order);
+      error.code = 'unhandled';
+      throw error;
     }
   }
 

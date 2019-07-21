@@ -46,7 +46,7 @@ export class Gateway extends Component.Component {
   }
 
   public async on(event: E) {
-    if (!(event.name in this)) throw new Error('Missing handler: ' + event.name);
+    if (!(event.name in this)) return ;
     return await this[event.name](event);
   }
 

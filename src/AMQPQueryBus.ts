@@ -46,7 +46,7 @@ export class AMQPQueryBus extends AMQPBus.AMQPBus {
 
   public serve(view: string, handler: (query: Q) => void) {
     const options = { channel: { prefetch: 10, noAck: true }, queue: { durable: false } };
-    const queue = [this.context, view, 'query'].join('.');
+    const queue = [view, 'query'].join('.');
     return this.consume(queue, (message: Message) => {
       const payload = JSON.parse(message.content.toString());
       const meta    = {};

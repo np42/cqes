@@ -28,10 +28,6 @@ export class CommandHandler extends Component.Component {
     this.commands = props.commands || {};
     this.events   = props.events   || {};
     this.topics   = props.topics   || [this.context + '.' + this.module];
-    if (props.index != null) {
-      const iname   = props.module[0].toLowerCase() + props.module.substr(1);
-      this[iname]   = props.index;
-    }
   }
 
   public async start(): Promise<boolean> {

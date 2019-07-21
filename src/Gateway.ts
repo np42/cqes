@@ -16,10 +16,6 @@ export class Gateway extends Component.Component {
     super(props);
     this.stream = this.context + '.' + this.module;
     this.events = props.events || {};
-    if (props.index) {
-      const iname = this.module[0].toLowerCase() + this.module.substr(1);
-      this[iname] = props.index;
-    }
   }
 
   public async start(): Promise<boolean> {

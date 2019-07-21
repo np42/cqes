@@ -262,6 +262,9 @@ export class Process extends Element.Element {
           if (iface == null) return ;
           if (resourceName === 'state') {
             serviceProps['state'] = iface[props.module];
+          } else if (resourceName === 'index') {
+            const iname = props.module[0].toLowerCase() + props.module.substr(1);
+            serviceProps[iname] = iface[props.module + 'Index'];
           } else {
             serviceProps[resourceName] = iface;
           }

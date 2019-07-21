@@ -123,7 +123,7 @@ Value.defineProperty('addCheck', function addCheck(check: any) {
 });
 
 Value.defineProperty('from', function from(value: any) {
-  return this._value ? this._value.from(value) : null;
+  return value;
 });
 
 Value.defineProperty('default', function def() {
@@ -241,6 +241,7 @@ export interface IRecord extends IValue {
   _object: Map<string, IValue>;
   _constructor: { new (): Object };
   add(field: string, type: any): this;
+  either(...a: Array<Array<string> | string>): this;
 }
 
 export const Record = <IRecord>Value.extends(function Record() {});
@@ -255,6 +256,26 @@ Record.defineProperty('of', function of(model: { [name: string]: any }) {
       record._object.set(field, Value.of(model[field]));
   }
   return record;
+});
+
+Record.defineProperty('either', function either(...args: Array<Array<string> | string>) {
+  return this.addCheck((data: Object) => {
+    either: for (let i = 0; i < args.length; i += 1) {
+      const arg = args[i];
+      if (typeof arg === 'string') {
+        if (data[arg] != null)
+          return true;
+      } else if (arg instanceof Array) {
+        for (let ii = 0; ii < arg.length; ii += 1)
+          if (data[arg[ii]] == null)
+            continue either;
+        return true;
+      } else {
+        // Skip silently
+      }
+    }
+    return false;
+  });
 });
 
 Record.defineProperty('add', function add(field: string, type: any) {

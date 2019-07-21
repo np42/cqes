@@ -1,9 +1,11 @@
 import * as Component from './Component';
+import * as Index     from './Index';
 
 import { event as E }  from './event';
 
 export interface props extends Component.props {
   events?: { [name: string]: { new (data: any): any } }
+  index?:  Index.Index;
 }
 
 export class Gateway extends Component.Component {
@@ -12,8 +14,12 @@ export class Gateway extends Component.Component {
 
   constructor(props: props) {
     super(props);
-    this.events = props.events || {};
     this.stream = this.context + '.' + this.module;
+    this.events = props.events || {};
+    if (props.index) {
+      const iname = this.module[0].toLowerCase() + this.module.substr(1);
+      this[iname] = props.index;
+    }
   }
 
   public async start(): Promise<boolean> {

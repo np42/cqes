@@ -185,7 +185,7 @@ export class Process extends Element.Element {
               if (iface == null) return ;
               dependencyProps[ifaceName] = iface;
             });
-            dependencyProps.name = depContextName + '.' + depModuleName;
+            dependencyProps.stream = depContextName + '.' + depModuleName;
             return new dependency[className](dependencyProps);
           }
         } else {
@@ -210,7 +210,7 @@ export class Process extends Element.Element {
     const services: { [service: string]: Dependency } =
       { commandHandler:
         { service: 'CommandHandler'
-        , resources: ['commands', 'events']
+        , resources: ['index', 'commands', 'events']
         , dependencies:
           { buffer:
             { service: 'Buffer', local: true
@@ -221,7 +221,7 @@ export class Process extends Element.Element {
             }
           }
         }
-      , gateway:    { service: 'Gateway', resources: ['events'] }
+      , gateway:    { service: 'Gateway', resources: ['index', 'events'] }
       , repository: { service: 'Repository', resources: ['events', 'queries', 'replies'] }
       };
     for (const key in props) {

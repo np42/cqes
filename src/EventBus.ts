@@ -31,17 +31,21 @@ export class EventBus extends Element.Element {
       , 'VALUES '
       ].join(' ');
     const params = <Array<any>>[];
-    const rows = <Array<any>>[];
+    const rows   = <Array<any>>[];
+    const date   = new Date();
     events.forEach(event => {
-      rows.push('(?, ?, ?, ?, UTC_TIMESTAMP(), ?, ?)');
-      params.push( event.stream, event.id, event.number, event.name
+      rows.push('(?, ?, ?, ?, ?, ?, ?)');
+      params.push( event.stream, event.id, event.number, event.name, date
                  , JSON.stringify(event.data), JSON.stringify(event.meta)
                  );
     });
     if (events.length > 1) this.logger.todo('make transaction if several events');
     // Will throws an error on duplicate key
     const result = <any>await this.mysql.request(query + rows.join(', '), params);
-    events.forEach((event, offset) => event.position = result.insertId + offset);
+    events.forEach((event, offset) => {
+      event.position = result.insertId + offset
+      event.meta = Object.assign(event.meta || {}, { createdAt: date });
+    });
     const first = events[0];
     const subscriptions = this.subscriptions.get(first.stream);
     if (subscriptions) {
@@ -161,8 +165,8 @@ export class EventBus extends Element.Element {
           })
           .on('result', async row => {
             connection.pause();
-            const meta = { createdAt: row.date, ...JSON.parse(row.meta) };
             const data = JSON.parse(row.payload);
+            const meta = { createdAt: row.date, ...JSON.parse(row.meta) };
             const event = new E(stream, row.streamId, row.number, row.eventName, data, meta);
             event.position = row.eventId;
             try {

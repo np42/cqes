@@ -1,11 +1,13 @@
 import * as Component    from './Component';
 import * as Buffer       from './Buffer';
+import * as Index        from './Index';
 
 import { state   as S }  from './state';
 import { command as C }  from './command';
 import { event   as E }  from './event';
 
 export interface props extends Component.props {
+  index:     Index.Index;
   events?:   { [name: string]: { new (data: any): any } }
   commands?: { [name: string]: { new (data: any): any } }
   topics?:   Array<string>;
@@ -26,6 +28,10 @@ export class CommandHandler extends Component.Component {
     this.commands = props.commands || {};
     this.events   = props.events   || {};
     this.topics   = props.topics   || [this.context + '.' + this.module];
+    if (props.index != null) {
+      const iname   = props.module[0].toLowerCase() + props.module.substr(1);
+      this[iname]   = props.index;
+    }
   }
 
   public async start(): Promise<boolean> {

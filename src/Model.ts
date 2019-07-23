@@ -123,7 +123,7 @@ Value.defineProperty('addCheck', function addCheck(check: any) {
 });
 
 Value.defineProperty('from', function from(value: any) {
-  return value;
+  return this._value ? this._value.from(value) : value;
 });
 
 Value.defineProperty('default', function def() {

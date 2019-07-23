@@ -16,7 +16,7 @@ export class Index extends Component.Component {
 
   constructor(props: props) {
     super(props);
-    this.stream   = props.stream;
+    this.stream   = props.stream   || props.context + '.' + props.module;
     this.commands = props.commands || {};
     this.queries  = props.queries  || {};
     this.replies  = props.replies  || {};

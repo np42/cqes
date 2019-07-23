@@ -207,10 +207,11 @@ export class Process extends Element.Element {
     const directory   = props.directory;
     const contextName = props.context;
     const moduleName  = props.module;
+    const indexName   = props.module[0].toLowerCase() + props.module.substr(1);
     const services: { [service: string]: Dependency } =
       { commandHandler:
         { service: 'CommandHandler'
-        , resources: ['index', 'commands', 'events']
+        , resources: ['commands', 'events']
         , dependencies:
           { buffer:
             { service: 'Buffer', local: true
@@ -219,9 +220,18 @@ export class Process extends Element.Element {
               { factory: { service: 'Factory', resources: ['events'] }
               }
             }
+          , [indexName]: { service: 'index'
+                         , resources: ['commands', 'queries', 'replies']
+                         }
           }
         }
-      , gateway:    { service: 'Gateway', resources: ['index', 'events'] }
+      , gateway:    { service: 'Gateway', resources: ['events']
+                    , dependencies:
+                      { [indexName]: { service: 'index'
+                                     , resources: ['commands', 'queries', 'replies']
+                                     }
+                      }
+                    }
       , repository: { service: 'Repository', resources: ['events', 'queries', 'replies'] }
       };
     for (const key in props) {
@@ -262,9 +272,6 @@ export class Process extends Element.Element {
           if (iface == null) return ;
           if (resourceName === 'state') {
             serviceProps['state'] = iface[props.module];
-          } else if (resourceName === 'index') {
-            const iname = props.module[0].toLowerCase() + props.module.substr(1);
-            serviceProps[iname] = iface[props.module + 'Index'];
           } else {
             serviceProps[resourceName] = iface;
           }
@@ -279,7 +286,7 @@ export class Process extends Element.Element {
               : join(this.rootpath, contextName, moduleName, dependency.service);
             const className = dependency.local
               ? dependency.service
-              : moduleName + dependency.service;
+              : moduleName + (dependency.service[0].toUpperCase() + dependency.service.substr(1));
             const dependencyPackage = Process.safeRequire(path);
             if (dependencyPackage == null) return ;
             const logger = new Logger(LOG_FORMAT, contextName, moduleName, dependency.service);

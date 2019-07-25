@@ -26,7 +26,8 @@ export class Index extends Component.Component {
     if (this.commands[name] == null) throw new Error('Command ' + name + ' not found');
     const command = new this.commands[name](data);
     if (id == null) id = uuid();
-    return this.bus.command.send(this.stream, id, name, command, meta);
+    await this.bus.command.send(this.stream, id, name, command, meta);
+    return { id };
   }
 
   public async requestQuery(name: string, data: any, meta?: any) {

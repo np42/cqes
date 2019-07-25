@@ -287,7 +287,7 @@ Record.defineProperty('add', function add(field: string, type: any) {
 Record.defineProperty('from', function from(data: any) {
   if (data && data instanceof Object) {
     if (this._constructor == null)
-      this._constructor = eval('(function ' + this._name + '() {})');
+      this._constructor = this._name ? eval('(function ' + this._name + '() {})') : Object;
     const record = <any>new this._constructor();
     for (const [name, type] of this._object) {
       try { record[name] = type.from(data[name]); }

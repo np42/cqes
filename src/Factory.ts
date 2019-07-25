@@ -27,6 +27,7 @@ export class Factory extends Element.Element {
     } else {
       this.logger.warn('%s skip %s: %j', state.key, event.name, event.data);
     }
+    newState.revision = event.number;
     return newState;
   }
 

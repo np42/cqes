@@ -19,10 +19,6 @@ export class CommandHandler extends Component.Component {
   protected buffer:   Buffer.Buffer;
   protected topics:   Array<string>;
 
-  static noop(): Array<E> {
-    return [];
-  }
-
   constructor(props: props) {
     super(props);
     this.commands = props.commands || {};
@@ -80,18 +76,22 @@ export class CommandHandler extends Component.Component {
     return super.stop();
   }
 
+  protected emit(data: any): void {}
+
   public async handle(state: S, command: C): Promise<Array<E>> {
     if (command.order in this) {
       this.logger.debug('Handle %s : %s %j', command.id, command.order, command.data);
-      let result = await this[command.order](state, command);
-      if (result == null) result = CommandHandler.noop();
-      else if (!(result instanceof Array)) result = [result];
-      return result.map((event: any, index: number) => {
+      const context = Object.create(this);
+      context.events = <Array<E>>[];
+      context.emit = (event: E) => context.events.push(event);
+      let events = (await this[command.order].call(context, state, command)) || [];
+      if (!(events instanceof Array)) events = [events];
+      return context.events.concat(events).filter((e: E) => e != null).map((event: any, index: number) => {
         if (event instanceof E) return event;
         const stream = this.context + '.' + this.module;
         const id     = command.id;
         const number = state.revision + index + 1;
-        const name   = event.constructor.name
+        const name   = event.constructor.name;
         return new E(stream, id, number, name, event, command.meta);
       });
     } else {

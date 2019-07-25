@@ -22,13 +22,13 @@ export class state<A = any> {
 
   public merge(partial?: Partial<A>): state<A> {
     const data = partial ? merge(this.data || {}, partial) : this.data;
-    const state = new (<any>this.constructor)(this.stream, this.id, this.revision + 1, data);
+    const state = new (<any>this.constructor)(this.stream, this.id, this.revision, data);
     state.ahead = this.ahead + 1;
     return state;
   }
 
   public next(): state<A> {
-    const state = new (<any>this.constructor)(this.stream, this.id, this.revision + 1, this.data);
+    const state = new (<any>this.constructor)(this.stream, this.id, this.revision, this.data);
     state.ahead = this.ahead + 1;
     return state;
   }

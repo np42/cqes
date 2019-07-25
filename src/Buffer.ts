@@ -92,12 +92,12 @@ export class Buffer extends Component.Component {
   }
 
   protected async resolve(id: string) {
-    const snapshot = await this.bus.state.fetch(this.stream, id);
-    let state      = snapshot || new S(this.stream, id, -1, null);
-    state.data     = new this.state(state.data);
+    let state = await this.bus.state.fetch(this.stream, id);
+    state.data = new this.state(state.data);
     await this.bus.event.readFrom(this.stream, id, state.revision, async event => {
       state = this.factory.apply(state, event);
-    })
+      state.data = new this.state(state.data);
+    });
     this.set(id, state);
   }
 
@@ -105,7 +105,7 @@ export class Buffer extends Component.Component {
     this.cache.set(id, state, { ttl: this.ttl });
     const pending = this.pending.get(id);
     if (pending == null) {
-      if (state.ahead > 10) {
+      if (state.revision >= 0 && state.ahead > 0) {
         this.bus.state.save(state);
         state.ahead = 0;
       }

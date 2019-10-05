@@ -1,59 +1,52 @@
-import * as Element           from './Element';
-import { command as Command } from './command';
-import * as AMQPCommandBus    from './AMQPCommandBus';
-import { v4 as uuid }         from 'uuid';
+import * as Component         from './Component';
+import { Command as C }       from './Command';
+import { Typer }              from './Type';
 
-export interface props extends Element.props {
-  AMQP?: AMQPCommandBus.props
+export type commandHandler = (commmand: C) => Promise<void>;
+
+export interface Subscription {
+  abort: () => Promise<void>;
 }
 
-export class CommandBus extends Element.Element {
-  protected amqp:   AMQPCommandBus.AMQPCommandBus;
+export interface Transport {
+  start:  () => Promise<void>;
+  listen: (channel: string, handler: commandHandler) => Promise<Subscription>;
+  send:   (command: C) => Promise<void>;
+  stop:   () => Promise<void>;
+}
+
+export interface props extends Component.props {
+  transport:  string;
+  channel:    string;
+  commands:   { [name: string]: Typer };
+}
+
+export class CommandBus extends Component.Component {
+  protected commands:  { [name: string]: Typer };
+  protected transport: Transport;
+  protected channel:   string;
 
   constructor(props: props) {
-    super(props);
-    const childProps = { context: props.context, logger: props.logger };
-    this.amqp = new AMQPCommandBus.AMQPCommandBus({ ...childProps, ...props.AMQP });
+    super({ logger: 'CommandBus:' + props.name, ...props });
+    const Transport = require(props.transport).Transport;
+    if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
+    if (props.channel == null) throw new Error('Missing channel reference');
+    this.transport = new Transport(props);
+    this.channel   = props.channel;
+    this.commands  = props.commands || {};
   }
 
-  public listen(topic: string, handler: (command: Command<any>) => void): boolean {
-    this.logger.log('%red %s', 'Listen', topic);
-    this.amqp.listen(topic, handler);
-    return true;
+  public listen(handler: commandHandler): Promise<Subscription> {
+    return Promise.resolve(null);
   }
 
-  public send(topic: string, id: string, order: string, data: any, meta?: any): Promise<void> {
-    if (id == null) id = uuid();
-    this.logger.log('%red %s-%s : %s %j', 'Command', topic, id, order, data);
-    const type = topic.split('-').shift();
-    const command = new Command(type, id, order, data, meta);
-    this.amqp.send(topic, command);
+  public send(category: string, id: string, order: string, data: any, meta?: any) {
+    const command = new C(category, id, order, data, meta);
+    return this.sendCommand(command);
+  }
+
+  public sendCommand(command: C): Promise<void> {
     return Promise.resolve();
-  }
-
-  public discard(command: Command<any>): Promise<void> {
-    return this.amqp.ack(command);
-  }
-
-  public replay(command: Command<any>): Promise<void> {
-    this.logger.todo('Replay %j', command);
-    return Promise.resolve();
-  }
-
-  public relocate(command: Command<any>, topic: string): Promise<void> {
-    this.logger.todo('Relocate %s %j', topic, command);
-    return Promise.resolve();
-  }
-
-  //--
-
-  public start(): Promise<boolean> {
-    this.logger.debug('Starting %s@%s', this.context, this.constructor.name);
-    return this.amqp.start();
-  }
-
-  public stop(): Promise<void> {
-    return this.amqp.stop();
   }
 
 }

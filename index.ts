@@ -1,28 +1,29 @@
-import * as Process        from './src/Process';
-import * as Element        from './src/Element';
-import * as Component      from './src/Component';
-import * as Index          from './src/Index';
+//--
+import * as Process    from './src/Process';
+import * as Component  from './src/Component';
+import { Logger }      from './src/Logger';
 
-import * as CommandHandler from './src/CommandHandler';
-import * as Repository     from './src/Repository';
-import * as Gateway        from './src/Gateway';
-import * as Factory        from './src/Factory';
+export { Process, Component, Logger };
 
-export { Element, Process, Index
-       , Component, Gateway, CommandHandler, Factory, Repository
-       };
+//--
+import { Command as C } from './src/Command';
+import { Query as Q }   from './src/Query';
+import { Reply as R }   from './src/Reply';
+import { Event as E }   from './src/Event';
+import { State as S }   from './src/State';
 
-export { command as C } from './src/command';
-export { query as Q }   from './src/query';
-export { reply as R }   from './src/reply';
-export { event as E }   from './src/event';
-export { state as S }   from './src/state';
+export { C, Q, R, E, S };
 
-import * as Model        from './src/Model';
-export { Model };
+//--
+import { Index }      from './src/Index';
+import { Manager }    from './src/Manager';
+import { View }       from './src/View';
+import { Projection } from './src/Projection';
+import { Service }    from './src/Service';
 
-import * as Mx           from './src/Mx';
-import * as Qx           from './src/Qx';
-import { Px }            from './src/Px';
+export { Manager, View, Projection, Service, Index };
 
-export { Qx, Mx, Px };
+//--
+import * as util from './src/util';
+
+export { util };

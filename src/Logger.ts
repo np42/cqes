@@ -109,7 +109,7 @@ export class Logger {
   }
 
   _headers(tagName: string, ...modifiers: Array<string>) {
-    return this._tag(tagName, modifiers) + ' ' + this._date() + ' ' + String(this.name);
+    return this._date() + ' ' + this._tag(tagName, modifiers) + ' ' + String(this.name);
   }
 
   _tag(name: string, modifiers: Array<string>) {

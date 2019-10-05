@@ -1,364 +1,254 @@
-import * as Element                from './Element';
-import { Component }               from './Component';
-import { Bus }                     from './Bus';
-import { Logger }                  from './Logger';
+import * as Component              from './Component';
+import * as Context                from './Context';
 
-import { clone }                   from './clone';
-import { merge }                   from './merge';
-import { walk }                    from './walk';
+import { CommandBus }              from './CommandBus';
+import { QueryBus }                from './QueryBus';
+import { EventBus }                from './EventBus';
+import { StateBus }                from './StateBus';
+
+import * as Manager                from './Manager';
+import * as View                   from './View';
+import * as Projection             from './Projection';
+import * as Service                from './Service';
+
+import { clone, merge, walk }      from './util';
 
 import { hostname, userInfo }      from 'os';
-import { readFile }                from 'fs';
 import * as fs                     from 'fs';
 import { join, dirname, basename } from 'path';
 
 const yaml                         = require('js-yaml');
 
-export interface props extends Element.props {
-  root:    string;
-  config?: string;
-  name:    string;
+function safeRequire(path: string) {
+  try {
+    return require(path);
+  } catch (e) {
+    if (e.code != 'MODULE_NOT_FOUND') throw e;
+    if (!~e.toString().indexOf(path)) throw e;
+    return {};
+  }
 }
 
-interface Contexts { [context: string]: Context }
-interface Context  { bus?: Bus; logger?: Logger; modules?: { [name: string]: Module; } }
-interface Module   { [service: string]: Component }
-interface Dependency { service: string
-                     , local?: boolean
-                     , resources: Array<string>
-                     , dependencies?: { [name: string]: Dependency }
-                     }
+export interface props {
+  name:    string;
+  root?:   string;
+  config?: string;
+}
 
-const LOG_FORMAT = '%cyan.%magenta.%yellow';
+interface RecordMap<T = any> { [name: string]: T; }
 
-export class Process extends Element.Element {
-  protected name:        string;
-  protected rootpath:    string;
-  protected environment: string;
-  protected hostname:    string;
-  protected procuser:    string;
-  protected launcher:    string;
-  protected contexts:    Contexts;
+export class Process extends Component.Component {
+  protected root:       string;
+  protected configFile: string;
+  protected vars:       Map<string, string>;
+  protected contexts:   Map<string, Context.ContextProps | Context.Context>;
 
-  static safeRequire(path: string) {
-    try {
-      const module = require(path);
-      return module;
-    } catch (e) {
-      if (e.code != 'MODULE_NOT_FOUND') throw e;
-      if (!~e.toString().indexOf(path)) throw e;
-      return null;
-    }
+  static async readYaml(filepath: string) {
+    return new Promise((resolve, reject) => {
+      return fs.readFile(filepath, (err, content) => {
+        if (err) return reject(err);
+        try {
+          const config = yaml.safeLoad(content.toString());
+          return resolve(config);
+        } catch (e) {
+          return reject(e);
+        }
+      });
+    });
   }
 
   constructor(props: props) {
-    process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
-    process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
-    super({ ...props, logger: new Logger('Process') });
-    this.name     = props.name;
-    this.rootpath = props.root;
-    this.contexts = {};
-    this.loadConstant();
+    if (props.name == null) throw new Error('Need a <name> to start');
+    super({ name: props.name, logger: 'Process:' + props.name });
+    this.root       = props.root || process.cwd();
+    this.configFile = join(this.root, props.config || 'cqesconfig.yml');
+    this.vars       = new Map();
+    this.contexts   = new Map();
+    this.loadConstants();
   }
 
-  private loadConstant() {
+  protected loadConstants() {
     const environmentsAliases = { dev: 'development', prod: 'production' };
     const environRaw  = (process.env.NODE_ENV || process.env.ENVIRONMENT || 'unknown').toLowerCase();
     const environ     = environmentsAliases[environRaw] || environRaw;
     if (environ == 'unknown')
       this.logger.warn('Unknown environment type (e.g. developement, staging, production)');
     process.env.NODE_ENV = environ;
-    this.hostname    = hostname();
-    this.procuser    = userInfo().username;
-    this.launcher    = process.stdin.isTTY ? 'console' : 'daemon';
-    this.environment = environ;
-  }
-
-  private readYaml(filepath: string) {
-    return new Promise((resolve, reject) => {
-      return readFile(filepath, (err, content) => {
-        if (err) return resolve({});
-        this.logger.log('Loading config file: %s', filepath);
-        try {
-          const config = yaml.safeLoad(content.toString());
-          return resolve(config);
-        } catch (e) {
-          this.logger.error('Failed when loading:', filepath);
-          this.logger.error(e);
-          return resolve({});
-        }
-      });
-    });
-  }
-
-  private async loadContexts(): Promise<void> {
-    const filename  = 'cqes.yml';
-    const directory = this.rootpath;
-    const filepath  = join(directory, filename);
-    const processes = await this.readYaml(filepath);
-    this.contexts   = processes[this.name] || {};
-    for (const name in this.contexts) {
-      const context = this.contexts[name];
-      if (!('modules' in context)) context.modules = {};
-      if (!(name in context.modules)) context.modules[name] = {};
-    }
-  }
-
-  private async loadModules(): Promise<void> {
-    for (const contextName in this.contexts) {
-      const context   = this.contexts[contextName];
-      const directory = join(this.rootpath, contextName);
-      const props     = await this.getProps(directory, contextName) || {};
-      context.logger  = new Logger('%yellow', contextName);
-      const busProps  = { context: contextName, logger: context.logger };
-      Object.assign(busProps, this.getPropsDependencies(props.bus, busProps));
-      context.bus     = new Bus(busProps);
-      for (const key in props) {
-        if (!/^[A-Z]/.test(key)) continue ;
-        if (!(key in context.modules)) context.modules[key] = {};
-      }
-      for (const moduleName in context.modules) {
-        if (/^[A-Z]/.test(moduleName)) {
-          const directory    = join(this.rootpath, contextName, moduleName);
-          const mergedProps  = merge(context.modules[moduleName], props[moduleName]);
-          const moduleProps = { context: contextName, module: moduleName, directory
-                              , bus: context.bus, logger: context.logger
-                              , ...mergedProps };
-          context.modules[moduleName] = this.getModule(moduleProps);
-        }
-      }
-    }
-  }
-
-  private async getProps(directory: string, name: string): Promise<any> {
-    const files = this.getPropsFileList();
-    let config = <any>{};
-    for (const file of files) {
-      const filepath = join(directory, file);
-      const layer = await this.readYaml(filepath);
-      config = merge(config, layer);
-    }
-    const result = <any>{};
-    Object.keys(config).forEach(key => {
-      if (~key.indexOf('/')) {
-        const offset = key.indexOf('/');
-        const module = key.substr(0, offset);
-        const component = key.substr(offset + 1);
-        if (!(module in result)) result[module] = {};
-        result[module][component] = config[key];
-      } else {
-        result[key] = config[key];
-      }
-    });
-    return result;
-  }
-
-  private getPropsFileList(): Array<string> {
-    const extension = '.yml';
-    const list = ['context' + extension];
-    list.push('context.env-' + this.environment + extension);
-    list.push('context.host-' + this.hostname + extension);
-    list.push('context.user-' + this.procuser + extension);
-    list.push('context.mode-' + this.launcher + extension);
-    return list;
-  }
-
-  private getPropsDependencies(props: any, commonProps: any) {
-    const logger = commonProps.logger;
-    return walk(props || {}, (key, value) => {
-      if (value instanceof Object && '$' in value) {
-        if (!/(^[a-z])|\//.test(key)) logger.warn('should have dependency "%s" in lowercase', key);
-        const dependencyPath = value.$;
-        const dependencyProps = { ...commonProps, ...value };
-        if (/^[A-Z][^\/]*\/[A-Z][^\/]*$/.test(dependencyPath)) {
-          // Import local shared module interface
-          const [_, depContextName, depModuleName] = /^([^\/]*)\/(.*)$/.exec(dependencyPath);
-          const className = depModuleName + 'Index';
-          const path = join(this.rootpath, dependencyPath);
-          const dependency = Process.safeRequire(path);
-          if (dependency == null || !(className in dependency)) {
-            logger.warn('Missing dependency %s', key);
-          } else {
-            ['commands', 'queries', 'replies'].forEach(ifaceName => {
-              const path  = join(this.rootpath, dependencyPath, ifaceName);
-              const iface = Process.safeRequire(path);
-              if (iface == null) return ;
-              dependencyProps[ifaceName] = iface;
-            });
-            dependencyProps.stream = depContextName + '.' + depModuleName;
-            return new dependency[className](dependencyProps);
-          }
-        } else {
-          // Import cqes module
-          const dependency = Process.safeRequire(dependencyPath);
-          if (dependency == null || !('default' in dependency)) {
-            logger.warn('Missing dependency %s', key);
-          } else {
-            return new dependency.default(dependencyProps);
-          }
-        }
-      } else {
-        return value;
-      }
-    });
-  }
-
-  private getModule(props: any) {
-    const directory   = props.directory;
-    const contextName = props.context;
-    const moduleName  = props.module;
-    const indexName   = props.module[0].toLowerCase() + props.module.substr(1);
-    const services: { [service: string]: Dependency } =
-      { commandHandler:
-        { service: 'CommandHandler'
-        , resources: ['commands', 'events']
-        , dependencies:
-          { buffer:
-            { service: 'Buffer', local: true
-            , resources: ['state']
-            , dependencies:
-              { factory: { service: 'Factory', resources: ['events'] }
-              }
-            }
-          , [indexName]: { service: 'index'
-                         , resources: ['commands', 'queries', 'replies']
-                         }
-          }
-        }
-      , gateway:    { service: 'Gateway', resources: ['events']
-                    , dependencies:
-                      { [indexName]: { service: 'index'
-                                     , resources: ['commands', 'queries', 'replies']
-                                     }
-                      }
-                    }
-      , repository: { service: 'Repository', resources: ['events', 'queries', 'replies'] }
-      };
-    for (const key in props) {
-      const result = /^(CommandHandler|Repository|Factory|Gateway)\.(.+)/.exec(key);
-      if (!result) continue ;
-      const [_, type, name] = result;
-      const typeName = type[0].toLowerCase() + type.substr(1);
-      const service = clone(services[typeName]);
-      service.service = key;
-      services[name] = service;
-    }
-    // Prepare module services constructors
-    const module = {};
-    for (const serviceKey in services) {
-      // Retrieve service constructor
-      const serviceFullName = services[serviceKey].service;
-      const path = join(directory, serviceFullName);
-      const Service = Process.safeRequire(path);
-      if (Service == null) continue ;
-      const serviceType = /^([^.]+)(?:\.|$)/.exec(serviceFullName)[1];
-      const serviceName = ~serviceFullName.indexOf('.') ? /\.(.+)$/.exec(serviceFullName)[1] : moduleName;
-      const className = serviceName + serviceType;
-      if (!(className in Service)) {
-        this.logger.warn('%s.%s Missing class %s', moduleName, serviceName, className);
-        continue ;
-      }
-      // Instanciate custom dependencies
-      const logger = new Logger(LOG_FORMAT, contextName, moduleName, serviceFullName);
-      const serviceProps = { context: contextName, module: moduleName, service: serviceFullName
-                           , bus: props.bus, logger
-                           };
-      Object.assign(serviceProps, this.getPropsDependencies(props[serviceFullName], serviceProps));
-      (function loop(service: Dependency, serviceProps: any) {
-        // Prepare shared data interface
-        service.resources.forEach(resourceName => {
-          const path = join(directory, resourceName);
-          const iface = Process.safeRequire(path);
-          if (iface == null) return ;
-          if (resourceName === 'state') {
-            serviceProps['state'] = iface[props.module];
-          } else {
-            serviceProps[resourceName] = iface;
-          }
-        })
-        // Preprare known dependencies
-        if (service.dependencies) {
-          const knownDependencies = service.dependencies;
-          Object.keys(knownDependencies).forEach(fieldName => {
-            const dependency = knownDependencies[fieldName];
-            const path = dependency.local
-              ? './' + dependency.service
-              : join(this.rootpath, contextName, moduleName, dependency.service);
-            const className = dependency.local
-              ? dependency.service
-              : moduleName + (dependency.service[0].toUpperCase() + dependency.service.substr(1));
-            const dependencyPackage = Process.safeRequire(path);
-            if (dependencyPackage == null) return ;
-            const logger = new Logger(LOG_FORMAT, contextName, moduleName, dependency.service);
-            if (!(className in dependencyPackage)) {
-              logger.warn('Dependency %s not found', className);
-              return ;
-            }
-            const dependencyProps =
-              { context: contextName, module: moduleName, service: dependency.service
-              , bus: serviceProps.bus, logger
-              };
-            loop.call(this, dependency, dependencyProps);
-            serviceProps[fieldName] = new dependencyPackage[className](dependencyProps);
-          });
-        }
-      }).call(this, services[serviceKey], serviceProps);
-      // Instanciate service
-      module[serviceKey] = new Service[className](serviceProps);
-    }
-    return module;
-  }
-
-  /*******************************************/
-
-  public async run() {
-    await this.loadContexts();
-    await this.loadModules();
-    return this.start();
+    this.vars.set('hostname', hostname());
+    this.vars.set('procuser', userInfo().username);
+    this.vars.set('launcher', process.stdin.isTTY ? 'console' : 'daemon');
+    this.vars.set('environment', environ);
   }
 
   public async start() {
-    this.logger.log('%yellow', '==========  Starting  Services  ==========');
     const promises = [];
     const timeouts = <any>[];
-    for (const contextName in this.contexts) {
-      const context = this.contexts[contextName];
-      for (const moduleName in context.modules) {
-        const module = context.modules[moduleName];
-        for (const serviceName in module) {
-          const service = module[serviceName];
-          this.logger.log('Starting ' + LOG_FORMAT, contextName, moduleName, serviceName);
-          timeouts.push(setTimeout(() => {
-            this.logger.error(LOG_FORMAT + ' won\'t start', contextName, moduleName, serviceName);
-            //process.exit(-1);
-          }, 10000));
-          promises.push(service.start());
-        }
-      }
-      await context.bus.start();
+    this.logger.log('%bold', 'Load Config file');
+    await this.loadConfig();
+    this.logger.log('%bold', 'Load Contexts');
+    await this.loadContexts();
+    this.logger.log('%bold', 'Start Components');
+    await this.startComponents();
+    this.catchErrors();
+    this.logger.log('%bold', 'Process Ready');
+  }
+
+  protected async loadConfig() {
+    const configFileContent = await Process.readYaml(this.configFile);
+    const contexts = configFileContent[this.name] || {};
+    for (const contextName in contexts) {
+      this.logger.log('%magenta %cyan found', 'Context', contextName);
+      const props: Context.ContextProps = contexts[contextName] || {};
+      props.name = contextName;
+      this.setDefaultContextHandlersProps(props);
+      this.contexts.set(contextName, props);
     }
-    (await Promise.all(promises)).forEach((started, offset) => {
-      if (!started) process.exit(-1);
-      clearTimeout(timeouts[offset]);
-    });
-    this.logger.log('%green',  '========== All Services started ==========');
-    return true;
+  }
+
+  protected setDefaultContextHandlersProps(props: Context.ContextProps) {
+    if (props.managers == null)    props.managers    = {};
+    if (props.views == null)       props.views       = {};
+    if (props.services == null)    props.services    = {};
+    if (props.projections == null) props.projections = {};
+  }
+
+  protected loadContexts() {
+    for (const [contextName, contextProps] of this.contexts) {
+      if (contextProps instanceof Context.Context) continue ;
+      const context = new Context.Context(contextProps);
+      context.managers    = this.getContextManagers(contextProps, contextProps.managers);
+      context.views       = this.getContextViews(contextProps, contextProps.views);
+      context.projections = this.getContextProjections(contextProps, contextProps.projections);
+      context.services    = this.getContextServices(contextProps, contextProps.services);
+      this.contexts.set(contextName, context);
+    }
+  }
+
+  protected getContextManagers(context: Context.ContextProps, managersProps: RecordMap) {
+    return Object.keys(managersProps).reduce((result: Map<string, Manager.Manager>, name: string) => {
+      const managerProps = managersProps[name];
+      const commonProps  = { context: context.name, name };
+
+      const events = this.getTypes(context.name, name, 'events');
+      const commandBuses = (managerProps.listen || [name])
+        .reduce((result: Manager.CommandBuses, channel: string) => {
+          result[channel] = this.getCommandBus({ ...commonProps, ...context.CommandBus }, channel);
+          return result;
+        }, {});
+      const eventBus = this.getEventBus({ ...commonProps, ...context.EventBus }, name);
+      const stateBus = this.getStateBus({ ...commonProps, ...context.StateBus }, name);
+
+      const { CommandHandlers, DomainHandlers } = this.getManagerHandlers(context.name, name);
+      const props   = { ...commonProps, commandBuses, stateBus, eventBus, events
+                      , commandHandlers: CommandHandlers, domainHandlers: DomainHandlers
+                      }
+      const manager = new Manager.Manager(props);
+      this.logger.log('%red %cyan.%cyan found', 'Manager', context.name, name);
+      result.set(name, manager);
+      return result;
+    }, new Map());
+  }
+
+  protected getContextViews(context: Context.ContextProps, viewsProps: RecordMap) {
+    return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
+      const viewProps   = viewsProps[name];
+      const commonProps = { context: context.name, name };
+
+      const eventBuses = (viewProps.psubscribe || [name])
+        .reduce((result: View.EventBuses, stream: string) => {
+          result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
+          return result;
+        }, {});
+      const queryBus = this.getQueryBus({ ...commonProps, ...context.QueryBus }, name);
+      const stateBus = this.getStateBus({ ...commonProps, ...context.StateBus }, name);
+
+      const { QueryHandlers, UpdateHandlers } = this.getViewHandlers(context.name, name);
+      const props   = { ...commonProps, queryBus, stateBus, eventBuses
+                      , queryHandlers: QueryHandlers, updateHandlers: UpdateHandlers
+                      }
+      const view = new View.View(props);
+      this.logger.log('%blue %cyan.%cyan found', 'View', context.name, name);
+      result.set(name, view);
+      return result;
+    }, new Map());
+  }
+
+  protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
+    return new Map();
+  }
+
+  protected getContextProjections(context: Context.ContextProps, projectionsProps: RecordMap) {
+    return new Map();
+  }
+
+  protected getCommandBus(props: any, channel: string) {
+    if (props.transport == null) props.transport = './bus/AMQP.CommandBus';
+    const category = channel.split('.').shift();
+    const commands = this.getTypes(props.context, category, 'commands');
+    return new CommandBus({ ...props, channel, commands });
+  }
+
+  protected getQueryBus(props: any, view: string) {
+    if (props.transport == null) props.transport = './bus/HTTP.QueryBus';
+    return new QueryBus(props);
+  }
+
+  protected getEventBus(props: any, stream: string) {
+    if (props.transport == null) props.transport = './bus/MySQL_Redis.EventBus';
+    const category = stream.split('-').shift();
+    const events   = this.getTypes(props.context, category, 'events');
+    return new EventBus({ ...props, stream, events });
+  }
+
+  protected getStateBus(props: any, type: string) {
+    if (props.transport == null) props.transport = './bus/MySQL.StateBus';
+    return new StateBus(props);
+  }
+
+  protected getTypes(contextName: string, category: string, kind: string) {
+    const path = join(this.root, contextName, category + '.' + kind);
+    return safeRequire(path);
+  }
+
+  protected getManagerHandlers(contextName: string, name: string) {
+    const path = join(this.root, contextName, name + '.Manager');
+    const { CommandHandlers, DomainHandlers } = require(path);
+    return { CommandHandlers, DomainHandlers };
+  }
+
+  protected getViewHandlers(contextName: string, name: string) {
+    const path = join(this.root, contextName, name + '.View');
+    const { QueryHandlers, UpdateHandlers } = require(path);
+    return { QueryHandlers, UpdateHandlers };
+  }
+
+  protected getProjectionHandlers(contextName: string, name: string) {
+
+  }
+
+  protected getServiceHandlers(contextName: string, name: string) {
+
+  }
+
+  protected startComponents(): Promise<void> {
+    const promises = <Array<Promise<void>>>[];
+    for (const [contextName, context] of this.contexts) {
+      if (!(context instanceof Context.Context)) continue ;
+      for (const [name, manager] of context.managers) promises.push(manager.start());
+      for (const [name, view] of context.views) promises.push(view.start());
+      for (const [name, projection] of context.projections) promises.push(projection.start());
+      for (const [name, service] of context.services) promises.push(service.start());
+    }
+    return <any> Promise.all(promises);
+  }
+
+  protected catchErrors() {
+    process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
+    process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
   }
 
   public async stop() {
-    for (const contextName in this.contexts) {
-      const context = this.contexts[contextName];
-      await context.bus.stop();
-      for (const moduleName in context.modules) {
-        const module = context.modules[moduleName];
-        for (const serviceName in module) {
-          const service = module[serviceName];
-          this.logger.log('Stoping ' + LOG_FORMAT, contextName, moduleName, serviceName);
-          await service.stop();
-        }
-      }
-    }
-    this.logger.log('%red',    '==========   Services stopped   ==========');
+    
   }
 
 };

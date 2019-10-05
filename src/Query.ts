@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 
-export class query<A = any> {
+export class Query<A = any> {
   public view:      string; // Repository Name
   public method:    string; // Procedure Name
   public data:      any;    // Payload
@@ -8,9 +8,9 @@ export class query<A = any> {
 
   constructor(view: string, method: string, data: A, meta?: any) {
     this.view      = view;
-    this.method    = method || view;
+    this.method    = method;
     this.data      = data;
-    this.meta      = meta || null;
+    this.meta      = meta;
   }
 
 }

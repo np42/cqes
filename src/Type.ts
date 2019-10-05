@@ -2,6 +2,9 @@ import { v4 as uuid } from 'uuid';
 
 const model_f = Symbol('CQES_Model');
 
+export type Typer = { new (data: any): Typed };
+export type Typed = any;
+
 // Value
 export interface IValue {
   new (input: any): any;
@@ -479,7 +482,7 @@ _Set.defineProperty('of', function (type: any) {
 _Set.defineProperty('from', function (data: any) {
   if (data != null) {
     const set = new Set(data);
-    set.toJSON = this.toJSON;
+    (<any>set).toJSON = this.toJSON;
     return this.validate(set);
   } else {
     return this.default();
@@ -489,7 +492,7 @@ _Set.defineProperty('from', function (data: any) {
 _Set.defineProperty('default', function () {
   if (this._optional) return null;
   const set = new Set();
-  set.toJSON = this.toJSON;
+  (<any>set).toJSON = this.toJSON;
   return set;
 });
 
@@ -544,7 +547,7 @@ _Map.defineProperty('of', function (index: any, type: any) {
 
 _Map.defineProperty('from', function (data: any) {
   const map = new Map();
-  map.toJSON = this.toJSON;
+  (<any>map).toJSON = this.toJSON;
   if (data == null) return this.default();
   for (const [key, value] of data)
     map.set(this._index.from(key), this._subtype.from(value));
@@ -554,7 +557,7 @@ _Map.defineProperty('from', function (data: any) {
 _Map.defineProperty('default', function () {
   if (this._optional) return null;
   const map = new Map();
-  map.toJSON = this.toJSON;
+  (<any>map).toJSON = this.toJSON;
   return map;
 });
 

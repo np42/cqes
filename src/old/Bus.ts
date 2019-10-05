@@ -1,3 +1,19 @@
+
+/*
+export interface props {
+  Command: { bus: CommandBus }
+  Query:   { bus: HTTPBus }
+  Event:   { bus: MySQLBus }
+  State:   { bus: MySQLBus }
+}
+*/
+
+
+
+
+
+
+/*
 import * as Element    from './Element';
 
 import * as CommandBus from './CommandBus';
@@ -57,3 +73,4 @@ export class Bus extends Element.Element {
   }
 
 }
+*/

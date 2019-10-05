@@ -1,34 +1,67 @@
-import * as Component from './Component';
-import * as Factory   from './Factory';
+import * as Component   from './Component';
+import { CommandBus }   from './CommandBus';
+import { EventBus }     from './EventBus';
+import { Event }        from './Event';
+const  CachingMap       = require('caching-map');
+
+export type sender = (name: string, category: string, id: string, order: string, data: any, meta?: any)
+  => Promise<void>;
+export type eventHandler = (event: Event, send: sender) => Promise<void>;
+
+export interface CommandBuses { [name: string]: CommandBus };
+export interface EventBuses { [name: string]: EventBus };
+export interface EventHandlers { [name: string]: eventHandler };
+export interface Subscription { abort: () => Promise<void> };
 
 export interface props extends Component.props {
-  events?:  { [name: string]: { new (data: any): any } }
-  state?:   { new (data: any): any }
-  factory?: Factory.Factory;
+  commandBuses?:  CommandBuses;
+  eventBuses?:    EventBuses;
+  eventHandlers?: EventHandlers;
 }
 
 export class Service extends Component.Component {
-  protected factory: Factory.Factory;
-  protected events:  { [name: string]: { new (data: any): any } };
-  protected state:   { new (data: any): any }
+  protected commandBuses:  CommandBuses;
+  protected eventBuses:    EventBuses;
+  protected eventHandlers: EventHandlers;
+  protected subscriptions: Array<Subscription>;
 
   constructor(props: props) {
     super(props);
-    this.events  = props.events  || {};
-    this.state   = props.state   || Object;
-    this.factory = props.factory || null;
+    this.commandBuses      = props.commandBuses  || {};
+    this.eventBuses        = props.eventBuses    || {};
+    this.eventHandlers     = props.eventHandlers || {};
+    this.subscriptions     = [];
   }
 
-  public async start(): Promise<boolean> {
-    if (this.running) return true;
-    if (this.factory) await this.factory.start();
-    return super.start();
+  public start(): Promise<void> {
+    const eSubscription = Object.keys(this.eventBuses).map(name => {
+      const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
+      return this.eventBuses[name].psubscribe(subscription, (event: Event) => {
+        return this.handleServiceEvent(event)
+      });
+    });
+    return <any> Promise.all(eSubscription);
   }
 
-  public async stop(): Promise<void> {
-    if (!this.running) return ;
-    if (this.factory) await this.factory.stop();
-    return super.stop();
+  protected async handleServiceEvent(event: Event): Promise<void> {
+    const sender = (name: string, category: string, id: string, order: string, data: any, meta?: any) => {
+      return this.commandBuses[name].send(category, id, order, data, meta);
+    };
+    const handler = this.getEventHandler(event);
+    return handler.call(this, event, sender);
+  }
+
+  protected getEventHandler(event: Event): eventHandler {
+    const fullname = event.category + '_' + event.type;
+    if (fullname in this.eventHandlers) return this.eventHandlers[fullname];
+    const shortname = event.type;
+    if (shortname in this.eventHandlers) return this.eventHandlers[shortname];
+    const wildname = 'any';
+    if (wildname in this.eventHandlers) return this.eventHandlers[wildname];
+  }
+
+  public stop(): Promise<void> {
+    return <any> Promise.all(this.subscriptions.map(subscription => subscription.abort()));
   }
 
 }

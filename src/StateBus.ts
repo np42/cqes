@@ -1,31 +1,25 @@
-import * as Element   from './Element';
-import MySQL          from 'cqes-mysql';
-import { state as S } from './state';
+import * as Component from './Component';
+import { State as S } from './State';
+import { Typer }      from './Type';
 
-export interface props extends Element.props {
-  mysql: MySQL;
+export interface props extends Component.props {
+  state: Typer;
 }
 
-export class StateBus extends Element.Element {
-  protected mysql: MySQL;
+export class StateBus extends Component.Component {
+  protected state: Typer;
 
-  public async save(state: S) {
-    const query = [ 'INSERT INTO `@states` (`streamName`, `streamId`, `revision`, `payload`)'
-                  , 'VALUE (?, ?, ?, ?)'
-                  , 'ON DUPLICATE KEY UPDATE `payload` = ?'
-                  ].join(' ');
-    const data = JSON.stringify(state.data);
-    await this.mysql.request(query, [state.stream, state.id, state.revision, data, data]);
+  constructor(props: props) {
+    super({ logger: 'StateBus:' + props.name, ...props });
+    this.state = props.state;
   }
 
-  public async fetch(stream: string, id: string): Promise<S> {
-    const query = [ 'SELECT `revision`, `payload` FROM `@states`'
-                  , 'WHERE `streamName` = ? AND `streamId` = ?' ].join(' ');
-    const result = await this.mysql.request(query, [stream, id]);
-    if (result.length == 0) return new S(stream, id, -1, null);
-    const row = result[0];
-    const data = JSON.parse(row.payload);
-    return new S(stream, id, row.revision, data);
+  public set(id: string, state: S): Promise<void> {
+    return Promise.resolve();
+  }
+
+  public get(id: string): Promise<S> {
+    return Promise.resolve(new S(id, -1, null));
   }
 
 }

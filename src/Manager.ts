@@ -46,9 +46,12 @@ export class Manager extends Component.Component {
     this.subscriptions   = [];
   }
 
-  public start(): Promise<void> {
-    return <any> Promise.all(Object.keys(this.commandBuses).map(name => {
-      return this.commandBuses[name].listen((command: C) => this.handleManagerCommand(command))
+  public async start(): Promise<void> {
+    await this.eventBus.start();
+    await this.stateBus.start();
+    await Promise.all(Object.values(this.commandBuses).map(async bus => {
+      await bus.start();
+      await bus.listen((command: C) => this.handleManagerCommand(command))
     }));
   }
 
@@ -59,7 +62,7 @@ export class Manager extends Component.Component {
     if (shortname in this.commandHandlers) return this.commandHandlers[shortname];
     const wildname = 'any';
     if (wildname in this.commandHandlers) return this.commandHandlers[wildname];
-    return (state: S, command: C) => {
+    return function UnhandledCommand(state: S, command: C) {
       this.logger.warn('Command %s from %s has been lost', command.category, command.order);
     };
   }
@@ -72,7 +75,8 @@ export class Manager extends Component.Component {
     const emitter = (type: string, data: any, meta?: any) => {
       events.push(new E(command.category, command.streamId, -1, type, data, meta));
     };
-    const returnedEvents = handler(state, command, emitter);
+    this.logger.log('%red %s-%s %j', handler.name, command.category, command.streamId, command.data);
+    const returnedEvents = await handler.call(this, state, command, emitter);
     if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
     else if (returnedEvents instanceof E) events.push(returnedEvents);
     if (events.length == 0) return ;
@@ -82,6 +86,7 @@ export class Manager extends Component.Component {
       event.number = state.revision + offset;
       const applier  = this.domainHandlers[event.type];
       if (applier != null) {
+        this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
         const newState = applier(state, event) || state;
         newState.revision = state.revision + 1;
         return newState;
@@ -95,7 +100,10 @@ export class Manager extends Component.Component {
   }
 
   public async stop(): Promise<void> {
-    return <any> Promise.all(this.subscriptions.map(subscription => subscription.abort()));
+    await Promise.all(this.subscriptions.map(subscription => subscription.abort()));
+    await Promise.all(Object.values(this.commandBuses).map(bus => bus.stop()));
+    await this.eventBus.stop();
+    await this.stateBus.stop();
   }
 
 }

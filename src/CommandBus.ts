@@ -1,8 +1,8 @@
-import * as Component         from './Component';
-import { Command as C }       from './Command';
-import { Typer }              from './Type';
+import * as Component from './Component';
+import { Command }    from './Command';
+import { Typer }      from './Type';
 
-export type commandHandler = (commmand: C) => Promise<void>;
+export type commandHandler = (commmand: Command) => Promise<void>;
 
 export interface Subscription {
   abort: () => Promise<void>;
@@ -11,7 +11,7 @@ export interface Subscription {
 export interface Transport {
   start:  () => Promise<void>;
   listen: (channel: string, handler: commandHandler) => Promise<Subscription>;
-  send:   (command: C) => Promise<void>;
+  send:   (command: Command) => Promise<void>;
   stop:   () => Promise<void>;
 }
 
@@ -36,17 +36,29 @@ export class CommandBus extends Component.Component {
     this.commands  = props.commands || {};
   }
 
+  public start(): Promise<void> {
+    return this.transport.start();
+  }
+
   public listen(handler: commandHandler): Promise<Subscription> {
-    return Promise.resolve(null);
+    return this.transport.listen(this.channel, (command: Command) => {
+      if (command.order in this.commands)
+        command.data = new this.commands[command.order](command.data);
+      return handler(command);
+    });
   }
 
   public send(category: string, id: string, order: string, data: any, meta?: any) {
-    const command = new C(category, id, order, data, meta);
+    const command = new Command(category, id, order, data, meta);
     return this.sendCommand(command);
   }
 
-  public sendCommand(command: C): Promise<void> {
+  public sendCommand(command: Command): Promise<void> {
     return Promise.resolve();
+  }
+
+  public stop(): Promise<void> {
+    return this.transport.stop();
   }
 
 }

@@ -243,7 +243,7 @@ Enum.defineProperty('from', function from(value: any) {
 export interface IRecord extends IValue {
   _object: Map<string, IValue>;
   _constructor: { new (): Object };
-  add(field: string, type: any): this;
+  add(field: string, type: any, defaultValue?: any): this;
   either(...a: Array<Array<string> | string>): this;
 }
 
@@ -281,9 +281,11 @@ Record.defineProperty('either', function either(...args: Array<Array<string> | s
   });
 });
 
-Record.defineProperty('add', function add(field: string, type: any) {
+Record.defineProperty('add', function add(field: string, type: any, defaultValue?: any) {
   const record = this.clone();
   record._object.set(field, Value.of(type));
+  if (defaultValue !== undefined)
+    record.defineProperty('_default', () => defaultValue);
   return record;
 });
 
@@ -482,7 +484,7 @@ _Set.defineProperty('of', function (type: any) {
 _Set.defineProperty('from', function (data: any) {
   if (data != null) {
     const set = new Set(data);
-    (<any>set).toJSON = this.toJSON;
+    (<any> set).toJSON = this.toJSON;
     return this.validate(set);
   } else {
     return this.default();
@@ -492,7 +494,7 @@ _Set.defineProperty('from', function (data: any) {
 _Set.defineProperty('default', function () {
   if (this._optional) return null;
   const set = new Set();
-  (<any>set).toJSON = this.toJSON;
+  (<any> set).toJSON = this.toJSON;
   return set;
 });
 
@@ -547,7 +549,7 @@ _Map.defineProperty('of', function (index: any, type: any) {
 
 _Map.defineProperty('from', function (data: any) {
   const map = new Map();
-  (<any>map).toJSON = this.toJSON;
+  (<any> map).toJSON = this.toJSON;
   if (data == null) return this.default();
   for (const [key, value] of data)
     map.set(this._index.from(key), this._subtype.from(value));
@@ -557,7 +559,7 @@ _Map.defineProperty('from', function (data: any) {
 _Map.defineProperty('default', function () {
   if (this._optional) return null;
   const map = new Map();
-  (<any>map).toJSON = this.toJSON;
+  (<any> map).toJSON = this.toJSON;
   return map;
 });
 

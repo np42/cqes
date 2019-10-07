@@ -253,11 +253,14 @@ Record.defineProperty('either', function either(...args: Array<Array<string> | s
 });
 
 Record.defineProperty('add', function add(field: string, type: any, defaultValue?: any) {
-  const record   = this.clone();
+  const record = this.clone();
   type = Value.of(type);
   if (arguments.length > 2) {
-    if (!(defaultValue instanceof Function)) defaultValue = () => defaultValue;
-    type = type.setDefault(defaultValue);
+    if (typeof defaultValue === 'function') {
+      type = type.setDefault(defaultValue);
+    } else {
+      type = type.setDefault(() => defaultValue);
+    }
   }
   record._object.set(field, type);
   return record;
@@ -398,9 +401,7 @@ _Date.defineProperty('from', function from(value: any) {
 });
 
 _Date.defineProperty('defNow', function defNow() {
-  return this.clone((date: IDate) => {
-    date._default = () => new Date().toISOString().substr(0, 10);
-  });
+  return this.setDefault(() => new Date().toISOString().substr(0, 10));
 });
 
 // Time
@@ -420,9 +421,7 @@ _Time.defineProperty('from', function from(value: any) {
 });
 
 _Time.defineProperty('defNow', function defNow() {
-  return this.clone((time: ITime) => {
-    time._default = () => new Date().toISOString().substr(11, 12);
-  });
+  return this.setDefault(() => new Date().toISOString().substr(11, 12));
 });
 
 // DateTime
@@ -452,9 +451,7 @@ _DateTime.defineProperty('from', function from(value: any) {
 });
 
 _DateTime.defineProperty('defNow', function defNow() {
-  return this.clone((datetime: IDateTime) => {
-    datetime._default = () => new Date().toISOString().substr(0, 23).replace('T', ' ');
-  });
+  return this.setDefault(() => new Date().toISOString().substr(0, 23).replace('T', ' '));
 });
 
 // Price

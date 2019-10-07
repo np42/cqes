@@ -31,6 +31,7 @@ export class Subscription implements EventBus.Subscription {
 
   public drain(): void {
     if (this.draining) return ;
+    if (this.queue.length === 0) return ;
     this.draining = true;
     this.handler(this.queue.shift()).then(() => {
       this.draining = false;
@@ -198,7 +199,6 @@ export class Transport extends Component.Component implements EventBus.Transport
               }
             }
             subscriptionHandler = async event => {
-              debugger;
               await handler(event);
               await this.upsertPSubscriptionPosition(id, event.position)
             };

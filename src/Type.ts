@@ -13,17 +13,16 @@ export interface IValue {
   _name:     string;
   _value:    any;
   _default:  () => any;
-  _optional: boolean;
   _checks:   Array<any>;
   _cleaners: Array<any>;
 
   defineProperty(name: string, value: any, isGetter?: boolean): void;
-  extends(type: Function):   this;
-  of(...a: any[]):           this;
-  addCheck(check: any):      this;
+  extends(type: Function):              this;
+  of(...a: any[]):                      this;
+  addCheck(check: any):                 this;
   addCleaner(cleaner: (a: any) => any): this;
-  opt():                     this;
-  init(a: any):              this;
+  setDefault(defaultValue: () => any):  this;
+  opt():                                this;
 
   Set:             ISet;
   Array:           IArray;
@@ -54,7 +53,6 @@ Value.defineProperty = function defineProperty(name: string, value: any, isGette
 }
 
 Value.defineProperty('_value', null);
-Value.defineProperty('_optional', false);
 Value.defineProperty('_checks', new Array());
 Value.defineProperty('_cleaners', new Array());
 
@@ -99,17 +97,6 @@ Value.defineProperty('of', function of(model?: any, ...rest: any[]) {
   return this.clone((value: IValue) => value._value = model);
 });
 
-Value.defineProperty('opt', function opt() {
-  return this.clone((value: IValue) => value._optional = true);
-});
-
-Value.defineProperty('init', function init(defValue: any) {
-  return this.clone((value: IValue) => {
-    value._optional = false;
-    value._default  = typeof defValue === 'function' ? defValue : () => defValue;
-  });
-});
-
 Value.defineProperty('addCleaner', function addCleaner(cleaner: (a: any) => any) {
   return this.clone((value: IValue) => value._cleaners.push(cleaner));
 });
@@ -129,21 +116,25 @@ Value.defineProperty('from', function from(value: any) {
   return this._value ? this._value.from(value) : value;
 });
 
-Value.defineProperty('default', function def() {
-  if (this._optional || this._default == null) return null;
-  return this._default();
-});
-
 Value.defineProperty('validate', function validate(value: any) {
   for (let i = 0; i < this._cleaners.length; i += 1)
     value = this._cleaners[i].call(this, value);
   for (let i = 0; i < this._checks.length; i += 1) {
     if (!this._checks[i].test(value)) {
-      if (this._optional) return null;
-      else throw new Error('value "' + value + '" do not satisfy checks');
+      throw new Error('value "' + value + '" do not satisfy checks');
     }
   }
   return value;
+});
+
+Value.defineProperty('setDefault', function setDefault(defaultValue: () => any) {
+  if (typeof defaultValue != 'function') throw new Error('Default value must be a function');
+  return this.clone((value: IValue) => value._default = defaultValue);
+});
+
+Value.defineProperty('default', function def() {
+  if (this._default != null) return this._default();
+  throw new Error('Mandatory value was not provied');
 });
 
 // Boolean
@@ -154,7 +145,6 @@ export interface IBoolean extends IValue {
 
 export const _Boolean = <IBoolean>Value.extends(function Boolean() {})
   .addCheck((v: any) => v === !!v);
-_Boolean.defineProperty('_default', () => false);
 _Boolean.defineProperty('_true', new Set(['y', 'yes', 'true']));
 _Boolean.defineProperty('_false', new Set(['n', 'no', 'false']));
 
@@ -181,8 +171,6 @@ export interface INumber extends IValue {
 
 export const _Number = <INumber>Value.extends(function Number() {});
 
-_Number.defineProperty('_default', () => 0);
-
 _Number.defineProperty('between', function between(min: number, max: number) {
   return this.addCheck(function (value: number) {
     return value >= min && value <= max;
@@ -199,25 +187,9 @@ export interface IString extends IValue {}
 
 export const _String = <IString>Value.extends(function String() {});
 
-_String.defineProperty('_default', () => '');
-
 _String.defineProperty('from', function from(value: any) {
   if (value == null) return this.default();
   return this.validate(String(value));
-});
-
-// ID
-export interface IID extends IValue {}
-
-export const ID = <IID>Value.extends(function ID() {});
-
-ID.defineProperty('_default', () => uuid());
-
-ID.defineProperty('from', function from(value: any) {
-  if (typeof value === 'number' && value > 0) return this.validate(value);
-  if (typeof value === 'string' && value.length > 0) return this.validate(value);
-  if (value && value.ID) return this.from(value.ID);
-  return this.default();
 });
 
 // Enum
@@ -228,7 +200,6 @@ export interface IEnum extends IValue {
 export const Enum = <IEnum>Value.extends(function Enum() {});
 
 Enum.defineProperty('_either', new Set());
-Enum.defineProperty('_default', function () { return this._either.values().next().value });
 
 Enum.defineProperty('of', function of(...args: any[]) {
   return this.clone((value: IEnum) => value._either = new Set(args));
@@ -282,11 +253,18 @@ Record.defineProperty('either', function either(...args: Array<Array<string> | s
 });
 
 Record.defineProperty('add', function add(field: string, type: any, defaultValue?: any) {
-  const record = this.clone();
-  record._object.set(field, Value.of(type));
-  if (defaultValue !== undefined)
-    record.defineProperty('_default', () => defaultValue);
+  const record   = this.clone();
+  type = Value.of(type);
+  if (arguments.length > 2) {
+    if (!(defaultValue instanceof Function)) defaultValue = () => defaultValue;
+    type = type.setDefault(defaultValue);
+  }
+  record._object.set(field, type);
   return record;
+});
+
+Record.defineProperty('opt', function opt(field: string, type: any) {
+  return this.add(field, type, null);
 });
 
 Record.defineProperty('from', function from(data: any) {
@@ -295,9 +273,11 @@ Record.defineProperty('from', function from(data: any) {
       this._constructor = this._name ? eval('(function ' + this._name + '() {})') : Object;
     const record = <any>new this._constructor();
     for (const [name, type] of this._object) {
-      try { record[name] = type.from(data[name]); }
-      catch (e) {
-        throw new Error('Failed on field: ' + name + ': ' + JSON.stringify(data[name]) + '\n' + String(e));
+      try {
+        record[name] = type.from(data[name]);
+      } catch (e) {
+        const strval = JSON.stringify(data[name]);
+        throw new Error('Failed on field: ' + name + ' = ' + strval + '\n' + String(e));
       }
     }
     return this.validate(record);
@@ -306,40 +286,93 @@ Record.defineProperty('from', function from(data: any) {
   }
 });
 
-Record.defineProperty('default', function def() {
-  return this._optional ? null : this.from({});
-});
-
-// Entity
-export interface IEntity extends IRecord {
-  ID: IID;
-  ByID: IMap;
+// Set
+export interface ISet extends IValue {
+  _subtype: IValue;
 }
 
-export const Entity = <IEntity>Record.extends(function Entity() {})
-  .add('ID', ID);
+export const _Set = <ISet>Value.extends(function Set() {});
+_Set.defineProperty('_subtype', null);
 
-Entity.defineProperty('ID', () => ID, true);
-Entity.defineProperty('ByID', function ByID() { return _Map.of(this.ID, this); }, true);
-
-// Aggregate
-export interface IAggregate extends IEntity {}
-
-export const Aggregate = <IAggregate>Entity.extends(function Aggregate() {});
-
-Aggregate.defineProperty('Set',   () => {
-  throw new Error('Forbidden to create Set from Aggregate')
-}, true);
-Aggregate.defineProperty('Array', () => {
-  throw new Error('Forbidden to create Array from Aggregate')
-}, true);
-Aggregate.defineProperty('Map',   (index: any) => {
-  throw new Error('Forbidden to create Map from Aggregate')
+_Set.defineProperty('of', function (type: any) {
+  return this.clone((value: ISet) => value._subtype = Value.of(type));
 });
-Aggregate.defineProperty('ByID',  () => {
-  throw new Error('Forbidden to create Map By ID from Aggregate')
-}, true);
 
+_Set.defineProperty('from', function (data: any) {
+  if (data != null) {
+    const set = new Set(data);
+    (<any> set).toJSON = this.toJSON;
+    return this.validate(set);
+  } else {
+    return this.default();
+  }
+});
+
+_Set.defineProperty('default', function () {
+  const set = new Set();
+  (<any> set).toJSON = this.toJSON;
+  return set;
+});
+
+_Set.defineProperty('toJSON', function () {
+  return Array.from(this);
+});
+
+// Array
+export interface IArray extends IValue {
+  _subtype: IValue;
+}
+
+export const _Array = <IArray>Value.extends(function Array() {});
+_Array.defineProperty('_subtype', null);
+
+_Array.defineProperty('of', function (type: any) {
+  return this.clone((value: IArray) => value._subtype = Value.of(type));
+});
+
+_Array.defineProperty('from', function (data: any) {
+    if (data instanceof Array) {
+      const array = new Array(data.length);
+      for (let i = 0; i < data.length; i += 1)
+        array[i] = this._subtype.from(data[i]);
+      return this.validate(array);
+    } else {
+      return this.default();
+    }
+});
+
+// Map
+export interface IMap extends IValue {
+  _index: IValue;
+  _subtype: IValue;
+}
+
+export const _Map = <IMap>Value.extends(function Map() {});
+_Map.defineProperty('_index', null);
+_Map.defineProperty('_subtype', null);
+
+_Map.defineProperty('of', function (index: any, type: any) {
+  return this.clone((value: IMap) => {
+    value._index = Value.of(index);
+    value._subtype = Value.of(type);
+  });
+});
+
+_Map.defineProperty('from', function (data: any) {
+  const map = new Map();
+  (<any> map).toJSON = this.toJSON;
+  if (data == null) return this.default();
+  for (const [key, value] of data)
+    map.set(this._index.from(key), this._subtype.from(value));
+  return this.validate(map);
+});
+
+_Map.defineProperty('toJSON', function () {
+  return Array.from(this);
+});
+
+// ------------------------------------------
+// Extended Types
 // ------------------------------------------
 
 // Email
@@ -354,8 +387,6 @@ export interface IDate extends IString {
 }
 
 export const _Date = <IDate>_String.extends(function Date() {});
-
-_Date.defineProperty('_default', () => '0000-00-00');
 
 _Date.defineProperty('from', function from(value: any) {
   if (value instanceof Date)
@@ -378,8 +409,6 @@ export interface ITime extends IString {
 }
 
 export const _Time = <ITime>_String.extends(function Time() {});
-
-_Time.defineProperty('_default', () => '00:00:00');
 
 _Time.defineProperty('from', function from(value: any) {
   if (value instanceof Date)
@@ -412,8 +441,6 @@ export const _DateTime = <IDateTime>_String.extends(function DateTime() {})
       return value.substr(0, 10) + ' ' + value.substr(11, 12);
     }
   });
-
-_DateTime.defineProperty('_default', () => '0000-00-00 00:00:00');
 
 _DateTime.defineProperty('from', function from(value: any) {
   if (value instanceof Date)
@@ -452,8 +479,6 @@ export const _Price = <IPrice>Record.extends(function Price() {})
                           , 'TND', 'TRY', 'TMM', 'USD', 'UGX', 'UAH', 'UYU', 'AED', 'VUV', 'VEB', 'VND'
                           , 'YER', 'ZMK', 'ZWD' ));
 
-//----------------------------------------------------------
-
 // GPSPoint
 export interface IGPSPoint extends IRecord {}
 
@@ -469,100 +494,5 @@ export const _Distance = <IDistance>Record.extends(function Distance() {})
   .add('value', _Number)
   .add('unit', Enum.of('m', 'km'));
 
-// Set
-export interface ISet extends IValue {
-  _subtype: IValue;
-}
+//----------------------------------------------------------
 
-export const _Set = <ISet>Value.extends(function Set() {});
-_Set.defineProperty('_subtype', null);
-
-_Set.defineProperty('of', function (type: any) {
-  return this.clone((value: ISet) => value._subtype = Value.of(type));
-});
-
-_Set.defineProperty('from', function (data: any) {
-  if (data != null) {
-    const set = new Set(data);
-    (<any> set).toJSON = this.toJSON;
-    return this.validate(set);
-  } else {
-    return this.default();
-  }
-});
-
-_Set.defineProperty('default', function () {
-  if (this._optional) return null;
-  const set = new Set();
-  (<any> set).toJSON = this.toJSON;
-  return set;
-});
-
-_Set.defineProperty('toJSON', function () {
-  return Array.from(this);
-});
-
-// Array
-export interface IArray extends IValue {
-  _subtype: IValue;
-}
-
-export const _Array = <IArray>Value.extends(function Array() {});
-_Array.defineProperty('_subtype', null);
-
-_Array.defineProperty('of', function (type: any) {
-  return this.clone((value: IArray) => value._subtype = Value.of(type));
-});
-
-_Array.defineProperty('from', function (data: any) {
-    if (data instanceof Array) {
-      const array = new Array(data.length);
-      for (let i = 0; i < data.length; i += 1)
-        array[i] = this._subtype.from(data[i]);
-      return this.validate(array);
-    } else {
-      return this.default();
-    }
-});
-
-_Array.defineProperty('default', function def() {
-  if (this._optional) return null;
-  return new Array();
-});
-
-// Map
-export interface IMap extends IValue {
-  _index: IValue;
-  _subtype: IValue;
-}
-
-export const _Map = <IMap>Value.extends(function Map() {});
-_Map.defineProperty('_index', null);
-_Map.defineProperty('_subtype', null);
-
-_Map.defineProperty('of', function (index: any, type: any) {
-  return this.clone((value: IMap) => {
-    value._index = Value.of(index);
-    value._subtype = Value.of(type);
-  });
-});
-
-_Map.defineProperty('from', function (data: any) {
-  const map = new Map();
-  (<any> map).toJSON = this.toJSON;
-  if (data == null) return this.default();
-  for (const [key, value] of data)
-    map.set(this._index.from(key), this._subtype.from(value));
-  return this.validate(map);
-});
-
-_Map.defineProperty('default', function () {
-  if (this._optional) return null;
-  const map = new Map();
-  (<any> map).toJSON = this.toJSON;
-  return map;
-});
-
-_Map.defineProperty('toJSON', function () {
-  return Array.from(this);
-});

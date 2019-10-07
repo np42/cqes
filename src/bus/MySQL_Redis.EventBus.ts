@@ -7,38 +7,62 @@ import * as redis     from 'redis';
 export type eventHandler = EventBus.eventHandler;
 
 export interface props extends Component.props {
-  MySQL: MySQL.props;
-  Redis: redis.ClientOpts;
+  context: string;
+  MySQL:   MySQL.props;
+  Redis:   redis.ClientOpts;
 }
 
-export interface Subscription extends EventBus.Subscription {
-  handler:  eventHandler;
-  queue:    Array<Event>;
-  draining: boolean;
+export class Subscription implements EventBus.Subscription {
+  public    abort:    (err?: any) => Promise<void>;
+  protected handler:  eventHandler;
+  protected queue:    Array<Event>;
+  protected draining: boolean;
+
+  constructor(handler: eventHandler, abort: (err?: any) => Promise<void>) {
+    this.queue    = [];
+    this.draining = false;
+    this.handler  = handler;
+    this.abort    = abort;
+  }
+
+  public append(events: Array<Event>): void {
+    Array.prototype.push.apply(this.queue, events);
+  }
+
+  public drain(): void {
+    if (this.draining) return ;
+    this.draining = true;
+    this.handler(this.queue.shift()).then(() => {
+      this.draining = false;
+      this.drain();
+    }).catch(err => {
+      this.abort(err);
+    });
+  }
 }
 
 export class Transport extends Component.Component implements EventBus.Transport {
+  protected context:       string;
   protected mysql:         MySQL.MySQL;
   protected redis:         redis.RedisClient;
-  protected subscriptions: Map<string, Array<Subscription>>;
 
   constructor(props: props) {
     super(props);
-    if (props.MySQL == null) props.MySQL = <any>{};
-    if (props.MySQL.name == null) props.MySQL.name = props.name;
-    if (props.MySQL.user == null) props.MySQL.user = 'cqes';
+    if (props.MySQL == null)          props.MySQL = <any>{};
+    if (props.MySQL.name == null)     props.MySQL.name = props.name;
+    if (props.MySQL.user == null)     props.MySQL.user = 'cqes';
     if (props.MySQL.password == null) props.MySQL.password = 'changeit';
     if (props.MySQL.database == null) props.MySQL.database = 'cqes-' + props.name.toLowerCase();
-    this.mysql = new MySQL.MySQL(props.MySQL);
-    this.redis = redis.createClient(props.Redis);
-    this.subscriptions = new Map();
+    this.context = props.context;
+    this.mysql   = new MySQL.MySQL(props.MySQL);
+    this.redis   = redis.createClient(props.Redis);
   }
 
   public async save(events: Array<Event>): Promise<void> {
     if (events.length === 0) return ;
     const query =
       [ 'INSERT INTO `@events`'
-      ,   '(`category`, `streamId`, `number`, `type`, `date`, `time`, `payload`, `meta`)'
+      ,   '(`category`, `streamId`, `number`, `type`, `date`, `time`, `data`, `meta`)'
       , 'VALUES '
       ].join(' ');
     const params  = <Array<any>>[];
@@ -46,7 +70,7 @@ export class Transport extends Component.Component implements EventBus.Transport
     const date    = new Date();
     const isodate = date.toISOString();
     events.forEach(event => {
-      rows.push('(?, ?, ?, ?, ?, ?, ?)');
+      rows.push('(?, ?, ?, ?, ?, ?, ?, ?)');
       params.push( event.category, event.streamId, event.number, event.type
                  , isodate.substr(0, 10), isodate.substr(11, 12)
                  , JSON.stringify(event.data), JSON.stringify(event.meta)
@@ -57,16 +81,10 @@ export class Transport extends Component.Component implements EventBus.Transport
     const result = <any>await this.mysql.request(query + rows.join(', '), params);
     events.forEach((event, offset) => {
       event.position = result.insertId + offset
-      event.meta = Object.assign(event.meta || {}, { createdAt: date });
+      event.meta = Object.assign(event.meta || {}, { savedAt: date });
     });
-    const first = events[0];
-    const subscriptions = this.subscriptions.get(first.category);
-    if (subscriptions) {
-      subscriptions.forEach(subscription => {
-        Array.prototype.push.apply(subscription.queue, events);
-        this.drainStream(first.category);
-      });
-    }
+    const channel = '/' + this.context + '/' + this.name;
+    this.redis.publish(channel, JSON.stringify(events));
   }
 
   public readFrom(category: string, id: string, number: number, handler: eventHandler): Promise<void> {
@@ -74,7 +92,7 @@ export class Transport extends Component.Component implements EventBus.Transport
       this.mysql.getConnection((err, connection) => {
         if (err) return reject(err);
         const query =
-          [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `payload`, `meta`'
+          [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
           , 'FROM `@events`'
           , 'WHERE `category` = ? AND `streamId` = ? AND `number` > ?'
           , 'ORDER BY `number` ASC'
@@ -86,8 +104,8 @@ export class Transport extends Component.Component implements EventBus.Transport
             reject(err)
           })
           .on('result', row => {
-            const data = JSON.parse(row.payload);
-            const meta = { createdAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
+            const data = JSON.parse(row.data);
+            const meta = { savedAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
             const event = new Event(category, id, row.number, row.type, data, meta);
             event.position = row.eventId;
             handler(event);
@@ -102,32 +120,21 @@ export class Transport extends Component.Component implements EventBus.Transport
   }
 
   public subscribe(category: string, handler: eventHandler): Promise<Subscription> {
-    const subscription: Subscription =
-      { handler, queue: [], draining: false
-      , abort: () => Promise.resolve(<any> this.unsubscribe(category, subscription.handler))
-      }
-    if (this.subscriptions.has(category)) {
-      this.subscriptions.get(category).push(subscription);
-    } else {
-      this.subscriptions.set(category, [subscription]);
-    }
+    const channel = '/' + this.context + '/' + category;
+    const abort = (err?: Error) => {
+      this.redis.unsubscribe();
+      if (err) this.logger.error('Subscription %s failed', channel, err);
+      else this.logger.log('Subscription %s aborted', channel);
+      return Promise.resolve();
+    };
+    const subscription = new Subscription(handler, abort);
+    this.redis.subscribe(channel);
+    this.redis.on('message', (channel, message) => {
+      const events = JSON.parse(message);
+      subscription.append(events);
+      subscription.drain();
+    });
     return Promise.resolve(subscription);
-  }
-
-  public unsubscribe(category: string, handler: eventHandler): number {
-    const subscriptions = this.subscriptions.get(category);
-    let removed = 0;
-    for (let i = 0; i < subscriptions.length; ) {
-      if (subscriptions[i].handler === handler) {
-        subscriptions.splice(i, 1);
-        removed += 1;
-      } else {
-        i += 1;
-      }
-    }
-    if (subscriptions.length === 0)
-      this.subscriptions.delete(category);
-    return removed;
   }
 
   public async psubscribe(id: string, category: string, handler: eventHandler): Promise<Subscription> {
@@ -140,7 +147,7 @@ export class Transport extends Component.Component implements EventBus.Transport
       this.mysql.getConnection((err, connection) => {
         if (err) return reject(err);
         const query =
-          [ 'SELECT `eventId`, `streamId`, `number`, `type`, `date`, `time`, `payload`, `meta`'
+          [ 'SELECT `eventId`, `streamId`, `number`, `type`, `date`, `time`, `data`, `meta`'
           , 'FROM `@events`'
           , 'WHERE `eventId` > ? AND `category` = ?'
           , 'ORDER BY `eventId` ASC'
@@ -149,12 +156,16 @@ export class Transport extends Component.Component implements EventBus.Transport
           .on('error', err => {
             if (err && err.fatal) connection.destroy();
             else connection.release();
+            this.logger.error(request.sql);
             reject(err)
+          })
+          .on('fields', () => {
+            this.logger.log(request.sql);
           })
           .on('result', async row => {
             connection.pause();
-            const data  = JSON.parse(row.payload);
-            const meta  = { createdAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
+            const data  = JSON.parse(row.data);
+            const meta  = { savedAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
             const event = new Event(category, row.streamId, row.number, row.type, data, meta);
             event.position = row.eventId;
             try {
@@ -170,7 +181,7 @@ export class Transport extends Component.Component implements EventBus.Transport
             }
           })
           .on('end', async () => {
-            this.logger.log(request.sql);
+            connection.release();
             while (newEvents.length > 0) {
               const event = newEvents.pop();
               if (event.number == position + 1) {
@@ -187,39 +198,14 @@ export class Transport extends Component.Component implements EventBus.Transport
               }
             }
             subscriptionHandler = async event => {
+              debugger;
               await handler(event);
               await this.upsertPSubscriptionPosition(id, event.position)
             };
-            connection.release();
             return resolve(subscription);
           });
       });
-      return resolve(subscription);
     });
-  }
-
-  protected drainStream(category: string) {
-    const subscriptions = this.subscriptions.get(category);
-    if (subscriptions == null) return ;
-    subscriptions.forEach(subscription => {
-      if (subscription.draining) return ;
-      this.drainSubscription(subscription);
-    });
-  }
-
-  protected drainSubscription(subscription: Subscription) {
-    if (subscription.queue.length == 0) {
-      subscription.draining = false;
-    } else {
-      subscription.draining = true;
-      const event = subscription.queue.shift();
-      subscription.handler(event).then(() => {
-        this.drainSubscription(subscription);
-      }).catch(e => {
-        this.logger.error(e);
-        subscription.abort();
-      });
-    }
   }
 
   protected async getPSubscriptionPosition(subscriptionId: string): Promise<number> {

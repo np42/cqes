@@ -13,6 +13,7 @@ export class Component {
   protected helpers: { [name: string]: Helper };
 
   constructor(props: props) {
+    if (typeof props.name !== 'string') throw new Error('name property is required');
     if (props.logger == null) props.logger = props.name;
     if (typeof props.logger == 'string') props.logger = new Logger(props.logger);
     this.name    = props.name;

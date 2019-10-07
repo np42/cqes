@@ -1,3 +1,4 @@
+export *         from './common';
 export { merge } from './merge';
 export { clone } from './clone';
 export { walk }  from './walk';

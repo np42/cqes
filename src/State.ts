@@ -12,6 +12,10 @@ export class State<A = any> {
     this.data     = data instanceof Object ? data : <A>{};
   }
 
+  public clone(): State<A> {
+    return new (<any>this.constructor)(this.stateId, this.revision, this.data);
+  }
+
   public merge(partial?: Partial<A>): State<A> {
     const data = partial ? merge(this.data || {}, partial) : this.data;
     return new (<any>this.constructor)(this.stateId, this.revision, data);

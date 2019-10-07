@@ -29,10 +29,10 @@ export class Projection extends Service.Service {
   }
 
   protected async handleServiceEvent(event: Event): Promise<void> {
-    const id = this.partition(event);
-    const state = await this.stateBus.get(id);
+    const stateId  = this.partition(event);
+    const state    = await this.stateBus.get(stateId);
     const newState = await this.handleProjectionEvent(state, event);
-    this.stateBus.set(id, newState);
+    this.stateBus.set(newState);
   }
 
   protected async handleProjectionEvent(state: State, event: Event) {

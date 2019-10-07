@@ -48,7 +48,8 @@ export class Service extends Component.Component {
       return this.commandBuses[name].send(category, id, order, data, meta);
     };
     const handler = this.getEventHandler(event);
-    return handler.call(this, event, sender);
+    this.logger.log('%green %s-%s %j', handler.name, event.category, event.streamId, event.data);
+    return handler.call(this.eventHandlers, event, sender);
   }
 
   protected getEventHandler(event: Event): eventHandler {

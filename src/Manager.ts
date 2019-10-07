@@ -68,26 +68,26 @@ export class Manager extends Component.Component {
   }
 
   protected async handleManagerCommand(command: C): Promise<void> {
-    const id      = command.category + '-' + command.streamId;
-    const state   = await this.stateBus.get(id);
+    const stateId = command.category + '-' + command.streamId;
+    const state   = await this.stateBus.get(stateId);
     const handler = this.getCommandHandler(command);
     const events  = <Array<E>> [];
     const emitter = (type: string, data: any, meta?: any) => {
       events.push(new E(command.category, command.streamId, -1, type, data, meta));
     };
     this.logger.log('%red %s-%s %j', handler.name, command.category, command.streamId, command.data);
-    const returnedEvents = await handler.call(this, state, command, emitter);
+    const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
     if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
     else if (returnedEvents instanceof E) events.push(returnedEvents);
     if (events.length == 0) return ;
     const newState = events.reduce((state, event, offset) => {
       const Typer = this.events[event.type];
       if (Typer != null) event.data = new Typer(event.data);
-      event.number = state.revision + offset;
+      event.number = state.revision + offset + 1;
       const applier  = this.domainHandlers[event.type];
       if (applier != null) {
         this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
-        const newState = applier(state, event) || state;
+        const newState = applier.call(this.domainHandlers, state, event) || state;
         newState.revision = state.revision + 1;
         return newState;
       } else {
@@ -96,7 +96,7 @@ export class Manager extends Component.Component {
       }
     }, state);
     await this.eventBus.emitEvents(events);
-    this.stateBus.set(id, newState);
+    this.stateBus.set(newState);
   }
 
   public async stop(): Promise<void> {

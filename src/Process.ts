@@ -11,7 +11,8 @@ import * as View                   from './View';
 import * as Projection             from './Projection';
 import * as Service                from './Service';
 
-import { clone, merge, walk }      from './util';
+import { clone, merge, walk
+       , isConstructor }           from './util';
 
 import { hostname, userInfo }      from 'os';
 import * as fs                     from 'fs';
@@ -138,9 +139,9 @@ export class Process extends Component.Component {
       const eventBus = this.getEventBus({ ...commonProps, ...context.EventBus }, name);
       const stateBus = this.getStateBus({ ...commonProps, ...context.StateBus }, name);
 
-      const { CommandHandlers, DomainHandlers } = this.getManagerHandlers(context.name, name);
+      const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
       const props   = { ...commonProps, commandBuses, stateBus, eventBus, events
-                      , commandHandlers: CommandHandlers, domainHandlers: DomainHandlers
+                      , commandHandlers, domainHandlers
                       }
       const manager = new Manager.Manager(props);
       this.logger.log('%red %cyan.%cyan found', 'Manager', context.name, name);
@@ -160,13 +161,10 @@ export class Process extends Component.Component {
           return result;
         }, {});
       const queryBus = this.getQueryBus({ ...commonProps, ...context.QueryBus }, name);
-      const stateBus = this.getStateBus({ ...commonProps, ...context.StateBus }, name);
 
-      const { QueryHandlers, UpdateHandlers } = this.getViewHandlers(context.name, name);
-      const props   = { ...commonProps, queryBus, stateBus, eventBuses
-                      , queryHandlers: QueryHandlers, updateHandlers: UpdateHandlers
-                      }
-      const view = new View.View(props);
+      const { queryHandlers, updateHandlers } = this.getViewHandlers(context.name, name, viewProps);
+      const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
+      const view  = new View.View(props);
       this.logger.log('%blue %cyan.%cyan found', 'View', context.name, name);
       result.set(name, view);
       return result;
@@ -210,16 +208,30 @@ export class Process extends Component.Component {
     return safeRequire(path);
   }
 
-  protected getManagerHandlers(contextName: string, name: string) {
+  protected getManagerHandlers(contextName: string, name: string, props: any) {
     const path = join(this.root, contextName, name + '.Manager');
     const { CommandHandlers, DomainHandlers } = require(path);
-    return { CommandHandlers, DomainHandlers };
+    if (!isConstructor(CommandHandlers))
+      throw new Error('Constructor CommandHandlers from ' + path + ' expected');
+    if (!isConstructor(DomainHandlers))
+      throw new Error('Constructor DomainHandlers from ' + path + ' expected');
+    const childProps = { name: contextName + '.' + name, ...props };
+    const commandHandlers = new CommandHandlers(childProps);
+    const domainHandlers  = new DomainHandlers(childProps);
+    return { commandHandlers, domainHandlers };
   }
 
-  protected getViewHandlers(contextName: string, name: string) {
+  protected getViewHandlers(contextName: string, name: string, props: any) {
     const path = join(this.root, contextName, name + '.View');
     const { QueryHandlers, UpdateHandlers } = require(path);
-    return { QueryHandlers, UpdateHandlers };
+    if (!isConstructor(QueryHandlers))
+      throw new Error('Constructor QueryHandlers from ' + path + ' expected');
+    if (!isConstructor(UpdateHandlers))
+      throw new Error('Constructor UpdateHandlers from ' + path + ' expected');
+    const childProps = { name: contextName + '.' + name, ...props };
+    const queryHandlers  = new QueryHandlers(childProps);
+    const updateHandlers = new UpdateHandlers(childProps);
+    return { queryHandlers, updateHandlers };
   }
 
   protected getProjectionHandlers(contextName: string, name: string) {

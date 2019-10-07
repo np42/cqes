@@ -45,7 +45,7 @@ export class View extends Service.Service {
 
   protected handleViewQuery(query: Query): Promise<Reply> {
     const handler = this.getQueryHandler(query);
-    return handler.call(this, query);
+    return handler.call(this.queryHandlers, query);
   }
 
   public getQueryHandler(query: Query): queryHandler {

@@ -8,10 +8,10 @@ export type sender = (name: string, category: string, id: string, order: string,
   => Promise<void>;
 export type eventHandler = (event: Event, send: sender) => Promise<void>;
 
-export interface CommandBuses { [name: string]: CommandBus };
-export interface EventBuses { [name: string]: EventBus };
+export interface CommandBuses  { [name: string]: CommandBus };
+export interface EventBuses    { [name: string]: EventBus };
 export interface EventHandlers { [name: string]: eventHandler };
-export interface Subscription { abort: () => Promise<void> };
+export interface Subscription  { abort: () => Promise<void> };
 
 export interface props extends Component.props {
   commandBuses?:  CommandBuses;
@@ -48,8 +48,10 @@ export class Service extends Component.Component {
       return this.commandBuses[name].send(category, id, order, data, meta);
     };
     const handler = this.getEventHandler(event);
-    this.logger.log('%green %s-%s %j', handler.name, event.category, event.streamId, event.data);
-    return handler.call(this.eventHandlers, event, sender);
+    if (handler != null) {
+      this.logger.log('%green %s-%s %j', handler.name, event.category, event.streamId, event.data);
+      return handler.call(this.eventHandlers, event, sender);
+    }
   }
 
   protected getEventHandler(event: Event): eventHandler {

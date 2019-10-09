@@ -22,7 +22,6 @@ export interface IValue {
   addCheck(check: any):                 this;
   addCleaner(cleaner: (a: any) => any): this;
   setDefault(defaultValue: () => any):  this;
-  opt():                                this;
 
   Set:             ISet;
   Array:           IArray;
@@ -215,6 +214,7 @@ export interface IRecord extends IValue {
   _object: Map<string, IValue>;
   _constructor: { new (): Object };
   add(field: string, type: any, defaultValue?: any): this;
+  opt(field: string, type: any): this;
   either(...a: Array<Array<string> | string>): this;
 }
 

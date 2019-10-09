@@ -171,11 +171,38 @@ export class Process extends Component.Component {
     }, new Map());
   }
 
-  protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
+  protected getContextProjections(context: Context.ContextProps, projectionsProps: RecordMap) {
     return new Map();
   }
 
-  protected getContextProjections(context: Context.ContextProps, projectionsProps: RecordMap) {
+  protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
+    return Object.keys(servicesProps).reduce((result: Map<string, Service.Service>, name: string) => {
+      const serviceProps = servicesProps[name];
+      const commonProps  = { context: context.name, name };
+
+      const eventBuses = (serviceProps.psubscribe || [name])
+        .reduce((result: Service.EventBuses, stream: string) => {
+          result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
+          return result;
+        }, {});
+      const commandBuses = (serviceProps.targets || [name])
+        .reduce((result: Manager.CommandBuses, channel: string) => {
+          result[channel] = this.getCommandBus({ ...commonProps, ...context.CommandBus }, channel);
+          return result;
+        }, {});
+
+      const props   = { ...commonProps, ...serviceProps, eventBuses, commandBuses };
+      const path = join(this.root, context.name, name + '.Service');
+      const SubService = require(path)[name];
+      if (SubService == null)
+        throw new Error('Missing ' + name + ' in ' + path);
+      const service = new SubService(props);
+      if (!(service instanceof Service.Service))
+        throw new Error('Service ' + name + ' must be tye of Service');
+      this.logger.log('%yellow %cyan.%cyan found', 'Service', context.name, name);
+      result.set(name, service);
+      return result;
+    }, new Map());
     return new Map();
   }
 
@@ -235,10 +262,6 @@ export class Process extends Component.Component {
   }
 
   protected getProjectionHandlers(contextName: string, name: string) {
-
-  }
-
-  protected getServiceHandlers(contextName: string, name: string) {
 
   }
 

@@ -16,12 +16,9 @@ export { C, Q, R, E, S };
 
 //--
 import { Index }      from './src/Index';
-import { Manager }    from './src/Manager';
-import { View }       from './src/View';
-import { Projection } from './src/Projection';
-import { Service }    from './src/Service';
+import * as Service   from './src/Service';
 
-export { Manager, View, Projection, Service, Index };
+export { Service, Index };
 
 //--
 import * as util from './src/util';

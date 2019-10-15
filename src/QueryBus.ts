@@ -17,12 +17,14 @@ export class QueryBus extends Component.Component {
   protected queries:      QueriesType;
   protected replies:      RepliesType;
   protected subscription: Subscription;
+  protected view:         string;
 
   constructor(props: props) {
     super({ logger: 'QueryBus:' + props.name, ...props });
     this.queries      = props.queries || {};
     this.replies      = props.replies || {};
     this.subscription = null;
+    this.view         = props.name;
   }
 
   public start(): Promise<void> {
@@ -33,8 +35,8 @@ export class QueryBus extends Component.Component {
     return Promise.resolve(null);
   }
 
-  public request(view: string, method: string, data: any, meta?: any): Promise<R> {
-    const query = new Q(view, method, data, meta);
+  public request(method: string, data: any, meta?: any): Promise<R> {
+    const query = new Q(this.view, method, data, meta);
     return this.requestQuery(query);
   }
 

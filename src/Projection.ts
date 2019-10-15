@@ -21,7 +21,8 @@ export class Projection extends Service.Service {
     super({ logger: 'Projection:' + props.name, ...props });
     this.projectionHandlers = props.projectionHandlers;
     this.stateBus           = props.stateBus;
-    if (props.partition) this.partition = props.partition;
+    if (props.partition != null)
+      this.partition        = props.partition;
   }
 
   protected partition(event: Event) {
@@ -36,8 +37,8 @@ export class Projection extends Service.Service {
   }
 
   protected async handleProjectionEvent(state: State, event: Event) {
-    const sender = (name: string, category: string, id: string, order: string, data: any, meta?: any) => {
-      return this.commandBuses[name].send(category, id, order, data, meta);
+    const sender = (name: string, id: string, order: string, data: any, meta?: any) => {
+      return this.commandBuses[name].send(id, order, data, meta);
     };
     const handler = this.getProjectionHandler(event);
     return handler.call(this, state, event, sender);

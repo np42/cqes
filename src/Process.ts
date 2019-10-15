@@ -191,8 +191,8 @@ export class Process extends Component.Component {
           return result;
         }, {});
 
-      const props   = { ...commonProps, ...serviceProps, eventBuses, commandBuses };
-      const path = join(this.root, context.name, name + '.Service');
+      const props = { ...commonProps, ...serviceProps, eventBuses, commandBuses };
+      const path  = join(this.root, context.name, name + '.Service');
       const SubService = require(path)[name];
       if (SubService == null)
         throw new Error('Missing ' + name + ' in ' + path);
@@ -242,7 +242,7 @@ export class Process extends Component.Component {
       throw new Error('Constructor CommandHandlers from ' + path + ' expected');
     if (!isConstructor(DomainHandlers))
       throw new Error('Constructor DomainHandlers from ' + path + ' expected');
-    const childProps = { name: contextName + '.' + name, ...props };
+    const childProps      = { name: contextName + '.' + name, ...props };
     const commandHandlers = new CommandHandlers(childProps);
     const domainHandlers  = new DomainHandlers(childProps);
     return { commandHandlers, domainHandlers };
@@ -255,7 +255,7 @@ export class Process extends Component.Component {
       throw new Error('Constructor QueryHandlers from ' + path + ' expected');
     if (!isConstructor(UpdateHandlers))
       throw new Error('Constructor UpdateHandlers from ' + path + ' expected');
-    const childProps = { name: contextName + '.' + name, ...props };
+    const childProps     = { name: contextName + '.' + name, ...props };
     const queryHandlers  = new QueryHandlers(childProps);
     const updateHandlers = new UpdateHandlers(childProps);
     return { queryHandlers, updateHandlers };

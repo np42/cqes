@@ -18,6 +18,7 @@ export interface props extends Component.props {
 export interface Config {
   url?:      string
   channel?:  amqp.Options.AssertQueue;
+  publish?:  amqp.Options.Publish;
   prefetch?: number;
 };
 
@@ -38,6 +39,8 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     if (props.AMQP.channel.durable == null) props.AMQP.channel.durable = true;
     if (props.AMQP.channel.maxPriority === undefined) props.AMQP.channel.maxPriority = 10;
     if (props.AMQP.prefetch == null) props.AMQP.prefetch = 10;
+    if (props.AMQP.publish == null) props.AMQP.publish = {};
+    if (props.AMQP.publish.persistent == null) props.AMQP.publish.persistent = true;
     this.config    = props.AMQP;
     this.listeners = [];
     this.channels  = new Map();
@@ -95,8 +98,12 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     return channel;
   }
 
-  public send(command: Command<any>): Promise<void> {
-    return Promise.resolve();
+  public async send(command: Command<any>): Promise<void> {
+    const channel = await this.getChannel(this.name);
+    const content = Buffer.from(JSON.stringify(command));
+    const sent    = await channel.publish('', command.category, content, this.config.publish);
+    if (sent) return Promise.resolve();
+    return new Promise(resolve => { channel.once('drain', () => resolve()); });
   }
 
   protected async reconnect(): Promise<void> {

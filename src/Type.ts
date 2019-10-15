@@ -5,6 +5,12 @@ const model_f = Symbol('CQES_Model');
 export type Typer = { new (data: any): Typed };
 export type Typed = any;
 
+export class TypeError extends Error {
+  constructor(message: string) {
+    super(message);
+  }
+}
+
 // Value
 export interface IValue {
   new (input: any): any;
@@ -120,7 +126,7 @@ Value.defineProperty('validate', function validate(value: any) {
     value = this._cleaners[i].call(this, value);
   for (let i = 0; i < this._checks.length; i += 1) {
     if (!this._checks[i].test(value)) {
-      throw new Error('value "' + value + '" do not satisfy checks');
+      throw new TypeError('value "' + value + '" do not satisfy checks');
     }
   }
   return value;
@@ -133,7 +139,7 @@ Value.defineProperty('setDefault', function setDefault(defaultValue: () => any) 
 
 Value.defineProperty('default', function def() {
   if (this._default != null) return this._default();
-  throw new Error('Mandatory value was not provied');
+  throw new TypeError('Mandatory value was not provied');
 });
 
 // Boolean
@@ -280,7 +286,7 @@ Record.defineProperty('from', function from(data: any) {
         record[name] = type.from(data[name]);
       } catch (e) {
         const strval = JSON.stringify(data[name]);
-        throw new Error('Failed on field: ' + name + ' = ' + strval + '\n' + String(e));
+        throw new TypeError('Failed on field: ' + name + ' = ' + strval + '\n' + String(e));
       }
     }
     return this.validate(record);

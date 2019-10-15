@@ -124,14 +124,17 @@ export class Logger {
 
   _date() {
     const date = new Date();
-    const Y = date.getFullYear();
-    const M = this._datePad(date.getMonth() + 1);
-    const D = this._datePad(date.getDate());
-    const h = this._datePad(date.getHours());
-    const m = this._datePad(date.getMinutes());
-    const s = this._datePad(date.getSeconds());
-    const u = this._datePad(date.getMilliseconds(), 3);
-    return [Y, '-', M, '-', D, ' ', h, ':', m, ':', s, '.', u].join('');
+    const tzo  = -date.getTimezoneOffset();
+    const diff = tzo >= 0 ? '+' : '-';
+    return date.getFullYear() +
+      '-'  + this._datePad(date.getMonth() + 1) +
+      '-'  + this._datePad(date.getDate()) +
+      'T'  + this._datePad(date.getHours()) +
+      ':'  + this._datePad(date.getMinutes()) +
+      ':'  + this._datePad(date.getSeconds()) +
+      '.'  + this._datePad(date.getMilliseconds(), 3) +
+      diff + this._datePad(tzo / 60) +
+      ':'  + this._datePad(tzo % 60);
   }
 
   _datePad(number: number, length: number = 2) {

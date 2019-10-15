@@ -25,6 +25,7 @@ export class CommandBus extends Component.Component {
   protected commands:  { [name: string]: Typer };
   protected transport: Transport;
   protected channel:   string;
+  protected category:  string;
 
   constructor(props: props) {
     super({ logger: 'CommandBus:' + props.name, ...props });
@@ -34,6 +35,8 @@ export class CommandBus extends Component.Component {
     this.transport = new Transport(props);
     this.channel   = props.channel;
     this.commands  = props.commands || {};
+    const offset   = this.channel.indexOf('.');
+    this.category  = offset === -1 ? this.channel : this.channel.substring(0, offset);
   }
 
   public start(): Promise<void> {
@@ -48,13 +51,15 @@ export class CommandBus extends Component.Component {
     });
   }
 
-  public send(category: string, id: string, order: string, data: any, meta?: any) {
-    const command = new Command(category, id, order, data, meta);
+  public send(id: string, order: string, data: any, meta?: any) {
+    const command = new Command(this.category, id, order, data, meta);
     return this.sendCommand(command);
   }
 
   public sendCommand(command: Command): Promise<void> {
-    return Promise.resolve();
+    if (command.order in this.commands)
+      command.data = new this.commands[command.order](command.data);
+    return this.transport.send(command);
   }
 
   public stop(): Promise<void> {

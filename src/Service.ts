@@ -4,8 +4,7 @@ import { EventBus }     from './EventBus';
 import { Event }        from './Event';
 const  CachingMap       = require('caching-map');
 
-export type sender = (name: string, category: string, id: string, order: string, data: any, meta?: any)
-  => Promise<void>;
+export type sender = (name: string, id: string, order: string, data: any, meta?: any) => Promise<void>;
 export type eventHandler = (event: Event, send: sender) => Promise<void>;
 
 export interface CommandBuses  { [name: string]: CommandBus };
@@ -34,18 +33,19 @@ export class Service extends Component.Component {
   }
 
   public start(): Promise<void> {
-    const eSubscription = Object.keys(this.eventBuses).map(name => {
+    const eSubscriptions = Object.keys(this.eventBuses).map(name => {
       const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
       return this.eventBuses[name].psubscribe(subscription, (event: Event) => {
         return this.handleServiceEvent(event)
       });
     });
-    return <any> Promise.all(eSubscription);
+    const cChannels = Object.values(this.commandBuses).map(bus => <any>bus.start());
+    return <any> Promise.all([eSubscriptions, ...cChannels]);
   }
 
   protected async handleServiceEvent(event: Event): Promise<void> {
-    const sender = (name: string, category: string, id: string, order: string, data: any, meta?: any) => {
-      return this.commandBuses[name].send(category, id, order, data, meta);
+    const sender = (name: string, id: string, order: string, data: any, meta?: any) => {
+      return this.commandBuses[name].send(id, order, data, meta);
     };
     const handler = this.getEventHandler(event);
     if (handler != null) {

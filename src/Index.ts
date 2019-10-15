@@ -23,12 +23,12 @@ export class Index extends Component.Component {
 
   public async command(order: string, id: string, data: any, meta?: any) {
     if (id == null) id = uuid();
-    await this.cBus.send(this.streamName, id, order, data, meta);
+    await this.cBus.send(id, order, data, meta);
     return { id };
   }
 
   public async query(view: string, data: any, meta?: any) {
-    return this.qBus.request(this.streamName, view, data, meta);
+    return this.qBus.request(view, data, meta);
   }
 
 }

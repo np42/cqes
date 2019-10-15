@@ -1,1 +1,1 @@
-dist/type.js
+dist/src/Type.js

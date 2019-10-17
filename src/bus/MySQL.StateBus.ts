@@ -35,7 +35,7 @@ export class Transport extends Component.Component implements StateBus.Transport
     const result = await this.mysql.request(query, [id]);
     if (result.length == 0) return new State(id, -1, null);
     const row = result[0];
-    const data = JSON.parse(row.payload);
+    const data = JSON.parse(row.payload || '{}');
     return new State(id, row.revision, data);
   }
 

@@ -2,14 +2,16 @@ import { v4 as uuid } from 'uuid';
 
 const model_f = Symbol('CQES_Model');
 
-export type Typer = { new (data: any): Typed };
-export type Typed = any;
+export type Typer     = { new (data: any): Typed };
+export type Typed     = any;
 
 export class TypeError extends Error {
   constructor(message: string) {
     super(message);
   }
 }
+
+export type predicate = (a: any) => boolean;
 
 // Value
 export interface IValue {
@@ -221,6 +223,7 @@ export interface IRecord extends IValue {
   _constructor: { new (): Object };
   add(field: string, type: any, defaultValue?: any): this;
   opt(field: string, type: any): this;
+  rewrite(field: string, predicate: predicate, value: any): this;
   either(...a: Array<Array<string> | string>): this;
 }
 
@@ -274,6 +277,14 @@ Record.defineProperty('add', function add(field: string, type: any, defaultValue
 
 Record.defineProperty('opt', function opt(field: string, type: any) {
   return this.add(field, type, null);
+});
+
+Record.defineProperty('rewrite', function rewrite(field: string, predicate: predicate, value: any) {
+  return this.addCleaner((record: any) => {
+    if (record && predicate(record[field]))
+      record[field] = value;
+    return record;
+  });
 });
 
 Record.defineProperty('from', function from(data: any) {

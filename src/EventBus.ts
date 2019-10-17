@@ -43,7 +43,10 @@ export class EventBus extends Component.Component {
   }
 
   public psubscribe(name: string, handler: eventHandler): Promise<Subscription> {
-    return this.transport.psubscribe(name, this.stream, handler);
+    return this.transport.psubscribe(name, this.stream, (event: E) => {
+      if (event.type in this.events) event.data = new this.events[event.type](event.data);
+      return handler(event);
+    });
   }
 
   public emit(category: string, streamId: string, number: number, name: string, data: any, meta?: any) {
@@ -53,6 +56,10 @@ export class EventBus extends Component.Component {
 
   public emitEvents(events: Array<E>) {
     return this.transport.save(events);
+  }
+
+  public readFrom(category: string, streamId: string, number: number, handler: eventHandler) {
+    return this.transport.readFrom(category, streamId, number, handler);
   }
 
 }

@@ -3,6 +3,8 @@ import { State }      from './State';
 import { Typer }      from './Type';
 const CachingMap      = require('caching-map');
 
+type upgrade = (state: State) => Promise<State>;
+
 export interface Transport {
   start: () => Promise<void>;
   save:  (state: State) => Promise<void>;
@@ -35,10 +37,15 @@ export class StateBus extends Component.Component {
     await this.transport.save(state);
   }
 
-  public async get(stateId: string): Promise<State> {
+  public async get(stateId: string, upgrade?: upgrade): Promise<State> {
     if (this.cache.has(stateId)) return this.cache.get(stateId).clone();
-    const state = await this.transport.load(stateId);
-    this.cache.set(stateId, state);
+    let state = await this.transport.load(stateId);
+    if (upgrade != null) {
+      state = await upgrade(state);
+      this.set(state);
+    } else {
+      this.cache.set(stateId, state);
+    }
     return state.clone();
   }
 

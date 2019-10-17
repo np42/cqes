@@ -70,9 +70,10 @@ export class Transport extends Component.Component implements EventBus.Transport
     const rows    = <Array<any>>[];
     const date    = new Date();
     const isodate = date.toISOString();
-    events.forEach(event => {
+    events.forEach((event, offset) => {
+      const number = event.number === -2 ? null : event.number;
       rows.push('(?, ?, ?, ?, ?, ?, ?, ?)');
-      params.push( event.category, event.streamId, event.number, event.type
+      params.push( event.category, event.streamId, number, event.type
                  , isodate.substr(0, 10), isodate.substr(11, 12)
                  , JSON.stringify(event.data), JSON.stringify(event.meta)
                  );
@@ -95,7 +96,7 @@ export class Transport extends Component.Component implements EventBus.Transport
         const query =
           [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
           , 'FROM `@events`'
-          , 'WHERE `category` = ? AND `streamId` = ? AND `number` > ?'
+          , 'WHERE `category` = ? AND `streamId` = ? AND `number` >= ?'
           , 'ORDER BY `number` ASC'
           ].join(' ');
         const request = connection.query(query, [category, id, number])
@@ -104,12 +105,14 @@ export class Transport extends Component.Component implements EventBus.Transport
             else connection.release();
             reject(err)
           })
-          .on('result', row => {
+          .on('result', async row => {
+            connection.pause()
             const data = JSON.parse(row.data);
             const meta = { savedAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
             const event = new Event(category, id, row.number, row.type, data, meta);
             event.position = row.eventId;
-            handler(event);
+            await handler(event);
+            connection.resume();
           })
           .on('end', () => {
             this.logger.log(request.sql);

@@ -137,10 +137,11 @@ export class Process extends Component.Component {
           return result;
         }, {});
       const eventBus = this.getEventBus({ ...commonProps, ...context.EventBus }, name);
-      const stateBus = this.getStateBus({ ...commonProps, ...context.StateBus }, name);
+      const noopBus  = this.getEventBus({ ...commonProps, ...context.EventBus }, 'NoOp');
+      const stateBus = this.getStateBus({ ...commonProps, ...context.StateBus, eventBus }, name);
 
       const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
-      const props   = { ...commonProps, commandBuses, stateBus, eventBus, events
+      const props   = { ...commonProps, commandBuses, stateBus, noopBus, eventBus, events
                       , commandHandlers, domainHandlers
                       }
       const manager = new Manager.Manager(props);
@@ -180,7 +181,7 @@ export class Process extends Component.Component {
       const serviceProps = servicesProps[name];
       const commonProps  = { context: context.name, name };
 
-      const eventBuses = (serviceProps.psubscribe || [name])
+      const eventBuses = ['NoOp'].concat(serviceProps.psubscribe || [name])
         .reduce((result: Service.EventBuses, stream: string) => {
           result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
           return result;

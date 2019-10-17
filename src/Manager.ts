@@ -20,6 +20,7 @@ export interface Subscription    { abort: () => Promise<void> };
 export interface props extends Component.props {
   commandBuses?:    CommandBuses;
   stateBus?:        StateBus;
+  noopBus?:         EventBus;
   eventBus?:        EventBus;
   commandHandlers?: CommandHandlers;
   domainHandlers?:  DomainHandlers;
@@ -29,6 +30,7 @@ export interface props extends Component.props {
 export class Manager extends Component.Component {
   protected commandBuses:    CommandBuses;
   protected stateBus:        StateBus;
+  protected noopBus:         EventBus;
   protected eventBus:        EventBus;
   protected commandHandlers: CommandHandlers;
   protected domainHandlers:  DomainHandlers;
@@ -38,6 +40,7 @@ export class Manager extends Component.Component {
   constructor(props: props) {
     super(props);
     this.commandBuses    = props.commandBuses    || {};
+    this.noopBus         = props.noopBus;
     this.eventBus        = props.eventBus;
     this.stateBus        = props.stateBus;
     this.commandHandlers = props.commandHandlers || {};
@@ -68,35 +71,53 @@ export class Manager extends Component.Component {
   }
 
   protected async handleManagerCommand(command: C): Promise<void> {
-    const stateId = command.category + '-' + command.streamId;
-    const state   = await this.stateBus.get(stateId);
+    const { category, streamId, order } = command;
+    const stateId = category + '-' + streamId;
+    debugger;
+    const state   = await this.stateBus.get(stateId, async (state: S) => {
+      await this.eventBus.readFrom(category, streamId, state.revision + 1, (event: E) => {
+        state = this.applyEvent(state, event);
+        return Promise.resolve();
+      });
+      return state;
+    });
     const handler = this.getCommandHandler(command);
     const events  = <Array<E>> [];
     const emitter = (type: string, data: any, meta?: any) => {
-      events.push(new E(command.category, command.streamId, -1, type, data, meta));
+      events.push(new E(category, streamId, -1, type, data, meta));
     };
-    this.logger.log('%red %s-%s %j', handler.name, command.category, command.streamId, command.data);
+    this.logger.log('%red %s-%s %j', handler.name, category, streamId, command.data);
     const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
     if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
     else if (returnedEvents instanceof E) events.push(returnedEvents);
-    if (events.length == 0) return ;
-    const newState = events.reduce((state, event, offset) => {
-      const Typer = this.events[event.type];
-      if (Typer != null) event.data = new Typer(event.data);
-      event.number = state.revision + offset + 1;
-      const applier  = this.domainHandlers[event.type];
-      if (applier != null) {
-        this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
-        const newState = applier.call(this.domainHandlers, state, event) || state;
-        newState.revision = state.revision + 1;
-        return newState;
-      } else {
-        state.revision += 1;
-        return state;
-      }
-    }, state);
-    await this.eventBus.emitEvents(events);
-    this.stateBus.set(newState);
+    if (events.length == 0) {
+      const meta = { ...command.meta, command: { category, order } };
+      const noop = new E('DeadLetter', streamId, -2, 'NoOp', command.data, meta);
+      this.logger.log('%green %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
+      await this.noopBus.emitEvents([noop]);
+    } else {
+      const newState = events.reduce((state, event, offset) => {
+        const Typer   = this.events[event.type];
+        if (Typer != null) event.data = new Typer(event.data);
+        event.number  = state.revision + offset + 1;
+        return this.applyEvent(state, event);
+      }, state);
+      await this.eventBus.emitEvents(events);
+      this.stateBus.set(newState);
+    }
+  }
+
+  protected applyEvent(state: S, event: E) {
+    const applier = this.domainHandlers[event.type];
+    if (applier != null) {
+      this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
+      const newState = applier.call(this.domainHandlers, state, event) || state;
+      newState.revision = state.revision + 1;
+      return newState;
+    } else {
+      state.revision += 1;
+      return state;
+    }
   }
 
   public async stop(): Promise<void> {

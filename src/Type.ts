@@ -2,7 +2,7 @@ import { v4 as uuid }    from 'uuid';
 import { isConstructor } from './util';
 import { inspect }       from 'util';
 
-const model_f   = Symbol('CQES_Model');
+const model_f   = Symbol('cqes-type');
 const _Boolean  = global.Boolean;
 const _Number   = global.Number;
 const _String   = global.String;
@@ -23,10 +23,13 @@ export class TypeError extends Error {
 }
 
 export type predicate = (a: any) => boolean;
+export type checker   = RegExp | predicate;
+export type cleaner   = (a: any) => any;
+export type getter    = () => any;
 
 // Value
-export interface IValue {
-  new (input: any): any;
+export interface IValue<A> {
+  new (input: any): A;
   (...types: Array<any>): this;
 
   _name:     string;
@@ -36,17 +39,17 @@ export interface IValue {
   _cleaners: Array<any>;
 
   defineProperty(name: string, value: any, isGetter?: boolean): void;
-  extends(type: Function):              this;
-  of(...a: any[]):                      this;
-  addCheck(check: any):                 this;
-  addCleaner(cleaner: (a: any) => any): this;
-  setDefault(defaultValue: () => any):  this;
+  extends<T>(this: T, type: Function):  T;
+  of<T>(this: T, ...a: any[]):          T;
+  addCheck<T>(this: T, fn: checker):    T;
+  addCleaner<T>(this: T, fn: cleaner):  T;
+  setDefault<T>(this: T, fn: getter):   T;
 
   default():       any;
   from(data: any): any;
 }
 
-export const Value = <IValue>function Value() {};
+export const Value = <IValue<any>>function Value() {};
 Value[model_f] = true;
 Value.defineProperty = function defineProperty(name: string, value: any, isGetter?: boolean) {
   if (isGetter) {
@@ -108,15 +111,15 @@ Value.defineProperty('clone',  function clone(modifier?: (a: any) => any) {
 
 Value.defineProperty('of', function of(model?: any, ...rest: any[]) {
   if (model && model[model_f]) return model;
-  return this.clone((value: IValue) => value._value = model);
+  return this.clone((value: IValue<any>) => value._value = model);
 });
 
 Value.defineProperty('addCleaner', function addCleaner(cleaner: (a: any) => any) {
-  return this.clone((value: IValue) => value._cleaners.push(cleaner));
+  return this.clone((value: IValue<any>) => value._cleaners.push(cleaner));
 });
 
 Value.defineProperty('addCheck', function addCheck(check: any) {
-  return this.clone((value: IValue) => {
+  return this.clone((value: IValue<any>) => {
     if (typeof check === 'function')
       value._checks.push({ test: check });
     else if (check && typeof check.test === 'function')
@@ -147,7 +150,7 @@ Value.defineProperty('validate', function validate(value: any) {
 
 Value.defineProperty('setDefault', function setDefault(defaultValue: () => any) {
   if (typeof defaultValue != 'function') throw new Error('Default value must be a function');
-  return this.clone((value: IValue) => value._default = defaultValue);
+  return this.clone((value: IValue<any>) => value._default = defaultValue);
 });
 
 Value.defineProperty('default', function def() {
@@ -156,7 +159,7 @@ Value.defineProperty('default', function def() {
 });
 
 // Boolean
-export interface IBoolean extends IValue {
+export interface IBoolean extends IValue<boolean> {
   _true:  Set<string>;
   _false: Set<string>;
 }
@@ -183,8 +186,8 @@ Boolean.defineProperty('from', function from(value: any) {
 });
 
 // Number
-export interface INumber extends IValue {
-  between(min: number, max: number): this;
+export interface INumber extends IValue<number> {
+  between<T>(this: T, min: number, max: number): T;
 }
 
 export const Number = <INumber>Value.extends(function Number() {});
@@ -201,7 +204,7 @@ Number.defineProperty('from', function from(value: any) {
 });
 
 // String
-export interface IString extends IValue {}
+export interface IString extends IValue<string> {}
 
 export const String = <IString>Value.extends(function String() {});
 
@@ -211,8 +214,8 @@ String.defineProperty('from', function from(value: any) {
 });
 
 // Enum
-export interface IEnum extends IValue {
-  _either: Set<IValue>;
+export interface IEnum extends IValue<Object> {
+  _either: Set<IValue<any>>;
 }
 
 export const Enum = <IEnum>Value.extends(function Enum() {});
@@ -229,13 +232,13 @@ Enum.defineProperty('from', function from(value: any) {
 });
 
 // Record
-export interface IRecord extends IValue {
-  _object: Map<string, IValue>;
+export interface IRecord extends IValue<Object> {
+  _object: Map<string, IValue<any>>;
   _constructor: { new (): Object };
-  add(field: string, type: any, defaultValue?: any): this;
-  opt(field: string, type: any): this;
-  rewrite(field: string, predicate: predicate, value: any): this;
-  either(...a: Array<Array<string> | string>): this;
+  add<T>(this: T, field: string, type: any, defaultValue?: any):        T;
+  opt<T>(this: T, field: string, type: any):                            T;
+  rewrite<T>(this: T, field: string, predicate: predicate, value: any): T;
+  either<T>(this: T, ...args: Array<Array<string> | string>):           T;
 }
 
 export const Record = <IRecord>Value.extends(function Record() {});
@@ -320,12 +323,12 @@ Record.defineProperty('from', function from(data: any) {
 });
 
 // Collection
-export interface ICollection extends IValue {
-  _subtype: IValue;
+export interface ICollection<A> extends IValue<A> {
+  _subtype: IValue<any>;
   notEmpty: this;
 }
 
-export const Collection = <ICollection>Value.extends(function Collection() {});
+export const Collection = <ICollection<any>>Value.extends(function Collection() {});
 Collection.defineProperty('_subtype', null);
 
 Collection.defineProperty('notEmpty', function notEmpty() {
@@ -335,7 +338,7 @@ Collection.defineProperty('notEmpty', function notEmpty() {
 }, true);
 
 // Set
-export interface ISet extends ICollection {}
+export interface ISet extends ICollection<Set<any>> {}
 
 export const Set = <ISet>Collection.extends(function _Set(type?: any) {
   if (type && type[model_f]) return Set.of(type);
@@ -372,7 +375,7 @@ Set.defineProperty('notEmpty', function notEmpty() {
 }, true);
 
 // Array
-export interface IArray extends ICollection {}
+export interface IArray extends ICollection<Array<any>> {}
 
 export const Array = <IArray>Collection.extends(function _Array(type?: any) {
   if (type && type[model_f]) return Array.of(type);
@@ -401,8 +404,8 @@ Array.defineProperty('notEmpty', function notEmpty() {
 }, true);
 
 // Map
-export interface IMap extends ICollection {
-  _index: IValue;
+export interface IMap extends ICollection<Map<any, any>> {
+  _index: IValue<any>;
 }
 
 export const Map = <IMap>Collection.extends(function _Map(index?: any, type?: any) {

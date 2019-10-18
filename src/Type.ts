@@ -22,28 +22,29 @@ export class TypeError extends Error {
   }
 }
 
-export type predicate = (a: any) => boolean;
-export type checker   = RegExp | predicate;
-export type cleaner   = (a: any) => any;
-export type getter    = () => any;
+export type predicate   = (a: any) => boolean;
+export type checker     = RegExp | predicate;
+export type transformer = (a: any) => any;
+export type getter      = () => any;
 
 // Value
 export interface IValue<A> {
   new (input: any): A;
   (...types: Array<any>): this;
 
-  _name:     string;
-  _value:    any;
-  _default:  () => any;
-  _checks:   Array<any>;
-  _cleaners: Array<any>;
+  _name:      string;
+  _value:     any;
+  _default:   () => any;
+  _checks:    Array<any>;
+  _modifiers: Array<any>;
 
   defineProperty(name: string, value: any, isGetter?: boolean): void;
-  extends<T>(this: T, type: Function):  T;
-  of<T>(this: T, ...a: any[]):          T;
-  addCheck<T>(this: T, fn: checker):    T;
-  addCleaner<T>(this: T, fn: cleaner):  T;
-  setDefault<T>(this: T, fn: getter):   T;
+
+  extends<T>(this: T, type: Function):     T;
+  of<T>(this: T, ...a: any[]):             T;
+  addCheck<T>(this: T, fn: checker):       T;
+  transform<T>(this: T, fn: transformer):  T;
+  setDefault<T>(this: T, fn: getter):      T;
 
   default():       any;
   from(data: any): any;
@@ -71,7 +72,7 @@ Value.defineProperty = function defineProperty(name: string, value: any, isGette
 
 Value.defineProperty('_value', null);
 Value.defineProperty('_checks', new _Array());
-Value.defineProperty('_cleaners', new _Array());
+Value.defineProperty('_modifiers', new _Array());
 
 Value.defineProperty('extends', function extend(constructor: Function) {
   const value = constructor;
@@ -114,8 +115,8 @@ Value.defineProperty('of', function of(model?: any, ...rest: any[]) {
   return this.clone((value: IValue<any>) => value._value = model);
 });
 
-Value.defineProperty('addCleaner', function addCleaner(cleaner: (a: any) => any) {
-  return this.clone((value: IValue<any>) => value._cleaners.push(cleaner));
+Value.defineProperty('transform', function transform(cleaner: (a: any) => any) {
+  return this.clone((value: IValue<any>) => value._modifiers.push(cleaner));
 });
 
 Value.defineProperty('addCheck', function addCheck(check: any) {
@@ -134,8 +135,8 @@ Value.defineProperty('from', function from(value: any) {
 });
 
 Value.defineProperty('validate', function validate(value: any) {
-  for (let i = 0; i < this._cleaners.length; i += 1)
-    value = this._cleaners[i].call(this, value);
+  for (let i = 0; i < this._modifiers.length; i += 1)
+    value = this._modifiers[i].call(this, value);
   for (let i = 0; i < this._checks.length; i += 1) {
     const check = this._checks[i];
     if (!check.test(value)) {
@@ -296,7 +297,7 @@ Record.defineProperty('opt', function opt(field: string, type: any) {
 });
 
 Record.defineProperty('rewrite', function rewrite(field: string, predicate: predicate, value: any) {
-  return this.addCleaner((record: any) => {
+  return this.transform((record: any) => {
     if (record && predicate(record[field]))
       record[field] = value;
     return record;
@@ -342,16 +343,24 @@ export interface ISet extends ICollection<Set<any>> {}
 
 export const Set = <ISet>Collection.extends(function _Set(type?: any) {
   if (type && type[model_f]) return Set.of(type);
-});
+}).setDefault(() => new _Set());
 
 Set.defineProperty('of', function (type: any) {
   return this.clone((value: ISet) => value._subtype = Value.of(type));
 });
 
 Set.defineProperty('from', function (data: any) {
-  if (data != null) {
-    const set = new _Set(data);
+  if (data instanceof Array || data instanceof Set) {
+    const set = new _Set();
     _Object.defineProperty(set, 'toJSON', { value: this.toJSON });
+    for (const item of data) {
+      try {
+        set.add(this._subtype.from(item));
+      } catch (e) {
+        const strval = JSON.stringify(item);
+        throw new TypeError('Failed on item: ' + strval + '\n' + _String(e));
+      }
+    }
     return this.validate(set);
   } else {
     return this.default();
@@ -388,14 +397,24 @@ Array.defineProperty('of', function (type: any) {
 Array.defineProperty('from', function (data: any) {
     if (data instanceof _Array) {
       const array = new _Array(data.length);
-      for (let i = 0; i < data.length; i += 1)
-        array[i] = this._subtype.from(data[i]);
+      for (let i = 0; i < data.length; i += 1) {
+        try {
+          array[i] = this._subtype.from(data[i]);
+        } catch (e) {
+          const strval = JSON.stringify(data[i]);
+          throw new TypeError('Failed on index: ' + i + ' = ' + strval + '\n' + _String(e));
+        }
+      }
       return this.validate(array);
     } else {
       return this.default();
     }
 });
 
+
+Array.defineProperty('default', function () {
+  return new _Array();
+});
 
 Array.defineProperty('notEmpty', function notEmpty() {
   return this.addCheck(function notEmpty(value: any) {
@@ -423,12 +442,29 @@ Map.defineProperty('of', function (index: any, type: any) {
 });
 
 Map.defineProperty('from', function (data: any) {
+  if (data instanceof Array || data instanceof Map) {
+    const map = new _Map();
+    _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
+    for (const [key, value] of data) {
+      try {
+        map.set(this._index.from(key), this._subtype.from(value));
+      } catch (e) {
+        const strkey = JSON.stringify(key);
+        const strval = JSON.stringify(value);
+        throw new TypeError('Failed on key: ' + strkey + ' = ' + strval + '\n' + _String(e));
+      }
+    }
+    return this.validate(map);
+  } else {
+    return this.default();
+  }
+});
+
+
+Map.defineProperty('default', function () {
   const map = new _Map();
   _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
-  if (data == null) return this.default();
-  for (const [key, value] of data)
-    map.set(this._index.from(key), this._subtype.from(value));
-  return this.validate(map);
+  return map;
 });
 
 Map.defineProperty('toJSON', function toJSON() {
@@ -497,7 +533,7 @@ export interface IDateTime extends IString {
 }
 
 export const DateTime = <IDateTime>String.extends(function DateTime() {})
-  .addCleaner(function (value: string) {
+  .transform(function (value: string) {
     const date = /^\d{4}(-\d\d){2}( |T)(\d\d)(:\d\d){2}(\.\d{3})?(Z|[+\-]\d+)?$/.exec(value);
     if (!date) return this.default();
     if (date[6] && date[6] != 'Z') {

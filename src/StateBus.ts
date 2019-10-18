@@ -40,6 +40,8 @@ export class StateBus extends Component.Component {
   public async get(stateId: string, upgrade?: upgrade): Promise<State> {
     if (this.cache.has(stateId)) return this.cache.get(stateId).clone();
     let state = await this.transport.load(stateId);
+    if (this.state != null && state.revision > -1)
+      state.data = new this.state(state.data);
     if (upgrade != null) {
       state = await upgrade(state);
       this.set(state);

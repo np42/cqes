@@ -122,11 +122,11 @@ export class HTTPService extends Service.Service {
       this.callbacks.set(transactionId, ttl, { hook, info: { category, streamId } });
     } catch (e) {
       if (e instanceof TypeError) {
-        this.logger.warn('Request %s failed with', transactionId, e);
+        this.logger.warn('Request %s failed with\n%e', transactionId, e);
         const data = { message: e.toString(), code: 400 };
         return handler(new Event(category, streamId, -1, 'Error', data, meta));
       } else {
-        this.logger.warn('Request %s failed with', transactionId, e);
+        this.logger.warn('Request %s failed with\n%e', transactionId, e);
         const data = { message: 'Internal server error', code: 500 };
         return handler(new Event(category, streamId, -1, 'Error', data, meta));
       }
@@ -141,7 +141,7 @@ export class HTTPService extends Service.Service {
           res.writeHead(cases[event.type][0], this.headers);
           res.end(JSON.stringify({ message: cases[event.type][1] }));
         } else {
-          //
+          // TODO
         }
         return true;
       } else if (event.type == 'Error') {

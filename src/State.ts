@@ -1,5 +1,5 @@
-import { Event }  from './Event';
-import { merge }  from './util';
+import { Event }        from './Event';
+import { merge, clone } from './util';
 
 export class State<A = any> {
   public stateId:   string;
@@ -13,7 +13,7 @@ export class State<A = any> {
   }
 
   public clone(): State<A> {
-    return new (<any>this.constructor)(this.stateId, this.revision, this.data);
+    return new (<any>this.constructor)(this.stateId, this.revision, clone(this.data));
   }
 
   public merge(partial?: Partial<A>): State<A> {

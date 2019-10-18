@@ -73,7 +73,6 @@ export class Manager extends Component.Component {
   protected async handleManagerCommand(command: C): Promise<void> {
     const { category, streamId, order } = command;
     const stateId = category + '-' + streamId;
-    debugger;
     const state   = await this.stateBus.get(stateId, async (state: S) => {
       await this.eventBus.readFrom(category, streamId, state.revision + 1, (event: E) => {
         state = this.applyEvent(state, event);
@@ -93,7 +92,7 @@ export class Manager extends Component.Component {
     if (events.length == 0) {
       const meta = { ...command.meta, command: { category, order } };
       const noop = new E('DeadLetter', streamId, -2, 'NoOp', command.data, meta);
-      this.logger.log('%green %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
+      this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
       await this.noopBus.emitEvents([noop]);
     } else {
       const newState = events.reduce((state, event, offset) => {

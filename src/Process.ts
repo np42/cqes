@@ -228,7 +228,9 @@ export class Process extends Component.Component {
 
   protected getStateBus(props: any, type: string) {
     if (props.transport == null) props.transport = './bus/MySQL.StateBus';
-    return new StateBus(props);
+    const states = this.getTypes(props.context, type, 'state');
+    const state = states && states[type] || null;
+    return new StateBus({ ...props, state });
   }
 
   protected getTypes(contextName: string, category: string, kind: string) {

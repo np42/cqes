@@ -45,8 +45,14 @@ export class CommandBus extends Component.Component {
 
   public listen(handler: commandHandler): Promise<Subscription> {
     return this.transport.listen(this.channel, (command: Command) => {
-      if (command.order in this.commands)
-        command.data = new this.commands[command.order](command.data);
+      if (command.order in this.commands) {
+        try {
+          command.data = new this.commands[command.order](command.data);
+        } catch (e) {
+          this.logger.error('Command discarded %j\n%e', command, e);
+          return Promise.resolve();
+        }
+      }
       return handler(command);
     });
   }

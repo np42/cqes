@@ -27,12 +27,19 @@ export type checker     = RegExp | predicate;
 export type transformer = (a: any) => any;
 export type getter      = () => any;
 
+const makeConstructor = (name: string) => eval
+( [ '(function ' + name + '() {'
+  , '  const method = this instanceof ' + name + ' ? "from" : "of";'
+  , '  return ' + name + '[method].apply(' + name + ', arguments);'
+  , '})'
+  ].join('\n')
+);
+
 // Value
 export interface IValue<A> {
   new (input: any): A;
   (...types: Array<any>): this;
 
-  _name:      string;
   _value:     any;
   _default:   () => any;
   _checks:    Array<any>;
@@ -40,7 +47,7 @@ export interface IValue<A> {
 
   defineProperty(name: string, value: any, isGetter?: boolean): void;
 
-  extends<T>(this: T, type: Function):     T;
+  extends<T>(this: T, name: string):       T;
   of<T>(this: T, ...a: any[]):             T;
   addCheck<T>(this: T, fn: checker):       T;
   transform<T>(this: T, fn: transformer):  T;
@@ -74,8 +81,8 @@ Value.defineProperty('_value', null);
 Value.defineProperty('_checks', new _Array());
 Value.defineProperty('_modifiers', new _Array());
 
-Value.defineProperty('extends', function extend(constructor: Function) {
-  const value = constructor;
+Value.defineProperty('extends', function extend(name: string) {
+  const value = makeConstructor(name);
   value[model_f] = true;
   let parent = this;
   while (parent != null) {
@@ -100,12 +107,8 @@ Value.defineProperty('extends', function extend(constructor: Function) {
   return value;
 });
 
-Value.defineProperty('clone',  function clone(modifier?: (a: any) => any) {
-  const Constructor = function This(input: any): any {
-    (<any>This)._name = this.constructor.name;
-    return (<any>This).from(input);
-  };
-  const value = this.extends(Constructor);
+Value.defineProperty('clone', function clone(modifier?: (a: any) => any) {
+  const value = this.extends(this.name);
   if (modifier) modifier(value);
   return value;
 });
@@ -165,7 +168,7 @@ export interface IBoolean extends IValue<boolean> {
   _false: Set<string>;
 }
 
-export const Boolean = <IBoolean>Value.extends(function Boolean() {})
+export const Boolean = <IBoolean>Value.extends('Boolean')
   .addCheck((v: any) => v === !!v);
 Boolean.defineProperty('_true', new _Set(['y', 'yes', 'true']));
 Boolean.defineProperty('_false', new _Set(['n', 'no', 'false']));
@@ -191,7 +194,7 @@ export interface INumber extends IValue<number> {
   between<T>(this: T, min: number, max: number): T;
 }
 
-export const Number = <INumber>Value.extends(function Number() {});
+export const Number = <INumber>Value.extends('Number');
 
 Number.defineProperty('between', function between(min: number, max: number) {
   return this.addCheck(function (value: number) {
@@ -207,7 +210,7 @@ Number.defineProperty('from', function from(value: any) {
 // String
 export interface IString extends IValue<string> {}
 
-export const String = <IString>Value.extends(function String() {});
+export const String = <IString>Value.extends('String');
 
 String.defineProperty('from', function from(value: any) {
   if (value == null) return this.default();
@@ -219,7 +222,7 @@ export interface IEnum extends IValue<Object> {
   _either: Set<IValue<any>>;
 }
 
-export const Enum = <IEnum>Value.extends(function Enum() {});
+export const Enum = <IEnum>Value.extends('Enum');
 
 Enum.defineProperty('_either', new _Set());
 
@@ -242,7 +245,7 @@ export interface IRecord extends IValue<Object> {
   either<T>(this: T, ...args: Array<Array<string> | string>):           T;
 }
 
-export const Record = <IRecord>Value.extends(function Record() {});
+export const Record = <IRecord>Value.extends('Record');
 Record._object = new _Map();
 
 Record.defineProperty('of', function of(model: { [name: string]: any }) {
@@ -329,7 +332,7 @@ export interface ICollection<A> extends IValue<A> {
   notEmpty: this;
 }
 
-export const Collection = <ICollection<any>>Value.extends(function Collection() {});
+export const Collection = <ICollection<any>>Value.extends('Collection');
 Collection.defineProperty('_subtype', null);
 
 Collection.defineProperty('notEmpty', function notEmpty() {
@@ -341,9 +344,13 @@ Collection.defineProperty('notEmpty', function notEmpty() {
 // Set
 export interface ISet extends ICollection<Set<any>> {}
 
-export const Set = <ISet>Collection.extends(function _Set(type?: any) {
-  if (type && type[model_f]) return Set.of(type);
-}).setDefault(() => new _Set());
+export const Set = <ISet>Collection.extends('Set');
+
+Set.defineProperty('_default', function () {
+  const set = new _Set();
+  _Object.defineProperty(set, 'toJSON', { value: this.toJSON });
+  return set;
+});
 
 Set.defineProperty('of', function (type: any) {
   return this.clone((value: ISet) => value._subtype = Value.of(type));
@@ -363,14 +370,9 @@ Set.defineProperty('from', function (data: any) {
     }
     return this.validate(set);
   } else {
-    return this.default();
+    const set = this.default();
+    return this.validate(set);
   }
-});
-
-Set.defineProperty('default', function () {
-  const set = new _Set();
-  _Object.defineProperty(set, 'toJSON', { value: this.toJSON });
-  return set;
 });
 
 Set.defineProperty('toJSON', function toJSON() {
@@ -386,8 +388,10 @@ Set.defineProperty('notEmpty', function notEmpty() {
 // Array
 export interface IArray extends ICollection<Array<any>> {}
 
-export const Array = <IArray>Collection.extends(function _Array(type?: any) {
-  if (type && type[model_f]) return Array.of(type);
+export const Array = <IArray>Collection.extends('Array');
+
+Array.defineProperty('_default', function () {
+  return new _Array();
 });
 
 Array.defineProperty('of', function (type: any) {
@@ -407,13 +411,9 @@ Array.defineProperty('from', function (data: any) {
       }
       return this.validate(array);
     } else {
-      return this.default();
+      const array = this.default();
+      return this.validate(array);
     }
-});
-
-
-Array.defineProperty('default', function () {
-  return new _Array();
 });
 
 Array.defineProperty('notEmpty', function notEmpty() {
@@ -427,12 +427,15 @@ export interface IMap extends ICollection<Map<any, any>> {
   _index: IValue<any>;
 }
 
-export const Map = <IMap>Collection.extends(function _Map(index?: any, type?: any) {
-  if (index && index[model_f] && type && type[model_f])
-    return Map.of(index, type);
-});
+export const Map = <IMap>Collection.extends('Map');
 
 Map.defineProperty('_index', null);
+
+Map.defineProperty('_default', function () {
+  const map = new _Map();
+  _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
+  return map;
+});
 
 Map.defineProperty('of', function (index: any, type: any) {
   return this.clone((value: IMap) => {
@@ -456,15 +459,9 @@ Map.defineProperty('from', function (data: any) {
     }
     return this.validate(map);
   } else {
-    return this.default();
+    const map = this.default();
+    return this.validate(map);
   }
-});
-
-
-Map.defineProperty('default', function () {
-  const map = new _Map();
-  _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
-  return map;
 });
 
 Map.defineProperty('toJSON', function toJSON() {
@@ -484,7 +481,7 @@ Map.defineProperty('notEmpty', function notEmpty() {
 // Email
 export interface IEmail extends IString {}
 
-export const _Email = <IEmail>String.extends(function Email() {})
+export const _Email = <IEmail>String.extends('Email')
   .addCheck(/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/);
 
 // Date
@@ -492,7 +489,7 @@ export interface IDate extends IString {
   defNow(): this;
 }
 
-export const Date = <IDate>String.extends(function Date() {});
+export const Date = <IDate>String.extends('Date');
 
 Date.defineProperty('from', function from(value: any) {
   if (value instanceof _Date)
@@ -512,7 +509,7 @@ export interface ITime extends IString {
   defNow(): this;
 }
 
-export const Time = <ITime>String.extends(function Time() {});
+export const Time = <ITime>String.extends('Time');
 
 Time.defineProperty('from', function from(value: any) {
   if (value instanceof _Date)
@@ -532,7 +529,7 @@ export interface IDateTime extends IString {
   defNow(): this;
 }
 
-export const DateTime = <IDateTime>String.extends(function DateTime() {})
+export const DateTime = <IDateTime>String.extends('DateTime')
   .transform(function (value: string) {
     const date = /^\d{4}(-\d\d){2}( |T)(\d\d)(:\d\d){2}(\.\d{3})?(Z|[+\-]\d+)?$/.exec(value);
     if (!date) return this.default();
@@ -560,7 +557,7 @@ DateTime.defineProperty('defNow', function defNow() {
 // UUID
 export interface IUUID extends IString {}
 
-export const UUID = <IUUID>String.extends(function UUID() {})
+export const UUID = <IUUID>String.extends('UUID')
   .addCheck(/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
 
 //---------------------------

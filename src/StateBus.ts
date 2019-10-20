@@ -6,10 +6,11 @@ const CachingMap      = require('caching-map');
 type upgrade = (state: State) => Promise<State>;
 
 export interface Transport {
-  start: () => Promise<void>;
-  save:  (state: State) => Promise<void>;
-  load:  (stateId: string) => Promise<State>;
-  stop:  () => Promise<void>;
+  start:   () => Promise<void>;
+  save:    (state: State) => Promise<void>;
+  load:    (stateId: string) => Promise<State>;
+  destroy: (stateId: string) => Promise<void>;
+  stop:    () => Promise<void>;
 }
 
 export interface props extends Component.props {
@@ -33,21 +34,24 @@ export class StateBus extends Component.Component {
   }
 
   public async set(state: State): Promise<void> {
-    this.cache.set(state.stateId, state);
-    await this.transport.save(state);
+    if (state.revision == -1) {
+      this.cache.delete(state.stateId);
+      await this.transport.destroy(state.stateId);
+    } else {
+      if (this.state != null)
+        state.data = this.state.from(state.data);
+      this.cache.set(state.stateId, state);
+      await this.transport.save(state);
+    }
   }
 
   public async get(stateId: string, upgrade?: upgrade): Promise<State> {
     if (this.cache.has(stateId)) return this.cache.get(stateId).clone();
     let state = await this.transport.load(stateId);
-    if (this.state != null && state.revision > -1)
-      state.data = new this.state(state.data);
-    if (upgrade != null) {
-      state = await upgrade(state);
-      this.set(state);
-    } else {
-      this.cache.set(stateId, state);
-    }
+    if (state == null) state = new State(stateId, -1, null);
+    if (this.state != null) state.data = this.state.from(state.data);
+    if (upgrade != null) state = await upgrade(state);
+    this.cache.set(stateId, state);
     return state.clone();
   }
 

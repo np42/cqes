@@ -2,7 +2,7 @@ import { v4 as uuid }    from 'uuid';
 import { isConstructor } from './util';
 import { inspect }       from 'util';
 
-const model_f   = Symbol('cqes-type');
+const _tag      = Symbol('cqes-type');
 const _Boolean  = global.Boolean;
 const _Number   = global.Number;
 const _String   = global.String;
@@ -13,7 +13,7 @@ const _Set      = global.Set;
 const _Array    = global.Array;
 const _Map      = global.Map;
 
-export type Typer     = { new (data: any): Typed };
+export type Typer     = { from(data: any): Typed };
 export type Typed     = any;
 
 export class TypeError extends Error {
@@ -23,42 +23,54 @@ export class TypeError extends Error {
 }
 
 export type predicate   = (a: any) => boolean;
-export type checker     = RegExp | predicate;
+export type constraint  = RegExp | predicate;
 export type transformer = (a: any) => any;
 export type getter      = () => any;
 
-const makeConstructor = (name: string) => eval
-( [ '(function ' + name + '() {'
-  , '  const method = this instanceof ' + name + ' ? "from" : "of";'
-  , '  return ' + name + '[method].apply(' + name + ', arguments);'
-  , '})'
-  ].join('\n')
-);
+const makeConstructor = (name: string) => {
+  if (!/^[a-z$_][a-z0-9$_]*$/i.test(name)) throw new Error('Bad name');
+  return eval
+  ( [ '(function ' + name + '() {'
+    , '  if (this instanceof ' + name + ') return this;'
+    , '  return ' + name + '.of.apply(' + name + ', arguments);'
+    , '})'
+    ].join('\n')
+  );
+}
+
+const tagCQESType = (Type: any) => {
+  _Object.defineProperty(Type, _tag, { value: true, enumerable: false, writable: false });
+}
+
+export function isType(Type: any) {
+  return !!(Type && Type[_tag]);
+}
 
 // Value
 export interface IValue<A> {
-  new (input: any): A;
   (...types: Array<any>): this;
 
-  _value:     any;
-  _default:   () => any;
-  _checks:    Array<any>;
-  _modifiers: Array<any>;
+  _default:     () => A;
+  _constraints: Array<any>;
+  _modifiers:   Array<any>;
 
   defineProperty(name: string, value: any, isGetter?: boolean): void;
 
-  extends<T>(this: T, name: string):       T;
-  of<T>(this: T, ...a: any[]):             T;
-  addCheck<T>(this: T, fn: checker):       T;
-  transform<T>(this: T, fn: transformer):  T;
-  setDefault<T>(this: T, fn: getter):      T;
+  extends<T>(this: T, name: string):         T;
+  of<T>(this: T, ...a: any[]):               T;
+  addConstraint<T>(this: T, fn: constraint): T;
+  transform<T>(this: T, fn: transformer):    T;
+  setDefault<T>(this: T, fn: getter):        T;
 
-  default():       any;
-  from(data: any): any;
+  default<X>(this: new (input?: any) => X):         X;
+  from<X>(this: new (input?: any) => X, data: any): X;
+  validate<X>(data: X):                             X;
 }
 
 export const Value = <IValue<any>>function Value() {};
-Value[model_f] = true;
+
+tagCQESType(Value);
+
 Value.defineProperty = function defineProperty(name: string, value: any, isGetter?: boolean) {
   if (isGetter) {
     if (typeof value === 'function' && value.length === 0) {
@@ -77,16 +89,15 @@ Value.defineProperty = function defineProperty(name: string, value: any, isGette
   }
 }
 
-Value.defineProperty('_value', null);
-Value.defineProperty('_checks', new _Array());
+Value.defineProperty('_constraints', new _Array());
 Value.defineProperty('_modifiers', new _Array());
 
 Value.defineProperty('extends', function extend(name: string) {
   const value = makeConstructor(name);
-  value[model_f] = true;
+  tagCQESType(value);
   let parent = this;
   while (parent != null) {
-    if (parent.hasOwnProperty(model_f)) break ;
+    if (parent.hasOwnProperty(_tag)) break ;
     parent = _Object.getPrototypeOf(parent);
   }
   if (parent == null) throw new Error('Must be a CQES/Type');
@@ -114,39 +125,39 @@ Value.defineProperty('clone', function clone(modifier?: (a: any) => any) {
 });
 
 Value.defineProperty('of', function of(model?: any, ...rest: any[]) {
-  if (model && model[model_f]) return model;
-  return this.clone((value: IValue<any>) => value._value = model);
+  if (model && model[_tag]) return model;
+  throw new Error('Value can not old value');
 });
 
 Value.defineProperty('transform', function transform(cleaner: (a: any) => any) {
   return this.clone((value: IValue<any>) => value._modifiers.push(cleaner));
 });
 
-Value.defineProperty('addCheck', function addCheck(check: any) {
+Value.defineProperty('addConstraint', function addConstraint(constraint: any) {
   return this.clone((value: IValue<any>) => {
-    if (typeof check === 'function')
-      value._checks.push({ test: check });
-    else if (check && typeof check.test === 'function')
-      value._checks.push(check);
+    if (typeof constraint === 'function')
+      value._constraints.push({ test: constraint });
+    else if (constraint && typeof constraint.test === 'function')
+      value._constraints.push(constraint);
     else
-      value._checks.push({ test: (value: any) => value === check });
+      value._constraints.push({ test: (value: any) => value === constraint });
   });
 });
 
 Value.defineProperty('from', function from(value: any) {
-  return this._value ? this._value.from(value) : value;
+  return this.validate(value);
 });
 
 Value.defineProperty('validate', function validate(value: any) {
   for (let i = 0; i < this._modifiers.length; i += 1)
     value = this._modifiers[i].call(this, value);
-  for (let i = 0; i < this._checks.length; i += 1) {
-    const check = this._checks[i];
-    if (!check.test(value)) {
-      const checkName = check instanceof RegExp ? check.toString()
-        : check.test.name == '' || check.test.name == 'test' ? check.test.toString()
-        : check.test.name;
-      throw new TypeError('Value "' + inspect(value) + '" do not satisfy check ' + checkName);
+  for (let i = 0; i < this._constraints.length; i += 1) {
+    const constraint = this._constraints[i];
+    if (!constraint.test(value)) {
+      const constraintName = constraint instanceof RegExp ? constraint.toString()
+        : constraint.test.name == '' || constraint.test.name == 'test' ? constraint.test.toString()
+        : constraint.test.name;
+      throw new TypeError('Value "' + inspect(value) + '" do not satisfy constraint ' + constraintName);
     }
   }
   return value;
@@ -169,16 +180,17 @@ export interface IBoolean extends IValue<boolean> {
 }
 
 export const Boolean = <IBoolean>Value.extends('Boolean')
-  .addCheck((v: any) => v === !!v);
+  .addConstraint((v: any) => v === !!v);
 Boolean.defineProperty('_true', new _Set(['y', 'yes', 'true']));
 Boolean.defineProperty('_false', new _Set(['n', 'no', 'false']));
 
 Boolean.defineProperty('from', function from(value: any) {
-  if (value == null) return this.default();
+  if (value == null) value = this.default();
   switch (typeof value) {
   case 'string': {
     if (this._true.has(value.toLowerCase())) return this.validate(true);
     if (this._false.has(value.toLowerCase())) return this.validate(false);
+    return this.validate(value);
   } break ;
   case 'number': {
     return this.validate(!isNaN(value) && value !== 0);
@@ -197,7 +209,7 @@ export interface INumber extends IValue<number> {
 export const Number = <INumber>Value.extends('Number');
 
 Number.defineProperty('between', function between(min: number, max: number) {
-  return this.addCheck(function (value: number) {
+  return this.addConstraint(function (value: number) {
     return value >= min && value <= max;
   });
 });
@@ -213,8 +225,11 @@ export interface IString extends IValue<string> {}
 export const String = <IString>Value.extends('String');
 
 String.defineProperty('from', function from(value: any) {
-  if (value == null) return this.default();
-  return this.validate(_String(value));
+  if (value == null) value = this.default();
+  switch (typeof value) {
+  case 'number': case 'boolean': { value = _String(value); } break ;
+  }
+  return this.validate(value);
 });
 
 // Enum
@@ -237,8 +252,9 @@ Enum.defineProperty('from', function from(value: any) {
 
 // Record
 export interface IRecord extends IValue<Object> {
-  _object: Map<string, IValue<any>>;
-  _constructor: { new (): Object };
+  new (input: any): this;
+  _fields: Map<string, IValue<any>>;
+
   add<T>(this: T, field: string, type: any, defaultValue?: any):        T;
   opt<T>(this: T, field: string, type: any):                            T;
   rewrite<T>(this: T, field: string, predicate: predicate, value: any): T;
@@ -246,21 +262,21 @@ export interface IRecord extends IValue<Object> {
 }
 
 export const Record = <IRecord>Value.extends('Record');
-Record._object = new _Map();
+Record.defineProperty('_fields', new _Map());
 
 Record.defineProperty('of', function of(model: { [name: string]: any }) {
   const record = this.clone();
   for (const field in model) {
     if (model[field] instanceof _Array)
-      record._object.set(field, Value.of(...model[field]));
+      record._fields.set(field, Value.of(...model[field]));
     else
-      record._object.set(field, Value.of(model[field]));
+      record._fields.set(field, Value.of(model[field]));
   }
   return record;
 });
 
 Record.defineProperty('either', function either(...args: Array<Array<string> | string>) {
-  return this.addCheck((data: Object) => {
+  return this.addConstraint((data: Object) => {
     either: for (let i = 0; i < args.length; i += 1) {
       const arg = args[i];
       if (typeof arg === 'string') {
@@ -283,7 +299,9 @@ Record.defineProperty('add', function add(field: string, type: any, defaultValue
   const record = this.clone();
   type = Value.of(type);
   if (arguments.length > 2) {
-    if (isConstructor(defaultValue)) {
+    if (isType(defaultValue)) {
+      type = type.setDefault(() => defaultValue.default());
+    } else if (isConstructor(defaultValue)) {
       type = type.setDefault(() => new defaultValue())
     } else if (typeof defaultValue === 'function') {
       type = type.setDefault(defaultValue);
@@ -291,7 +309,7 @@ Record.defineProperty('add', function add(field: string, type: any, defaultValue
       type = type.setDefault(() => defaultValue);
     }
   }
-  record._object.set(field, type);
+  record._fields.set(field, type);
   return record;
 });
 
@@ -309,10 +327,8 @@ Record.defineProperty('rewrite', function rewrite(field: string, predicate: pred
 
 Record.defineProperty('from', function from(data: any) {
   if (data && data instanceof _Object) {
-    if (this._constructor == null)
-      this._constructor = this._name ? eval('(function ' + this._name + '() {})') : _Object;
-    const record = <any>new this._constructor();
-    for (const [name, type] of this._object) {
+    const record = <any>new this();
+    for (const [name, type] of this._fields) {
       try {
         record[name] = type.from(data[name]);
       } catch (e) {
@@ -322,12 +338,14 @@ Record.defineProperty('from', function from(data: any) {
     }
     return this.validate(record);
   } else {
-    return this.default();
+    const record = this.default();
+    return this.validate(record);
   }
 });
 
 // Collection
 export interface ICollection<A> extends IValue<A> {
+  new (input: any): A;
   _subtype: IValue<any>;
   notEmpty: this;
 }
@@ -336,7 +354,7 @@ export const Collection = <ICollection<any>>Value.extends('Collection');
 Collection.defineProperty('_subtype', null);
 
 Collection.defineProperty('notEmpty', function notEmpty() {
-  return this.addCheck(function notEmpty(value: any) {
+  return this.addConstraint(function notEmpty(value: any) {
     return _Array.from(value).length > 0;
   });
 }, true);
@@ -357,7 +375,7 @@ Set.defineProperty('of', function (type: any) {
 });
 
 Set.defineProperty('from', function (data: any) {
-  if (data instanceof Array || data instanceof Set) {
+  if (data instanceof _Array || data instanceof _Set) {
     const set = new _Set();
     _Object.defineProperty(set, 'toJSON', { value: this.toJSON });
     for (const item of data) {
@@ -380,7 +398,7 @@ Set.defineProperty('toJSON', function toJSON() {
 });
 
 Set.defineProperty('notEmpty', function notEmpty() {
-  return this.addCheck(function notEmpty(value: any) {
+  return this.addConstraint(function notEmpty(value: any) {
     return value.size > 0;
   });
 }, true);
@@ -417,7 +435,7 @@ Array.defineProperty('from', function (data: any) {
 });
 
 Array.defineProperty('notEmpty', function notEmpty() {
-  return this.addCheck(function notEmpty(value: any) {
+  return this.addConstraint(function notEmpty(value: any) {
     return value.length > 0;
   });
 }, true);
@@ -445,7 +463,7 @@ Map.defineProperty('of', function (index: any, type: any) {
 });
 
 Map.defineProperty('from', function (data: any) {
-  if (data instanceof Array || data instanceof Map) {
+  if (data instanceof _Array || data instanceof _Map) {
     const map = new _Map();
     _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
     for (const [key, value] of data) {
@@ -469,7 +487,7 @@ Map.defineProperty('toJSON', function toJSON() {
 });
 
 Map.defineProperty('notEmpty', function notEmpty() {
-  return this.addCheck((value: any) => {
+  return this.addConstraint((value: any) => {
     return value.size > 0;
   });
 }, true);
@@ -482,7 +500,7 @@ Map.defineProperty('notEmpty', function notEmpty() {
 export interface IEmail extends IString {}
 
 export const _Email = <IEmail>String.extends('Email')
-  .addCheck(/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/);
+  .addConstraint(/^[^\s@]+@([^\s@.,]+\.)+[^\s@.,]{2,}$/);
 
 // Date
 export interface IDate extends IString {
@@ -558,7 +576,7 @@ DateTime.defineProperty('defNow', function defNow() {
 export interface IUUID extends IString {}
 
 export const UUID = <IUUID>String.extends('UUID')
-  .addCheck(/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
+  .addConstraint(/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
 
 //---------------------------
 

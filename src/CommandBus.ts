@@ -47,7 +47,7 @@ export class CommandBus extends Component.Component {
     return this.transport.listen(this.channel, (command: Command) => {
       if (command.order in this.commands) {
         try {
-          command.data = new this.commands[command.order](command.data);
+          command.data = this.commands[command.order].from(command.data);
         } catch (e) {
           this.logger.error('Command discarded %j\n%e', command, e);
           return Promise.resolve();
@@ -64,7 +64,7 @@ export class CommandBus extends Component.Component {
 
   public sendCommand(command: Command): Promise<void> {
     if (command.order in this.commands)
-      command.data = new this.commands[command.order](command.data);
+      command.data = this.commands[command.order].from(command.data);
     return this.transport.send(command);
   }
 

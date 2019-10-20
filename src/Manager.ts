@@ -71,6 +71,7 @@ export class Manager extends Component.Component {
   }
 
   protected async handleManagerCommand(command: C): Promise<void> {
+    debugger;
     const { category, streamId, order } = command;
     const stateId = category + '-' + streamId;
     const state   = await this.stateBus.get(stateId, async (state: S) => {
@@ -96,9 +97,9 @@ export class Manager extends Component.Component {
       await this.noopBus.emitEvents([noop]);
     } else {
       const newState = events.reduce((state, event, offset) => {
-        const Typer   = this.events[event.type];
-        if (Typer != null) event.data = new Typer(event.data);
-        event.number  = state.revision + offset + 1;
+        const typer  = this.events[event.type];
+        if (typer != null) event.data = typer.from(event.data);
+        event.number = state.revision + offset + 1;
         return this.applyEvent(state, event);
       }, state);
       await this.eventBus.emitEvents(events);

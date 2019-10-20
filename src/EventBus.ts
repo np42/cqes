@@ -44,7 +44,7 @@ export class EventBus extends Component.Component {
 
   public psubscribe(name: string, handler: eventHandler): Promise<Subscription> {
     return this.transport.psubscribe(name, this.stream, (event: E) => {
-      if (event.type in this.events) event.data = new this.events[event.type](event.data);
+      if (event.type in this.events) event.data = this.events[event.type].from(event.data);
       return handler(event);
     });
   }

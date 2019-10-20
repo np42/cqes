@@ -34,14 +34,17 @@ export class Transport extends Component.Component implements StateBus.Transport
   }
 
   public async load(id: string): Promise<State> {
-    const query = [ 'SELECT `revision`, `data` FROM `@states`'
-                  , 'WHERE `stateId` = ?' ].join(' ');
+    const query = 'SELECT `revision`, `data` FROM `@states` WHERE `stateId` = ?';
     const result = await this.mysql.request(query, [id]);
-    if (result.length == 0) return new State(id, -1, null);
-    const row = result[0];
-    if (row.data == null) return new State(id, -1, null);
-    const data = JSON.parse(row.data);
+    if (result.length == 0) return null;
+    const row  = result[0];
+    const data = row.data ? JSON.parse(row.data) : null;
     return new State(id, row.revision, data);
+  }
+
+  public destroy(id: string): Promise<void> {
+    const query = 'SELECT FROM `@states` WHERE `stateId` = ?';
+    return <any> this.mysql.request(query, [id]);
   }
 
 }

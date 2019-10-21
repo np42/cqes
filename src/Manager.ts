@@ -71,7 +71,6 @@ export class Manager extends Component.Component {
   }
 
   protected async handleManagerCommand(command: C): Promise<void> {
-    debugger;
     const { category, streamId, order } = command;
     const stateId = category + '-' + streamId;
     const state   = await this.stateBus.get(stateId, async (state: S) => {

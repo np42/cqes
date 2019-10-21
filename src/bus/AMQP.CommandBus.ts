@@ -79,7 +79,7 @@ export class Transport extends Component.Component implements CommandBus.Transpo
           await channel.ack(message);
         } catch (err) {
           this.logger.warn('Command rejected', err);
-          await channel.nack(message);
+          await channel.nack(message, false, false);
         }
       } catch (err) {
         this.logger.warn('Command received discarded', err);

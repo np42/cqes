@@ -49,6 +49,7 @@ export function isType(Type: any) {
 // Value
 export interface IValue<A> {
   (...types: Array<any>):    this;
+  new (input: any):          A;
 
   _default:     () => A;
   _constraints: Array<any>;
@@ -252,7 +253,6 @@ Enum.defineProperty('from', function from(value: any) {
 
 // Record
 export interface IRecord extends IValue<Object> {
-  new (input: any): this;
   _fields: Map<string, IValue<any>>;
 
   add<T>(this: T, field: string, type: any, defaultValue?: any):        T;
@@ -345,7 +345,6 @@ Record.defineProperty('from', function from(data: any) {
 
 // Collection
 export interface ICollection<A> extends IValue<A> {
-  new (input: any): A;
   _subtype: IValue<any>;
   notEmpty: this;
 }
@@ -504,7 +503,7 @@ export interface IUUID extends IString {
 export const UUID = <IUUID>String.extends('UUID')
   .addConstraint(/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
 
-UUID.defineProperty('empty', '00000000-0000-0000-0000-0000000000000');
+UUID.defineProperty('empty', '00000000-0000-0000-0000-000000000000');
 
 // Email
 export interface IEmail extends IString {}

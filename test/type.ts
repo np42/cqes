@@ -1,44 +1,30 @@
 import * as T from '../src/Type';
 
 class R0 extends T.Record
-  .add('field', T.String, 42)
+  .add('foo', T.String, 42)
 {
-  field: string;
+  foo: string;
 }
 
 class R1 extends R0
-  .add('pli', T.Number)
+  .add('bar', T.Number)
 {
-  pli: number;
+  bar: number;
 }
 
 const r0 = R0.from({});
-console.log(r0.field);
+console.log(r0.foo);
 
-const r1 = R1.from({ pli: 42 });
-console.log(r1.field, r1.pli);
+const r1 = R1.from({ bar: 42 });
+console.log(r1.foo, r1.bar);
 
 console.log(T.isType(R1));
 
-/*
-const A = class {
-  static foo = 42;
+class R2 extends T.Record
+  .add('col', T.Set(R0), T.Set)
+{
+  col: Set<R0>
 }
 
-const B = class extends A {
-  bar: string;
-
-  constructor() {
-    super();
-    this.bar = 'hello';
-  }
-}
-
-const b = new B();
-
-console.log(A.foo); // expect pass got pass
-console.log(B.foo); // expect pass got pass
-console.log(B.bar); // expect fail got fail
-console.log(b.foo); // expect fail got pass
-console.log(b.bar); // expect pass got pass
-*/
+const r2 = R2.from({});
+r2.col.add({ foo: '42' });

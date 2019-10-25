@@ -4,7 +4,8 @@ import { Command }     from '../Command';
 import * as amqp       from 'amqplib';
 import * as uuid       from 'uuid';
 
-export type commandHandler = (command: Command<any>) => Promise<void>;
+export type commandHandler  = (command: Command<any>) => Promise<void>;
+export type ConcurencyError = CommandBus.ConcurencyError;
 
 export interface Listener {
   queue:   string;
@@ -77,9 +78,15 @@ export class Transport extends Component.Component implements CommandBus.Transpo
         try {
           await handler(command);
           await channel.ack(message);
-        } catch (err) {
-          this.logger.warn('Command rejected', err);
-          await channel.nack(message, false, false);
+        } catch (e) {
+          const err = <ConcurencyError>e;
+          if (err.retry) {
+            this.logger.log('Command retry');
+            await channel.nack(message, false, true);
+          } else {
+            this.logger.warn('Command rejected', err);
+            await channel.nack(message, false, false);
+          }
         }
       } catch (err) {
         this.logger.warn('Command received discarded', err);
@@ -122,7 +129,7 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     this.listeners = this.listeners.filter(listener => {
       const match = listener.queue === queue && listener.handler === handler;
       if (match) {
-
+        this.logger.todo();
       }
       return match;
     });

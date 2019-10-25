@@ -4,6 +4,15 @@ import { Typer }      from './Type';
 
 export type commandHandler = (commmand: Command) => Promise<void>;
 
+export class ConcurencyError extends Error {
+  public retry: boolean;
+  constructor(e: Error) {
+    super(e.toString().substr(7));
+    this.stack = e.stack;
+    this.retry = true;
+  }
+}
+
 export interface Subscription {
   abort: () => Promise<void>;
 }

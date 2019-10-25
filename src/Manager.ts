@@ -1,11 +1,12 @@
-import * as Component   from './Component';
-import { CommandBus }   from './CommandBus';
-import { EventBus }     from './EventBus';
-import { StateBus }     from './StateBus';
-import { Command as C } from './Command';
-import { Event   as E } from './Event';
-import { State   as S } from './State';
-import { Typer }        from './Type';
+import * as Component      from './Component';
+import { CommandBus }      from './CommandBus';
+import { ConcurencyError } from './CommandBus';
+import { EventBus }        from './EventBus';
+import { StateBus }        from './StateBus';
+import { Command as C }    from './Command';
+import { Event   as E }    from './Event';
+import { State   as S }    from './State';
+import { Typer }           from './Type';
 
 export type emitter        = (type: string, data: any, meta?: any) => void
 export type commandHandler = (state: S, command: C, emit?: emitter) => Array<E> | E | void;
@@ -94,28 +95,32 @@ export class Manager extends Component.Component {
       const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
       if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
       else if (returnedEvents instanceof E) events.push(returnedEvents);
-      if (events.length == 0) {
-        const meta = { ...command.meta, command: { category, order } };
-        const noop = new E('DeadLetter', streamId, -2, 'NoOp', command.data, meta);
-        this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
-        await this.noopBus.emitEvents([noop]);
-      } else {
-        const newState = events.reduce((state, event) => {
-          const typer  = this.events[event.type];
-          if (typer != null) event.data = typer.from(event.data);
-          event.number = state.revision + 1;
-          return this.applyEvent(state, event);
-        }, state);
-        await this.eventBus.emitEvents(events);
-        this.stateBus.set(newState);
-      }
     } catch (e) {
       const meta = { ...command.meta, stack: e.stack };
       const data = { type: e.name, message: e.toString() };
-      const noop = new E('DeadLetter', streamId, -2, 'Error', data, meta);
+      const noop = new E('@DeadLetter', streamId, -2, 'Error', data, meta);
       this.logger.log('%yellow %s-%s %j', 'Error:' + order, category, streamId, command.data);
       await this.noopBus.emitEvents([noop]);
+      return ;
     }
+    if (events.length == 0) {
+      const meta = { ...command.meta, command: { category, order } };
+      const noop = new E('@DeadLetter', streamId, -2, 'NoOp', command.data, meta);
+      this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
+      await this.noopBus.emitEvents([noop]);
+      return ;
+    }
+    const newState = events.reduce((state, event) => {
+      const typer  = this.events[event.type];
+      if (typer != null) event.data = typer.from(event.data);
+      event.number = state.revision + 1;
+      const newState = this.applyEvent(state, event);
+      if (newState instanceof S) return newState;
+      return state;
+    }, state);
+    try { await this.eventBus.emitEvents(events); }
+    catch (e) { throw new ConcurencyError(e); }
+    this.stateBus.set(newState);
   }
 
   protected applyEvent(state: S, event: E) {

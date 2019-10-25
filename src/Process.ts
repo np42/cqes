@@ -181,7 +181,7 @@ export class Process extends Component.Component {
       const serviceProps = servicesProps[name];
       const commonProps  = { context: context.name, name };
 
-      const eventBuses = ['NoOp'].concat(serviceProps.psubscribe || [name])
+      const eventBuses = ['@DeadLetter'].concat(serviceProps.psubscribe || [name])
         .reduce((result: Service.EventBuses, stream: string) => {
           result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
           return result;

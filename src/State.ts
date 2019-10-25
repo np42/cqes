@@ -12,6 +12,10 @@ export class State<A = any> {
     this.data     = data instanceof Object ? data : <A>{};
   }
 
+  public isNew() {
+    return this.revision === -1;
+  }
+
   public clone(): State<A> {
     return new (<any>this.constructor)(this.stateId, this.revision, clone(this.data));
   }

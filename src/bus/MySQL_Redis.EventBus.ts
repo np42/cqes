@@ -54,6 +54,7 @@ export class Transport extends Component.Component implements EventBus.Transport
     if (props.MySQL.user == null)     props.MySQL.user = 'cqes';
     if (props.MySQL.password == null) props.MySQL.password = 'changeit';
     if (props.MySQL.database == null) props.MySQL.database = 'cqes-' + props.name.toLowerCase();
+    //props.MySQL.multipleStatements = true;
     this.context = props.context;
     this.mysql   = new MySQL.MySQL(props.MySQL);
     this.redis   = redis.createClient(props.Redis);
@@ -78,7 +79,6 @@ export class Transport extends Component.Component implements EventBus.Transport
                  , JSON.stringify(event.data), JSON.stringify(event.meta)
                  );
     });
-    if (events.length > 1) this.logger.todo('make transaction if several events');
     // Will throws an error on duplicate key
     const result = <any>await this.mysql.request(query + rows.join(', '), params);
     events.forEach((event, offset) => {

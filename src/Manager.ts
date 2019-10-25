@@ -82,27 +82,39 @@ export class Manager extends Component.Component {
     });
     const handler = this.getCommandHandler(command);
     const events  = <Array<E>> [];
-    const emitter = (type: string, data: any, meta?: any) => {
-      events.push(new E(category, streamId, -1, type, data, meta));
+    const emitter = (type: string | E, data?: any, meta?: any) => {
+      if (type instanceof E) {
+        events.push(type);
+      } else {
+        events.push(new E(category, streamId, -1, type, data, meta));
+      }
     };
     this.logger.log('%red %s-%s %j', handler.name, category, streamId, command.data);
-    const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
-    if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
-    else if (returnedEvents instanceof E) events.push(returnedEvents);
-    if (events.length == 0) {
-      const meta = { ...command.meta, command: { category, order } };
-      const noop = new E('DeadLetter', streamId, -2, 'NoOp', command.data, meta);
-      this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
+    try {
+      const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
+      if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
+      else if (returnedEvents instanceof E) events.push(returnedEvents);
+      if (events.length == 0) {
+        const meta = { ...command.meta, command: { category, order } };
+        const noop = new E('DeadLetter', streamId, -2, 'NoOp', command.data, meta);
+        this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
+        await this.noopBus.emitEvents([noop]);
+      } else {
+        const newState = events.reduce((state, event) => {
+          const typer  = this.events[event.type];
+          if (typer != null) event.data = typer.from(event.data);
+          event.number = state.revision + 1;
+          return this.applyEvent(state, event);
+        }, state);
+        await this.eventBus.emitEvents(events);
+        this.stateBus.set(newState);
+      }
+    } catch (e) {
+      const meta = { ...command.meta, stack: e.stack };
+      const data = { type: e.name, message: e.toString() };
+      const noop = new E('DeadLetter', streamId, -2, 'Error', data, meta);
+      this.logger.log('%yellow %s-%s %j', 'Error:' + order, category, streamId, command.data);
       await this.noopBus.emitEvents([noop]);
-    } else {
-      const newState = events.reduce((state, event, offset) => {
-        const typer  = this.events[event.type];
-        if (typer != null) event.data = typer.from(event.data);
-        event.number = state.revision + offset + 1;
-        return this.applyEvent(state, event);
-      }, state);
-      await this.eventBus.emitEvents(events);
-      this.stateBus.set(newState);
     }
   }
 

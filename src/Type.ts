@@ -48,7 +48,7 @@ export function isType(Type: any) {
 
 // Value
 export interface IValue<A> {
-  (...types: Array<any>): this;
+  (...types: Array<any>):    this;
 
   _default:     () => A;
   _constraints: Array<any>;
@@ -496,6 +496,16 @@ Map.defineProperty('notEmpty', function notEmpty() {
 // Extended Types
 // ------------------------------------------
 
+// UUID
+export interface IUUID extends IString {
+  empty: string;
+}
+
+export const UUID = <IUUID>String.extends('UUID')
+  .addConstraint(/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
+
+UUID.defineProperty('empty', '00000000-0000-0000-0000-0000000000000');
+
 // Email
 export interface IEmail extends IString {}
 
@@ -571,12 +581,6 @@ DateTime.defineProperty('from', function from(value: any) {
 DateTime.defineProperty('defNow', function defNow() {
   return this.setDefault(() => new _Date().toISOString().substr(0, 23).replace('T', ' '));
 });
-
-// UUID
-export interface IUUID extends IString {}
-
-export const UUID = <IUUID>String.extends('UUID')
-  .addConstraint(/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
 
 //---------------------------
 

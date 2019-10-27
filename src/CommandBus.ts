@@ -7,15 +7,14 @@ export type commandHandler = (commmand: Command) => Promise<void>;
 export class ConcurencyError extends Error {
   public retry: boolean;
   constructor(e: Error) {
-    super(e.toString().substr(7));
+    super(e.toString().substring(7));
     this.stack = e.stack;
     this.retry = true;
   }
 }
 
-export interface Subscription {
-  abort: () => Promise<void>;
-}
+export interface Subscription { abort: () => Promise<void>; }
+export interface CommandTypes { [name: string]: Typer };
 
 export interface Transport {
   start:  () => Promise<void>;
@@ -27,11 +26,11 @@ export interface Transport {
 export interface props extends Component.props {
   transport:  string;
   channel:    string;
-  commands:   { [name: string]: Typer };
+  commands:   CommandTypes;
 }
 
 export class CommandBus extends Component.Component {
-  protected commands:  { [name: string]: Typer };
+  protected commands:  CommandTypes;
   protected transport: Transport;
   protected channel:   string;
   protected category:  string;

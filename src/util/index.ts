@@ -2,6 +2,8 @@ export *             from './common';
 export { merge }     from './merge';
 export { clone }     from './clone';
 export { walk }      from './walk';
+export { recfold }   from './recfold';
+export { qsencode }  from './qsencode';
 export { Qx }        from './Qx';
 export { Px }        from './Px';
 export { Mx }        from './Mx';

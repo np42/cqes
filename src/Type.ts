@@ -256,7 +256,6 @@ export interface IRecord extends IValue<Object> {
   _fields: Map<string, IValue<any>>;
 
   add<T>(this: T, field: string, type: any, defaultValue?: any):        T;
-  opt<T>(this: T, field: string, type: any):                            T;
   rewrite<T>(this: T, field: string, predicate: predicate, value: any): T;
   either<T>(this: T, ...args: Array<Array<string> | string>):           T;
 }
@@ -311,10 +310,6 @@ Record.defineProperty('add', function add(field: string, type: any, defaultValue
   }
   record._fields.set(field, type);
   return record;
-});
-
-Record.defineProperty('opt', function opt(field: string, type: any) {
-  return this.add(field, type, null);
 });
 
 Record.defineProperty('rewrite', function rewrite(field: string, predicate: predicate, value: any) {

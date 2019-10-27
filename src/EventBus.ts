@@ -13,20 +13,19 @@ export interface Transport {
   stop:        () => Promise<void>;
 }
 
-export interface Subscription {
-  abort: () => Promise<void>;
-}
+export interface Subscription { abort: () => Promise<void>; }
+export interface EventTypes   { [name: string]: Typer };
 
 export interface props extends Component.props {
   transport:  string;
   stream:     string;
-  events:     { [name: string]: Typer };
+  events:     EventTypes;
 }
 
 export class EventBus extends Component.Component {
   protected transport: Transport;
   protected stream:    string;
-  protected events:    { [name: string]: Typer };
+  protected events:    EventTypes;
 
   constructor(props: props) {
     super({ logger: 'EventBus:' + props.name, ...props });

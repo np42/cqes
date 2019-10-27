@@ -161,7 +161,7 @@ export class Process extends Component.Component {
           result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
           return result;
         }, {});
-      const queryBus = this.getQueryBus({ ...commonProps, ...context.QueryBus }, name);
+      const queryBus = this.getQueryBus({ ...commonProps, ...context.QueryBus, mode: 'server' }, name);
 
       const { queryHandlers, updateHandlers } = this.getViewHandlers(context.name, name, viewProps);
       const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
@@ -181,18 +181,24 @@ export class Process extends Component.Component {
       const serviceProps = servicesProps[name];
       const commonProps  = { context: context.name, name };
 
-      const eventBuses = ['@DeadLetter'].concat(serviceProps.psubscribe || [name])
-        .reduce((result: Service.EventBuses, stream: string) => {
-          result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
-          return result;
-        }, {});
       const commandBuses = (serviceProps.targets || [name])
         .reduce((result: Manager.CommandBuses, channel: string) => {
           result[channel] = this.getCommandBus({ ...commonProps, ...context.CommandBus }, channel);
           return result;
         }, {});
+      const queryBuses = (serviceProps.views || [])
+        .reduce((result: Service.QueryBuses, view: string) => {
+          const mode = 'client';
+          result[view] = this.getQueryBus({ ...commonProps, ...context.QueryBus, mode }, view);
+          return result;
+        }, {});
+      const eventBuses = ['@DeadLetter'].concat(serviceProps.psubscribe || [name])
+        .reduce((result: Service.EventBuses, stream: string) => {
+          result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
+          return result;
+        }, {});
 
-      const props = { ...commonProps, ...serviceProps, eventBuses, commandBuses };
+      const props = { ...commonProps, ...serviceProps, eventBuses, commandBuses, queryBuses };
       const path  = join(this.root, context.name, name + '.Service');
       const SubService = require(path)[name];
       if (SubService == null)
@@ -216,7 +222,9 @@ export class Process extends Component.Component {
 
   protected getQueryBus(props: any, view: string) {
     if (props.transport == null) props.transport = './bus/HTTP.QueryBus';
-    return new QueryBus(props);
+    const queries = this.getTypes(props.context, view, 'queries');
+    const replies = this.getTypes(props.context, view, 'replies');
+    return new QueryBus({ ...props, view, queries, replies });
   }
 
   protected getEventBus(props: any, stream: string) {

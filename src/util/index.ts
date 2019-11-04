@@ -1,9 +1,9 @@
 export *             from './common';
 export { merge }     from './merge';
 export { clone }     from './clone';
-export { walk }      from './walk';
-export { recfold }   from './recfold';
-export { qsencode }  from './qsencode';
+export *             from './qs';
+export { genId }     from './genId';
+export { Tree }      from './Tree';
 export { Qx }        from './Qx';
 export { Px }        from './Px';
 export { Mx }        from './Mx';

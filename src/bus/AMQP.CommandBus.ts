@@ -53,10 +53,19 @@ export class Transport extends Component.Component implements CommandBus.Transpo
 
   protected async connect(): Promise<void> {
     this.lastConnection = Date.now();
+    if (this.connectFlag) clearTimeout(this.connectFlag);
+    this.logger.log('Connecting to %s', this.config.url);
     const connection = await amqp.connect(this.config.url);
     this.amqp = connection;
-    this.amqp.on('error', () => this.reconnect());
-    this.amqp.on('close', () => this.reconnect());
+    this.amqp.on('error', (err: Error) => {
+      this.logger.error('Received', err);
+      this.reconnect()
+    });
+    this.amqp.on('close', (err: Error) => {
+      this.logger.warn('Connection lost');
+      this.amqp = null;
+      this.reconnect()
+    });
     await Promise.all(this.listeners.map(({ queue, handler }) => this.bind(queue, handler)));
   }
 
@@ -69,29 +78,30 @@ export class Transport extends Component.Component implements CommandBus.Transpo
 
   protected async bind(queue: string, handler: commandHandler): Promise<void> {
     const channel = await this.getChannel(queue);
+    const ack = async (message: amqp.Message, fn?: () => void) => {
+      if (fn) fn();
+      try { await channel.ack(message); }
+      catch (e) { this.logger.error(e); this.reconnect(); }
+    };
+    const nack = async (message: amqp.Message, requeue: boolean, fn?: () => void) => {
+      if (fn) fn();
+      try { await channel.nack(message, false, requeue); }
+      catch (e) { this.logger.error(e); this.reconnect(); }
+    };
     return <any> channel.consume(queue, async message => {
-      try {
-        const payload = JSON.parse(message.content.toString());
-        const { category, order, data, meta } = payload;
-        const streamId = payload.streamId || uuid();
-        const command  = new Command(category, streamId, order, data, meta);
-        try {
-          await handler(command);
-          await channel.ack(message);
-        } catch (e) {
-          const err = <ConcurencyError>e;
-          if (err.retry) {
-            this.logger.log('Command retry');
-            await channel.nack(message, false, true);
-          } else {
-            this.logger.warn('Command rejected', err);
-            await channel.nack(message, false, false);
-          }
-        }
-      } catch (err) {
-        this.logger.warn('Command received discarded', err);
-        await channel.ack(message);
+      let payload = null;
+      try { payload = JSON.parse(message.content.toString()); }
+      catch (err) { return ack(message, () => this.logger.warn('Command received discarded', err)); }
+      const { category, order, data, meta } = payload;
+      const streamId = payload.streamId || uuid();
+      const command  = new Command(category, streamId, order, data, meta);
+      try { await handler(command); }
+      catch (e) {
+        const err = <ConcurencyError>e;
+        if (err.retry) return nack(message, true, () => this.logger.log('Command retry'))
+        else return nack(message, false, () => this.logger.warn('Command rejected', err))
       }
+      return ack(message)
     });
   }
 
@@ -114,12 +124,17 @@ export class Transport extends Component.Component implements CommandBus.Transpo
   }
 
   protected async reconnect(): Promise<void> {
+    if (this.connectFlag != null) return ;
     await this.disconnect();
     const now = Date.now();
-    const delay = now - (this.lastConnection + 5000);
+    const delay = (this.lastConnection + 5000) - now;
     if (delay > 10) {
       clearTimeout(this.connectFlag);
-      this.connectFlag = setTimeout(() => this.reconnect(), delay);
+      this.logger.log('Reconnecting in %sms', delay);
+      this.connectFlag = setTimeout(() => {
+        this.connectFlag = null;
+        this.reconnect()
+      }, delay);
     } else {
       this.connect();
     }
@@ -138,12 +153,15 @@ export class Transport extends Component.Component implements CommandBus.Transpo
 
   protected async disconnect(): Promise<void> {
     this.channels.clear();
-    await this.amqp.close();
-    this.amqp = null;
+    if (this.amqp != null) {
+      try { await this.amqp.close(); }
+      catch (e) { this.logger.error(e); }
+      this.amqp = null;
+    }
   }
 
   public stop(): Promise<void> {
-    return Promise.resolve();
+    return this.disconnect();
   }
 }
 

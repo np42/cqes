@@ -11,7 +11,7 @@ import * as View                   from './View';
 import * as Projection             from './Projection';
 import * as Service                from './Service';
 
-import { clone, merge, walk
+import { clone, merge
        , isConstructor }           from './util';
 
 import { hostname, userInfo }      from 'os';
@@ -133,12 +133,15 @@ export class Process extends Component.Component {
       const events = this.getTypes(context.name, name, 'events');
       const commandBuses = (managerProps.listen || [name])
         .reduce((result: Manager.CommandBuses, channel: string) => {
-          result[channel] = this.getCommandBus({ ...commonProps, ...context.CommandBus }, channel);
+          const commandBusProps = { ...commonProps, ...context.CommandBus, ...managerProps.CommandBus };
+          result[channel] = this.getCommandBus(commandBusProps, channel);
           return result;
         }, {});
-      const eventBus = this.getEventBus({ ...commonProps, ...context.EventBus }, name);
-      const noopBus  = this.getEventBus({ ...commonProps, ...context.EventBus }, 'NoOp');
-      const stateBus = this.getStateBus({ ...commonProps, ...context.StateBus, eventBus }, name);
+      const eventBusProps = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
+      const eventBus = this.getEventBus(eventBusProps, name);
+      const noopBus  = this.getEventBus(eventBusProps, 'NoOp');
+      const stateBusProps = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
+      const stateBus = this.getStateBus({ ...stateBusProps, eventBus }, name);
 
       const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
       const props   = { ...commonProps, commandBuses, stateBus, noopBus, eventBus, events
@@ -158,10 +161,12 @@ export class Process extends Component.Component {
 
       const eventBuses = (viewProps.psubscribe || [name])
         .reduce((result: View.EventBuses, stream: string) => {
-          result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
+          const eventBusProps = { ...commonProps, ...context.EventBus, ...viewProps.EventBus };
+          result[stream] = this.getEventBus(eventBusProps, stream);
           return result;
         }, {});
-      const queryBus = this.getQueryBus({ ...commonProps, ...context.QueryBus, mode: 'server' }, name);
+      const queryBusProps = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
+      const queryBus = this.getQueryBus({ ...queryBusProps, mode: 'server' }, name);
 
       const { queryHandlers, updateHandlers } = this.getViewHandlers(context.name, name, viewProps);
       const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
@@ -183,18 +188,22 @@ export class Process extends Component.Component {
 
       const commandBuses = (serviceProps.targets || [name])
         .reduce((result: Manager.CommandBuses, channel: string) => {
-          result[channel] = this.getCommandBus({ ...commonProps, ...context.CommandBus }, channel);
+          const commandBusProps = { ...commonProps, ...context.CommandBus, ...serviceProps.CommandBus };
+          result[channel] = this.getCommandBus(commandBusProps, channel);
           return result;
         }, {});
       const queryBuses = (serviceProps.views || [])
         .reduce((result: Service.QueryBuses, view: string) => {
-          const mode = 'client';
-          result[view] = this.getQueryBus({ ...commonProps, ...context.QueryBus, mode }, view);
+          const serverQueryBusProps = (<any>context.views[view]).QueryBus || {};
+          const queryBusProps = { ...commonProps, ...context.QueryBus
+                                , ...serverQueryBusProps, ...serviceProps.QueryBus };
+          result[view] = this.getQueryBus({ ...queryBusProps, mode: 'client' }, view);
           return result;
         }, {});
       const eventBuses = ['@DeadLetter'].concat(serviceProps.psubscribe || [name])
         .reduce((result: Service.EventBuses, stream: string) => {
-          result[stream] = this.getEventBus({ ...commonProps, ...context.EventBus }, stream);
+          const eventBusProps = { ...commonProps, ...context.EventBus, ...serviceProps.EventBus };
+          result[stream] = this.getEventBus(eventBusProps, stream);
           return result;
         }, {});
 

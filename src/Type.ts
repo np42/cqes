@@ -22,10 +22,11 @@ export class TypeError extends Error {
   }
 }
 
+export type rewriter    = (a: any) => any;
 export type predicate   = (a: any) => boolean;
-export type constraint  = RegExp | predicate;
-export type transformer = (a: any) => any;
-export type getter      = () => any;
+export type assertion   = (a: any) => void;
+export type constraint  = RegExp | predicate | assertion;
+export type parser      = (a: any) => any | void;
 
 const makeConstructor = (name: string) => {
   if (!/^[a-z$_][a-z0-9$_]*$/i.test(name)) throw new Error('Bad name');
@@ -52,20 +53,21 @@ export interface IValue<A> {
   new (input: any):          A;
 
   _default:     () => A;
-  _constraints: Array<any>;
-  _modifiers:   Array<any>;
+  _rewriters:   Array<any>;
+  _parsers:     Array<any>;
+  _assertions:  Array<any>;
 
   defineProperty(name: string, value: any, isGetter?: boolean): void;
 
-  extends<T>(this: T, name: string):         T;
-  of<T>(this: T, ...a: any[]):               T;
-  addConstraint<T>(this: T, fn: constraint): T;
-  transform<T>(this: T, fn: transformer):    T;
-  setDefault<T>(this: T, fn: getter):        T;
+  extends<T>(this: T, name: string):                                     T;
+  of<T>(this: T, ...a: any[]):                                           T;
+  setProperty<T>(this: T, name: string, value: any, isGetter?: boolean): T;
+  addConstraint<T>(this: T, fn: constraint):                             T;
+  addParser<T>(this: T, fn: parser):                                     T;
+  setDefault<T>(this: T, fn: any):                                       T;
+  mayNull:                                                               this;
 
-  default<X>(this: new (input?: any) => X):         X;
   from<X>(this: new (input?: any) => X, data: any): X;
-  validate<X>(data: X):                             X;
 }
 
 export const Value = <IValue<any>>function Value() {};
@@ -88,10 +90,11 @@ Value.defineProperty = function defineProperty(name: string, value: any, isGette
   } else {
     _Object.defineProperty(this, name, { value, enumerable: true, writable: true });
   }
-}
+};
 
-Value.defineProperty('_constraints', new _Array());
-Value.defineProperty('_modifiers', new _Array());
+Value.defineProperty('_rewriters',  new _Array());
+Value.defineProperty('_parsers',    new _Array());
+Value.defineProperty('_assertions', new _Array());
 
 Value.defineProperty('extends', function extend(name: string) {
   const value = makeConstructor(name);
@@ -127,51 +130,82 @@ Value.defineProperty('clone', function clone(modifier?: (a: any) => any) {
 
 Value.defineProperty('of', function of(model?: any, ...rest: any[]) {
   if (model && model[_tag]) return model;
-  throw new Error('Value can not old value');
+  if (isConstructor(model)) throw new Error(model.name + ' is not a valid type, forgot an import ?');
+  throw new Error('Value can not hold value');
 });
 
-Value.defineProperty('transform', function transform(cleaner: (a: any) => any) {
-  return this.clone((value: IValue<any>) => value._modifiers.push(cleaner));
+Value.defineProperty('setProperty', function setProperty(name: string, value: any, isGetter?: boolean) {
+  return this.clone((type: IValue<any>) => {
+    type.defineProperty(name, value, isGetter);
+  });
+});
+
+Value.defineProperty('setDefault', function setDefault(defaultValue: any) {
+  return this.clone((type: IValue<any>) => {
+    if (isType(defaultValue)) {
+      type._default = () => defaultValue.default();
+    } else if (isConstructor(defaultValue)) {
+      type._default = () => new defaultValue();
+    } else if (typeof defaultValue === 'function') {
+      type._default = defaultValue;
+    } else {
+      type._default = () => defaultValue;
+    }
+  });
+});
+
+Value.defineProperty('mayNull', function mayNull() {
+  return this.setDefault(null);
+}, true);
+
+Value.defineProperty('addRewriter', function rewrite(rewriter: rewriter) {
+  return this.clone((type: IValue<any>) => {
+    this._rewriters.push(rewriter);
+  });
+});
+
+Value.defineProperty('addParser', function addParser(cleaner: (a: any) => any) {
+  return this.clone((value: IValue<any>) => value._parsers.push(cleaner));
 });
 
 Value.defineProperty('addConstraint', function addConstraint(constraint: any) {
   return this.clone((value: IValue<any>) => {
     if (typeof constraint === 'function')
-      value._constraints.push({ test: constraint });
-    else if (constraint && typeof constraint.test === 'function')
-      value._constraints.push(constraint);
+      value._assertions.push(constraint);
+    else if (constraint instanceof RegExp)
+      value._assertions.push((value: any) => {
+        constraint.lastIndex = 0;
+        const result = constraint.test(value);
+        if (result === false)
+          throw new TypeError('Constraint ' + constraint + ' not satisfied');
+      });
     else
-      value._constraints.push({ test: (value: any) => value === constraint });
+      value._assertions.push((value: any) => {
+        const result = constraint === value;
+        if (result === false)
+          throw new TypeError('Constraint (=== ' + constraint + ') not satisfied')
+      });
   });
 });
 
 Value.defineProperty('from', function from(value: any) {
-  return this.validate(value);
-});
-
-Value.defineProperty('validate', function validate(value: any) {
-  for (let i = 0; i < this._modifiers.length; i += 1)
-    value = this._modifiers[i].call(this, value);
-  for (let i = 0; i < this._constraints.length; i += 1) {
-    const constraint = this._constraints[i];
-    if (!constraint.test(value)) {
-      const constraintName = constraint instanceof RegExp ? constraint.toString()
-        : constraint.test.name == '' || constraint.test.name == 'test' ? constraint.test.toString()
-        : constraint.test.name;
-      throw new TypeError('Value "' + inspect(value) + '" do not satisfy constraint ' + constraintName);
-    }
+  for (let i = 0; i < this._rewriters.length; i += 1) {
+    value = this._rewriters[i].call(this, value);
   }
+  if (value == null) {
+    if (this._default != null) value = this._default();
+    else throw new TypeError('Mandatory value is missing');
+    if (value === null) return null;
+  }
+  for (let i = 0; i < this._parsers.length; i += 1) {
+    const result = this._parsers[i].call(this, value);
+    if (result == null) continue ;
+    value = result;
+    break ;
+  }
+  for (let i = 0; i < this._assertions.length; i += 1)
+    this._assertions[i].call(this, value);
   return value;
-});
-
-Value.defineProperty('setDefault', function setDefault(defaultValue: () => any) {
-  if (typeof defaultValue != 'function') throw new Error('Default value must be a function');
-  return this.clone((value: IValue<any>) => value._default = defaultValue);
-});
-
-Value.defineProperty('default', function def() {
-  if (this._default != null) return this._default();
-  throw new TypeError('Mandatory value was not provied');
 });
 
 // Boolean
@@ -181,162 +215,137 @@ export interface IBoolean extends IValue<boolean> {
 }
 
 export const Boolean = <IBoolean>Value.extends('Boolean')
-  .addConstraint((v: any) => v === !!v);
-Boolean.defineProperty('_true', new _Set(['y', 'yes', 'true']));
-Boolean.defineProperty('_false', new _Set(['n', 'no', 'false']));
-
-Boolean.defineProperty('from', function from(value: any) {
-  if (value == null) value = this.default();
-  switch (typeof value) {
-  case 'string': {
+  .setProperty('_true', new _Set(['y', 'yes', 'true']))
+  .setProperty('_false', new _Set(['n', 'no', 'false']))
+  .addParser((value: string) => {
+    if (typeof value !== 'string') return ;
     if (this._true.has(value.toLowerCase())) return this.validate(true);
     if (this._false.has(value.toLowerCase())) return this.validate(false);
-    return this.validate(value);
-  } break ;
-  case 'number': {
-    return this.validate(!isNaN(value) && value !== 0);
-  } break ;
-  default: {
-    return this.validate(value);
-  } break ;
-  }
-});
+  })
+  .addParser((value: number) => {
+    if (typeof value !== 'number') return ;
+    return !(isNaN(value) || value === 0);
+  })
+  .addConstraint((v: any) => {
+    if (v !== !!v) throw new TypeError('Require a Boolean');
+  });
 
 // Number
 export interface INumber extends IValue<number> {
   between<T>(this: T, min: number, max: number): T;
 }
 
-export const Number = <INumber>Value.extends('Number');
-
-Number.defineProperty('between', function between(min: number, max: number) {
-  return this.addConstraint(function (value: number) {
-    return value >= min && value <= max;
+export const Number = <INumber>Value.extends('Number')
+  .setProperty('between', function between(min: number, max: number) {
+    return this.addConstraint(function isBetween(value: number) {
+      return value >= min && value <= max;
+    });
+  })
+  .addParser(function parseNumber(value: string) {
+    if (typeof value !== 'string') return ;
+    return parseFloat(value);
+  })
+  .addConstraint(function isNumber(value: number) {
+    if (typeof value !== 'number') throw new TypeError('Require a Number');
+    if (isNaN(value)) throw new TypeError('Number is NaN');
   });
-});
-
-Number.defineProperty('from', function from(value: any) {
-  if (value == null) return this.default();
-  return this.validate(parseFloat(value));
-});
 
 // String
 export interface IString extends IValue<string> {}
 
-export const String = <IString>Value.extends('String');
-
-String.defineProperty('from', function from(value: any) {
-  if (value == null) value = this.default();
-  switch (typeof value) {
-  case 'number': case 'boolean': { value = _String(value); } break ;
-  }
-  return this.validate(value);
-});
+export const String = <IString>Value.extends('String')
+  .addParser(function parseNative(value: any) {
+    switch (typeof value) {
+    case 'number': case 'boolean': return _String(value);
+    }
+  })
+  .addConstraint(function isString(value: any) {
+    if (typeof value !== 'string') throw new TypeError('Require a String');
+  });
 
 // Enum
 export interface IEnum extends IValue<Object> {
   _either: Set<IValue<any>>;
 }
 
-export const Enum = <IEnum>Value.extends('Enum');
-
-Enum.defineProperty('_either', new _Set());
-
-Enum.defineProperty('of', function of(...args: any[]) {
-  return this.clone((value: IEnum) => value._either = new _Set(args));
-});
-
-Enum.defineProperty('from', function from(value: any) {
-  if (this._either.has(value)) return this.validate(value);
-  return this.default();
-});
+export const Enum = <IEnum>Value.extends('Enum')
+  .setProperty('_either', new _Set())
+  .setProperty('of', (...args: any[]) => {
+    return this.clone((value: IEnum) => value._either = new _Set(args));
+  })
+  .addConstraint(function isIn(value: any) {
+    if (this._either.has(value)) return ;
+    const values = Array.from(this._eithers).join(', ');
+    throw new Error('Value ' + value + ' must be one of ' + values);
+  });
 
 // Record
 export interface IRecord extends IValue<Object> {
   _fields: Map<string, IValue<any>>;
 
-  add<T>(this: T, field: string, type: any, defaultValue?: any):        T;
+  add<T>(this: T, field: string, type: any):                            T;
   rewrite<T>(this: T, field: string, predicate: predicate, value: any): T;
-  either<T>(this: T, ...args: Array<Array<string> | string>):           T;
 }
 
-export const Record = <IRecord>Value.extends('Record');
-Record.defineProperty('_fields', new _Map());
-
-Record.defineProperty('of', function of(model: { [name: string]: any }) {
-  const record = this.clone();
-  for (const field in model) {
-    if (model[field] instanceof _Array)
-      record._fields.set(field, Value.of(...model[field]));
-    else
-      record._fields.set(field, Value.of(model[field]));
-  }
-  return record;
-});
-
-Record.defineProperty('either', function either(...args: Array<Array<string> | string>) {
-  return this.addConstraint((data: Object) => {
-    either: for (let i = 0; i < args.length; i += 1) {
-      const arg = args[i];
-      if (typeof arg === 'string') {
-        if (data[arg] != null)
-          return true;
-      } else if (arg instanceof _Array) {
-        for (let ii = 0; ii < arg.length; ii += 1)
-          if (data[arg[ii]] == null)
-            continue either;
-        return true;
-      } else {
-        // Skip silently
-      }
+export const Record = <IRecord>Value.extends('Record')
+  .setProperty('_fields', new _Map())
+  .setProperty('of', function of(model: { [name: string]: any }) {
+    const record = this.clone();
+    for (const field in model) {
+      if (model[field] instanceof _Array)
+        record._fields.set(field, Value.of(...model[field]));
+      else
+        record._fields.set(field, Value.of(model[field]));
     }
-    return false;
-  });
-});
-
-Record.defineProperty('add', function add(field: string, type: any, defaultValue?: any) {
-  const record = this.clone();
-  type = Value.of(type);
-  if (arguments.length > 2) {
-    if (isType(defaultValue)) {
-      type = type.setDefault(() => defaultValue.default());
-    } else if (isConstructor(defaultValue)) {
-      type = type.setDefault(() => new defaultValue())
-    } else if (typeof defaultValue === 'function') {
-      type = type.setDefault(defaultValue);
-    } else {
-      type = type.setDefault(() => defaultValue);
-    }
-  }
-  record._fields.set(field, type);
-  return record;
-});
-
-Record.defineProperty('rewrite', function rewrite(field: string, predicate: predicate, value: any) {
-  return this.transform((record: any) => {
-    if (record && predicate(record[field]))
-      record[field] = value;
     return record;
-  });
-});
-
-Record.defineProperty('from', function from(data: any) {
-  if (data && data instanceof _Object) {
-    const record = <any>new this();
+  })
+  .setProperty('either', function either(...args: Array<Array<string> | string>) {
+    return this.addConstraint((data: Object) => {
+      either: for (let i = 0; i < args.length; i += 1) {
+        const arg = args[i];
+        if (typeof arg === 'string') {
+          if (data[arg] != null)
+            return true;
+        } else if (arg instanceof _Array) {
+          for (let ii = 0; ii < arg.length; ii += 1)
+            if (data[arg[ii]] == null)
+              continue either;
+          return true;
+        } else {
+          // Skip silently
+        }
+      }
+      return false;
+    });
+  })
+  .setProperty('add', function add(field: string, type: any) {
+    const record = this.clone();
+    type = Value.of(type);
+    record._fields.set(field, type);
+    return record;
+  })
+  .setProperty('rewrite', function rewrite(field: string, predicate: predicate, value: any) {
+    return this.addRewriter((record: any) => {
+      if (record && predicate(record[field]))
+        record[field] = value;
+      return record;
+    });
+  })
+  .addParser(function parseRecord(data: any) {
+    if (data == null) data = this.default();
+    const result = new this();
     for (const [name, type] of this._fields) {
-      try {
-        record[name] = type.from(data[name]);
-      } catch (e) {
+      try { result[name] = type.from(data[name]); }
+      catch (e) {
         const strval = JSON.stringify(data[name]);
         throw new TypeError('Failed on field: ' + name + ' = ' + strval + '\n' + _String(e));
       }
     }
-    return this.validate(record);
-  } else {
-    const record = this.default();
-    return this.validate(record);
-  }
-});
+    return result;
+  })
+  .addConstraint(function isRecord(data: any) {
+    if (typeof data != 'object') throw new TypeError('Require an object');
+  });
 
 // Collection
 export interface ICollection<A> extends IValue<A> {
@@ -344,147 +353,117 @@ export interface ICollection<A> extends IValue<A> {
   notEmpty: this;
 }
 
-export const Collection = <ICollection<any>>Value.extends('Collection');
-Collection.defineProperty('_subtype', null);
-
-Collection.defineProperty('notEmpty', function notEmpty() {
-  return this.addConstraint(function notEmpty(value: any) {
-    return _Array.from(value).length > 0;
-  });
-}, true);
+export const Collection = <ICollection<any>>Value.extends('Collection')
+  .setProperty('_subtype', null)
+  .setProperty('notEmpty', function notEmpty() {
+    throw new Error('Not implemented');
+  }, true);
 
 // Set
 export interface ISet extends ICollection<Set<any>> {}
 
-export const Set = <ISet>Collection.extends('Set');
-
-Set.defineProperty('_default', function () {
-  const set = new _Set();
-  _Object.defineProperty(set, 'toJSON', { value: this.toJSON });
-  return set;
-});
-
-Set.defineProperty('of', function (type: any) {
-  return this.clone((value: ISet) => value._subtype = Value.of(type));
-});
-
-Set.defineProperty('from', function (data: any) {
-  if (data instanceof _Array || data instanceof _Set) {
+export const Set = <ISet>Collection.extends('Set')
+  .setProperty('of', function (type: any) {
+    return this.clone((value: ISet) => value._subtype = Value.of(type));
+  })
+  .setProperty('toJSON', function toJSON() {
+    return _Array.from(this);
+  })
+  .setDefault(function () {
     const set = new _Set();
     _Object.defineProperty(set, 'toJSON', { value: this.toJSON });
-    for (const item of data) {
-      try {
-        set.add(this._subtype.from(item));
-      } catch (e) {
-        const strval = JSON.stringify(item);
-        throw new TypeError('Failed on item: ' + strval + '\n' + _String(e));
-      }
-    }
-    return this.validate(set);
-  } else {
-    const set = this.default();
-    return this.validate(set);
-  }
-});
-
-Set.defineProperty('toJSON', function toJSON() {
-  return _Array.from(this);
-});
-
-Set.defineProperty('notEmpty', function notEmpty() {
-  return this.addConstraint(function notEmpty(value: any) {
-    return value.size > 0;
+    return set;
+  })
+  .setProperty('notEmpty', function notEmpty() {
+    return this.addConstraint(function notEmpty(value: any) {
+      return value.size > 0;
+    });
+  }, true)
+  .addParser(function parseArray(data: any) {
+    if (!(data instanceof _Array || data instanceof _Set)) return ;
+    const set = new _Set();
+    for (const value of data)
+      set.add(this._subtype.from(value));
+    _Object.defineProperty(set, 'toJSON', { value: this.toJSON });
+    return set;
+  })
+  .addConstraint(function isSet(data: any) {
+    if (!(data instanceof _Set)) throw new TypeError('Require a Set');
   });
-}, true);
 
 // Array
 export interface IArray extends ICollection<Array<any>> {}
 
-export const Array = <IArray>Collection.extends('Array');
-
-Array.defineProperty('_default', function () {
-  return new _Array();
-});
-
-Array.defineProperty('of', function (type: any) {
-  return this.clone((value: IArray) => value._subtype = Value.of(type));
-});
-
-Array.defineProperty('from', function (data: any) {
-    if (data instanceof _Array) {
-      const array = new _Array(data.length);
-      for (let i = 0; i < data.length; i += 1) {
-        try {
-          array[i] = this._subtype.from(data[i]);
-        } catch (e) {
-          const strval = JSON.stringify(data[i]);
-          throw new TypeError('Failed on index: ' + i + ' = ' + strval + '\n' + _String(e));
-        }
+export const Array = <IArray>Collection.extends('Array')
+  .setProperty('_default', function () {
+    return new _Array();
+  })
+  .setProperty('of', function (type: any) {
+    return this.clone((value: IArray) => value._subtype = Value.of(type));
+  })
+  .setProperty('notEmpty', function notEmpty() {
+    return this.addConstraint(function notEmpty(value: any) {
+      return value.length > 0;
+    });
+  }, true)
+  .addParser(function parseArray(data: any) {
+    if (!(data instanceof _Array)) return ;
+    const array = new _Array();
+    for (let i = 0; i < data.length; i += 1) {
+      try { array[i] = this._subtype.from(data[i]); }
+      catch (e) {
+        const strval = JSON.stringify(data[i]);
+        throw new TypeError('Failed on index: ' + i + ' = ' + strval + '\n' + _String(e));
       }
-      return this.validate(array);
-    } else {
-      const array = this.default();
-      return this.validate(array);
     }
-});
-
-Array.defineProperty('notEmpty', function notEmpty() {
-  return this.addConstraint(function notEmpty(value: any) {
-    return value.length > 0;
+  })
+  .addConstraint(function isArray(data: any) {
+    if (!(data instanceof _Array)) throw new TypeError('Require an Array');
   });
-}, true);
 
 // Map
 export interface IMap extends ICollection<Map<any, any>> {
   _index: IValue<any>;
 }
 
-export const Map = <IMap>Collection.extends('Map');
-
-Map.defineProperty('_index', null);
-
-Map.defineProperty('_default', function () {
-  const map = new _Map();
-  _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
-  return map;
-});
-
-Map.defineProperty('of', function (index: any, type: any) {
-  return this.clone((value: IMap) => {
-    value._index = Value.of(index);
-    value._subtype = Value.of(type);
-  });
-});
-
-Map.defineProperty('from', function (data: any) {
-  if (data instanceof _Array || data instanceof _Map) {
+export const Map = <IMap>Collection.extends('Map')
+  .setProperty('_index', null)
+  .setProperty('_default', function () {
     const map = new _Map();
     _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
+    return map;
+  })
+  .setProperty('toJSON', function toJSON() {
+    return _Array.from(this);
+  })
+  .setProperty('notEmpty', function notEmpty() {
+    return this.addConstraint((value: any) => {
+      return value.size > 0;
+    });
+  }, true)
+  .setProperty('of', function (index: any, type: any) {
+    return this.clone((value: IMap) => {
+      value._index = Value.of(index);
+      value._subtype = Value.of(type);
+    });
+  })
+  .addParser(function parseArray(data: any) {
+    if (!(data instanceof _Array || data instanceof _Map)) return ;
+    const map = new _Map();
     for (const [key, value] of data) {
-      try {
-        map.set(this._index.from(key), this._subtype.from(value));
-      } catch (e) {
+      try { map.set(this._index.from(key), this._subtype.from(value)); }
+      catch (e) {
         const strkey = JSON.stringify(key);
         const strval = JSON.stringify(value);
-        throw new TypeError('Failed on key: ' + strkey + ' = ' + strval + '\n' + _String(e));
+        throw new TypeError('Failed on ' + strkey + ' = ' + strval + '\n' + _String(e));
       }
     }
-    return this.validate(map);
-  } else {
-    const map = this.default();
-    return this.validate(map);
-  }
-});
-
-Map.defineProperty('toJSON', function toJSON() {
-  return _Array.from(this);
-});
-
-Map.defineProperty('notEmpty', function notEmpty() {
-  return this.addConstraint((value: any) => {
-    return value.size > 0;
+    _Object.defineProperty(map, 'toJSON', { value: this.toJSON });
+    return map;
+  })
+  .addConstraint(function isMap(data: any) {
+    if (!(data instanceof _Map)) throw new TypeError('Require a Map');
   });
-}, true);
 
 // ------------------------------------------
 // Extended Types
@@ -492,13 +471,16 @@ Map.defineProperty('notEmpty', function notEmpty() {
 
 // UUID
 export interface IUUID extends IString {
-  empty: string;
+  _blank:   string;
+  mayBlank: this;
 }
 
 export const UUID = <IUUID>String.extends('UUID')
+  .setProperty('_blank', '00000000-0000-0000-0000-000000000000')
+  .setProperty('mayBlank', function () {
+    return this.setDefault(this._blank);
+  }, true)
   .addConstraint(/^[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}$/i);
-
-UUID.defineProperty('empty', '00000000-0000-0000-0000-000000000000');
 
 // Email
 export interface IEmail extends IString {}
@@ -508,73 +490,64 @@ export const _Email = <IEmail>String.extends('Email')
 
 // Date
 export interface IDate extends IString {
-  defNow(): this;
+  mayToday: this;
 }
 
-export const Date = <IDate>String.extends('Date');
-
-Date.defineProperty('from', function from(value: any) {
-  if (value instanceof _Date)
-    return this.validate(value.toISOString().substr(0, 10));
-  else if (/^\d{4}-\d{2}-\d{2}$/.test(value))
-    return this.validate(_String(value));
-  else
-    return this.default();
-});
-
-Date.defineProperty('defNow', function defNow() {
-  return this.setDefault(() => new _Date().toISOString().substr(0, 10));
-});
+export const Date = <IDate>String.extends('Date')
+  .setProperty('mayToday', function mayToday() {
+    return this.setDefault(() => new _Date());
+  }, true)
+  .addParser(function parseDate(value: any) {
+    if (!(value instanceof _Date)) return ;
+    return value.toISOString().substr(0, 10);
+  })
+  .addConstraint(function isDate(value: any) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return ;
+    throw new TypeError('Invalide Date format');
+  });
 
 // Time
 export interface ITime extends IString {
-  defNow(): this;
+  mayNow: this;
 }
 
-export const Time = <ITime>String.extends('Time');
+export const Time = <ITime>String.extends('Time')
+  .setProperty('mayNow', function mayNow() {
+    return this.setDefault(() => new _Date());
+  }, true)
+  .addParser(function parseDate(value: any) {
+    if (!(value instanceof _Date)) return ;
+    return value.toISOString().substr(11, 12);
+  })
+  .addConstraint(function isTime(value: any) {
+    if (/^\d{2}-\d{2}-\d{2}(\.\d{3})?(Z|[+\-]\d+)?$/.test(value)) return ;
+    throw new TypeError('Invalide Time format');
+  });
 
-Time.defineProperty('from', function from(value: any) {
-  if (value instanceof _Date)
-    return this.validate(value.toISOString().substr(11, 12));
-  if (/^\d{2}-\d{2}-\d{2}(\.\d{3})?(Z|[+\-]\d+)?$/.test(value))
-    return this.validate(_String(value));
-  else
-    return this.default();
-});
-
-Time.defineProperty('defNow', function defNow() {
-  return this.setDefault(() => new _Date().toISOString().substr(11, 12));
-});
 
 // DateTime
 export interface IDateTime extends IString {
-  defNow(): this;
+  mayNow: this;
 }
 
-export const DateTime = <IDateTime>String.extends('DateTime')
-  .transform(function (value: string) {
+export const DateTime = <IDateTime>Value.extends('DateTime')
+  .setProperty('mayNow', function mayNow() {
+    return this.setDefault(() => new _Date());
+  }, true)
+  .addParser(function parseTimestamp(value: number) {
+    if (typeof value !== 'number' || !(value > 0)) return ;
+    return new _Date(value);
+  })
+  .addParser(function parseString(value: string) {
+    if (typeof value !== 'string') return ;
     const date = /^\d{4}(-\d\d){2}( |T)(\d\d)(:\d\d){2}(\.\d{3})?(Z|[+\-]\d+)?$/.exec(value);
-    if (!date) return this.default();
-    if (date[6] && date[6] != 'Z') {
-      const idate = new _Date(value).toISOString();
-      return idate.substr(0, 10) + ' ' + idate.substr(11, 12);
-    } else {
-      return value.substr(0, 10) + ' ' + value.substr(11, 12);
-    }
+    return new _Date(value);
+  })
+  .addConstraint(function isDate(value: Date) {
+    if (!(value instanceof _Date)) throw new TypeError('Require a JsDate');
+    if (value.toString() === 'Invalid Date') throw new TypeError('Invalid date format');
   });
 
-DateTime.defineProperty('from', function from(value: any) {
-  if (value instanceof _Date)
-    return this.validate(value.toISOString());
-  else if (/^\d{4}(-\d\d){2}( |T)\d\d(:\d\d){2}(\.\d{3})?(Z|[+\-]\d+)?$/.test(value))
-    return this.validate(_String(value));
-  else
-    return this.default();
-});
-
-DateTime.defineProperty('defNow', function defNow() {
-  return this.setDefault(() => new _Date().toISOString().substr(0, 23).replace('T', ' '));
-});
 
 //---------------------------
 

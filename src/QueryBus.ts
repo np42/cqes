@@ -11,7 +11,7 @@ export interface Subscription { abort: () => Promise<void> };
 
 export interface Transport {
   start:   () => Promise<void>;
-  serve:   (handler: queryHandler) => Promise<void>;
+  serve:   (handler: queryHandler) => Promise<Subscription>;
   request: queryHandler;
   stop:    () => Promise<void>;
 }
@@ -19,8 +19,9 @@ export interface Transport {
 export interface props extends Component.props {
   transport: string;
   mode:      'client' | 'server';
-  queries:   QueryTypes;
-  replies:   ReplyTypes;
+  view?:     string;
+  queries?:  QueryTypes;
+  replies?:  ReplyTypes;
 }
 
 export class QueryBus extends Component.Component {
@@ -36,7 +37,7 @@ export class QueryBus extends Component.Component {
     this.transport    = new Transport(props);
     this.queries      = props.queries || {};
     this.replies      = props.replies || {};
-    this.view         = props.name;
+    this.view         = props.view    || props.name;
   }
 
   public start(): Promise<void> {
@@ -44,12 +45,18 @@ export class QueryBus extends Component.Component {
   }
 
   public async serve(handler: queryHandler): Promise<Subscription> {
-    return Promise.resolve(null);
+    return this.transport.serve(async (query: Query) => {
+      if (query.method in this.queries)
+        query.data = this.queries[query.method].from(query.data);
+      return handler(query);
+    });
   }
 
-  public request(method: string, data: any, meta?: any): Promise<Reply> {
+  public async request(method: string, data: any, meta?: any): Promise<Reply> {
     const query = new Query(this.view, method, data, meta);
-    return this.requestQuery(query);
+    const reply = await this.requestQuery(query);
+    if (reply.type in this.replies) reply.data = this.replies[reply.type].from(reply.data);
+    return reply;
   }
 
   public requestQuery(query: Query): Promise<Reply> {

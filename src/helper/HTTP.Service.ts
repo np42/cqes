@@ -8,13 +8,14 @@ import * as NodeUrl         from 'url';
 import * as Express         from 'express';
 import * as BodyParser      from 'body-parser';
 import * as cors            from 'cors';
-import { v1 as uuid }       from 'uuid';
 
 export interface Cases { [eventType: string]: [number, string] };
 export interface Request<T = any> extends NodeHttp.ClientRequest {
-  url:    string;
-  method: string;
-  body:   T;
+  url:           string;
+  method:        string;
+  query:         T;
+  body:          T;
+  remoteAddress: string;
 };
 export interface Response extends NodeHttp.ServerResponse {};
 
@@ -64,10 +65,11 @@ export class HTTPService extends Service.Service {
 
   protected handleHttpRequest(req: Request, res: Response) {
     const offset = req.url.indexOf('?');
-    const path   = req.url.substring(1, Math.max(offset, req.url.length)).split('/');
+    const path   = req.url.substring(1, offset === -1 ? req.url.length : offset).split('/');
     const handlerName = [req.method, ...path].join('_');
     if (handlerName in this) {
       this.logger.log('Handle %yellow %s %j', req.method, req.url, req.body);
+      req.remoteAddress = this.extractRemoteAddress(req);
       return this[handlerName](req, res);
     } else {
       this.logger.log('Reject %yellow %s %j', req.method, req.url, req.body);
@@ -76,7 +78,7 @@ export class HTTPService extends Service.Service {
     }
   }
 
-  protected respond(res: Response, code: number, data: any, options?: any) {
+  protected respond(res: Response, code: number, data?: any, options?: any) {
     if (options == null) options = {};
     if (options.type == null) options.type = 'json';
     if (options.wrap == null) options.wrap = true;
@@ -108,6 +110,19 @@ export class HTTPService extends Service.Service {
     default: {
       this.logger.todo();
     } break ;
+    }
+  }
+
+  protected extractRemoteAddress(req: any) {
+    if (!req) return null;
+    if (req.headers && req.headers['x-forwarded-for']) {
+      return req.headers['x-forwarded-for'].split(',').pop().trim();
+    } else if (req.connection && req.connection.remoteAddress) {
+      return req.connection.remoteAddress;
+    } else if (req.socket && req.socket.removeAddress) {
+      return req.socket.removeAddress;
+    } else {
+      return null;
     }
   }
 

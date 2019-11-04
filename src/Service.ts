@@ -1,12 +1,11 @@
-import * as Component   from './Component';
-import { CommandBus }   from './CommandBus';
-import { EventBus }     from './EventBus';
-import { QueryBus }     from './QueryBus';
-import { Event }        from './Event';
-import { Reply }        from './Reply';
-import { ExpireMap }    from './util';
-import { EventEmitter } from 'events';
-import { v1 as uuid }   from 'uuid';
+import * as Component       from './Component';
+import { CommandBus }       from './CommandBus';
+import { EventBus }         from './EventBus';
+import { QueryBus }         from './QueryBus';
+import { Event }            from './Event';
+import { Reply }            from './Reply';
+import { ExpireMap, genId } from './util';
+import { EventEmitter }     from 'events';
 
 export type sender = (name: string, id: string, order: string, data: any, meta?: any) => Promise<void>;
 export type eventHandler = (event: Event, send: sender) => Promise<void>;
@@ -58,6 +57,9 @@ export class Service extends Component.Component {
       lastTransactionId = transactionId;
       return Promise.resolve();
     };
+    const qSubscriptions = Object.keys(this.queryBuses).map(name => {
+      return this.queryBuses[name].start();
+    });
     const eSubscriptions = Object.keys(this.eventBuses).map(name => {
       const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
       return this.eventBuses[name].psubscribe(subscription, (event: Event) => {
@@ -65,7 +67,7 @@ export class Service extends Component.Component {
       });
     });
     const cChannels = Object.values(this.commandBuses).map(bus => <any>bus.start());
-    return <any> Promise.all([eSubscriptions, ...cChannels]);
+    return <any> Promise.all([eSubscriptions, qSubscriptions, ...cChannels]);
   }
 
   protected async handleServiceEvent(event: Event): Promise<void> {
@@ -89,36 +91,45 @@ export class Service extends Component.Component {
   }
 
   protected query(target: string, data: any, meta?: any): EventEmitter {
-    const ee     = new EventEmitter();
-    const offset = target.indexOf('.');
-    const view   = target.substring(0, offset);
-    const method = target.substring(offset + 1);
-    if (!(view in this.queryBuses)) {
-      setImmediate(() => ee.emit('error', new Error('View ' + view + ' not found')));
-      return ee;
-    }
-    this.queryBuses[view].request(method, data, meta)
-      .catch((error: Error) => ee.emit('error', error))
-      .then((reply: Reply) => ee.emit(reply.type, reply.data))
+    const ee = new EventEmitter();
+    setImmediate(() => {
+      const offset = target.indexOf('.');
+      const view   = target.substring(0, offset);
+      const method = target.substring(offset + 1);
+      if (!(view in this.queryBuses)) {
+        ee.emit('error', new Error('View ' + view + ' not found'));
+      } else {
+        this.queryBuses[view].request(method, data, meta)
+          .catch((error: Error) => ee.emit('error', error))
+          .then((reply: Reply) => ee.emit(reply.type, reply.data));
+      }
+    });
     return ee;
   }
 
   protected command(target: string, streamId: string, data: any, meta?: any): EventEmitter {
-    const ee       = new EventEmitter();
-    const offset   = target.indexOf('.');
-    const category = target.substring(0, offset);
-    const order    = target.substring(offset + 1);
-    if (!(category in this.queryBuses)) {
-      setImmediate(() => ee.emit('error', new Error('Manager ' + category + ' not found')));
-      return ee;
-    }
-    if (meta == null) meta = {};
-    if (meta.transactionId == null) meta.transactionId = uuid();
-    if (!(meta.ttl > 0)) meta.ttl = 10000;
-    const hook = (err: Error, event: Event) => err ? ee.emit('error', err) : ee.emit(event.type, event);
-    this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId } });
-    this.commandBuses[category].send(streamId, order, data, meta)
-      .catch(error => ee.emit('error', error))
+    const ee = new EventEmitter();
+    setImmediate(() => {
+      const offset   = target.indexOf('.');
+      const category = target.substring(0, offset);
+      const order    = target.substring(offset + 1);
+      if (!(category in this.commandBuses)) {
+        ee.emit('error', new Error('Manager ' + category + ' not found'));
+      } else {
+        if (meta == null) meta = {};
+        if (meta.transactionId == null) meta.transactionId = genId();
+        if (!(meta.ttl > 0)) meta.ttl = 10000;
+        const hook = (err: Error, event: Event) => {
+          if (err) return ee.emit('error', err);
+          ee.removeAllListeners('error').on('error', () => {});
+          return ee.emit(event.type, event);
+        };
+        this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId } });
+        ee.on('error', () => this.callbacks.delete(meta.transactionId));
+        this.commandBuses[category].send(streamId, order, data, meta)
+          .catch(error => ee.emit('error', error));
+      }
+    });
     return ee;
   }
 

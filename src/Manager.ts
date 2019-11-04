@@ -37,6 +37,7 @@ export class Manager extends Component.Component {
   protected domainHandlers:  DomainHandlers;
   protected events:          Events;
   protected subscriptions:   Array<Subscription>;
+  protected queues:          Map<string, Array<() => void>>;
 
   constructor(props: props) {
     super(props);
@@ -48,6 +49,7 @@ export class Manager extends Component.Component {
     this.domainHandlers  = props.domainHandlers  || {};
     this.events          = props.events          || {};
     this.subscriptions   = [];
+    this.queues          = new Map();
   }
 
   public async start(): Promise<void> {
@@ -74,53 +76,71 @@ export class Manager extends Component.Component {
   protected async handleManagerCommand(command: C): Promise<void> {
     const { category, streamId, order } = command;
     const stateId = category + '-' + streamId;
-    const state   = await this.stateBus.get(stateId, async (state: S) => {
-      await this.eventBus.readFrom(category, streamId, state.revision + 1, (event: E) => {
-        state = this.applyEvent(state, event);
-        return Promise.resolve();
-      });
-      return state;
-    });
-    const handler = this.getCommandHandler(command);
-    const events  = <Array<E>> [];
-    const emitter = (type: string | E, data?: any, meta?: any) => {
-      if (type instanceof E) {
-        events.push(type);
-      } else {
-        events.push(new E(category, streamId, -1, type, data, meta));
-      }
-    };
-    this.logger.log('%red %s-%s %j', handler.name, category, streamId, command.data);
+    await this.lock(stateId);
     try {
-      const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
-      if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
-      else if (returnedEvents instanceof E) events.push(returnedEvents);
-    } catch (e) {
-      const meta = { ...command.meta, stack: e.stack };
-      const data = { type: e.name, message: e.toString() };
-      const noop = new E('@DeadLetter', streamId, -2, 'Error', data, meta);
-      this.logger.log('%yellow %s-%s %j', 'Error:' + order, category, streamId, command.data);
-      await this.noopBus.emitEvents([noop]);
-      return ;
+      this.logger.log('%red %s %j', command.order, streamId, command.data);
+      const state = await this.stateBus.get(stateId, async (state: S) => {
+        await this.eventBus.readFrom(category, streamId, state.revision + 1, (event: E) => {
+          state = this.applyEvent(state, event);
+          return Promise.resolve();
+        });
+        return state;
+      });
+      const handler = this.getCommandHandler(command);
+      const events  = <Array<E>> [];
+      const emitter = (type: string | E, data?: any, meta?: any) => {
+        if (type instanceof E) {
+          events.push(type);
+        } else {
+          events.push(new E(category, streamId, -1, type, data, meta));
+        }
+      };
+      try {
+        const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
+        if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
+        else if (returnedEvents instanceof E) events.push(returnedEvents);
+      } catch (e) {
+        const meta = { ...command.meta, stack: e.stack };
+        const data = { type: e.name, message: e.toString() };
+        const noop = new E('@DeadLetter', streamId, -2, 'Error', data, meta);
+        this.logger.log('%yellow %s-%s %j', 'Error:' + order, category, streamId, command.data);
+        await this.noopBus.emitEvents([noop]);
+        return ;
+      }
+      if (events.length == 0) {
+        const meta = { ...command.meta, command: { category, order } };
+        const noop = new E('@DeadLetter', streamId, -2, 'NoOp', command.data, meta);
+        this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
+        await this.noopBus.emitEvents([noop]);
+        return ;
+      }
+      const newState = events.reduce((state, event) => {
+        const typer  = this.events[event.type];
+        if (typer != null) event.data = typer.from(event.data);
+        event.number = state.revision + 1;
+        const newState = this.applyEvent(state, event);
+        if (newState instanceof S) return newState;
+        return state;
+      }, state);
+      try { await this.eventBus.emitEvents(events); }
+      catch (e) { throw new ConcurencyError(e); }
+      this.stateBus.set(newState);
+    } finally {
+      this.unlock(stateId);
     }
-    if (events.length == 0) {
-      const meta = { ...command.meta, command: { category, order } };
-      const noop = new E('@DeadLetter', streamId, -2, 'NoOp', command.data, meta);
-      this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
-      await this.noopBus.emitEvents([noop]);
-      return ;
-    }
-    const newState = events.reduce((state, event) => {
-      const typer  = this.events[event.type];
-      if (typer != null) event.data = typer.from(event.data);
-      event.number = state.revision + 1;
-      const newState = this.applyEvent(state, event);
-      if (newState instanceof S) return newState;
-      return state;
-    }, state);
-    try { await this.eventBus.emitEvents(events); }
-    catch (e) { throw new ConcurencyError(e); }
-    this.stateBus.set(newState);
+  }
+
+  protected lock(key: string): Promise<void> {
+    const queue = this.queues.get(key);
+    if (queue != null) return new Promise(resolve => queue.push(resolve));
+    this.queues.set(key, []);
+    return Promise.resolve();
+  }
+
+  protected unlock(key: string): void {
+    const queue = this.queues.get(key);
+    if (queue.length > 0) setImmediate(queue.shift());
+    if (queue.length === 0) this.queues.delete(key);
   }
 
   protected applyEvent(state: S, event: E) {

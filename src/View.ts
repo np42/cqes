@@ -33,7 +33,8 @@ export class View extends Service.Service {
 
   public start(): Promise<void> {
     return new Promise((resolve, reject) => {
-      super.start().catch(reject).then(() => {
+      super.start().catch(reject).then(async () => {
+        await this.queryBus.start();
         this.queryBus.serve((query: Query) => this.handleViewQuery(query))
           .then((subscription: Subscription) => {
             this.subscriptions.push(subscription);
@@ -53,6 +54,10 @@ export class View extends Service.Service {
     if (shortname in this.queryHandlers) return this.queryHandlers[shortname];
     const wildname = 'any';
     if (wildname in this.queryHandlers) return this.queryHandlers[wildname];
+    return (query: Query) => {
+      this.logger.warn('Query %s not handled: %j', query.method, query.data);
+      return Promise.resolve(new Reply('NotHandled', { method: query.method }));
+    };
   }
 
 }

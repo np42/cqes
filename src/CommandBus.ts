@@ -71,8 +71,6 @@ export class CommandBus extends Component.Component {
   }
 
   public sendCommand(command: Command): Promise<void> {
-    if (command.order in this.commands)
-      command.data = this.commands[command.order].from(command.data);
     return this.transport.send(command);
   }
 

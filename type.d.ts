@@ -1,1 +1,0 @@
-dist/src/Type.d.ts

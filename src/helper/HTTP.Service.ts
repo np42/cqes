@@ -1,7 +1,7 @@
 import * as Service         from '../Service';
 import { Event }            from '../Event';
-import { merge }            from '../util';
-import { TypeError }        from '../Type';
+import { merge }            from 'cqes-util';
+import { TypeError }        from 'cqes-type';
 
 import * as NodeHttp        from 'http';
 import * as NodeUrl         from 'url';

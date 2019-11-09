@@ -1,5 +1,5 @@
 import { Event } from './Event';
-import { merge } from './util';
+import { merge } from 'cqes-util';
 
 export class Command<A = any> {
   public category:  string;

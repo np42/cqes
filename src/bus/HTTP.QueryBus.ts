@@ -2,7 +2,7 @@ import * as Component         from '../Component';
 import * as QueryBus          from '../QueryBus';
 import { Query }              from '../Query';
 import { Reply }              from '../Reply';
-import { qsencode, qsdecode } from '../util';
+import { qsencode, qsdecode } from 'cqes-util';
 import * as http              from 'http';
 import * as uuid              from 'uuid';
 

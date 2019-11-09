@@ -1,5 +1,5 @@
 import { Event }        from './Event';
-import { merge, clone } from './util';
+import { merge, clone } from 'cqes-util';
 
 export class State<A = any> {
   public stateId:   string;

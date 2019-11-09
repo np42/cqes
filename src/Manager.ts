@@ -6,7 +6,7 @@ import { StateBus }        from './StateBus';
 import { Command as C }    from './Command';
 import { Event   as E }    from './Event';
 import { State   as S }    from './State';
-import { Typer }           from './Type';
+import { Typer }           from 'cqes-type';
 
 export type emitter        = (type: string, data: any, meta?: any) => void
 export type commandHandler = (state: S, command: C, emit?: emitter) => Array<E> | E | void;

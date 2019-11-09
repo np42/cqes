@@ -1,5 +1,5 @@
 import * as Service   from './Service';
-import { Typer }        from './Type';
+import { Typer }        from 'cqes-type';
 import { QueryBus }     from './QueryBus';
 import { Event }        from './Event';
 import { Query }        from './Query';

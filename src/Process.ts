@@ -12,7 +12,7 @@ import * as Projection             from './Projection';
 import * as Service                from './Service';
 
 import { clone, merge
-       , isConstructor }           from './util';
+       , isConstructor }           from 'cqes-util';
 
 import { hostname, userInfo }      from 'os';
 import * as fs                     from 'fs';

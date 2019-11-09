@@ -1,6 +1,6 @@
 import * as Component from './Component';
 import { State }      from './State';
-import { Typer }      from './Type';
+import { Typer }      from 'cqes-type';
 const CachingMap      = require('caching-map');
 
 type upgrade = (state: State) => Promise<State>;

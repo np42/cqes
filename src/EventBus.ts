@@ -1,6 +1,6 @@
 import * as Component  from './Component';
 import { Event as E }  from './Event';
-import { Typer }       from './Type';
+import { Typer }       from 'cqes-type';
 
 export type eventHandler = (event: E) => Promise<void>;
 

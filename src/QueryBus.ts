@@ -1,7 +1,7 @@
 import * as Component       from './Component';
 import { Query }            from './Query';
 import { Reply }            from './Reply';
-import { Typer }            from './Type';
+import { Typer }            from 'cqes-type';
 
 export type queryHandler = (query: Query) => Promise<Reply>;
 

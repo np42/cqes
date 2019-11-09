@@ -1,6 +1,6 @@
 import * as Component from './Component';
 import { Command }    from './Command';
-import { Typer }      from './Type';
+import { Typer }      from 'cqes-type';
 
 export type commandHandler = (commmand: Command) => Promise<void>;
 

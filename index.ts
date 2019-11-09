@@ -19,8 +19,3 @@ import { Index }      from './src/Index';
 import * as Service   from './src/Service';
 
 export { Service, Index };
-
-//--
-import * as util from './src/util';
-
-export { util };

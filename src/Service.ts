@@ -4,7 +4,7 @@ import { EventBus }         from './EventBus';
 import { QueryBus }         from './QueryBus';
 import { Event }            from './Event';
 import { Reply }            from './Reply';
-import { ExpireMap, genId } from './util';
+import { ExpireMap, genId } from 'cqes-util';
 import { EventEmitter }     from 'events';
 
 export type sender = (name: string, id: string, order: string, data: any, meta?: any) => Promise<void>;

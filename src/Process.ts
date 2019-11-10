@@ -36,7 +36,8 @@ export interface props {
   config?: string;
 }
 
-interface RecordMap<T = any> { [name: string]: T; }
+interface RecordMap<T = any> { [name: string]: T; };
+interface BusEndpoint { name: string, slot: string };
 
 export class Process extends Component.Component {
   protected root:       string;
@@ -128,21 +129,15 @@ export class Process extends Component.Component {
   protected getContextManagers(context: Context.ContextProps, managersProps: RecordMap) {
     return Object.keys(managersProps).reduce((result: Map<string, Manager.Manager>, name: string) => {
       const managerProps = managersProps[name];
-      const commonProps  = { context: context.name, name };
-
-      const events = this.getTypes(context.name, name, 'events');
-      const commandBuses = (managerProps.listen || [name])
-        .reduce((result: Manager.CommandBuses, channel: string) => {
-          const commandBusProps = { ...commonProps, ...context.CommandBus, ...managerProps.CommandBus };
-          result[channel] = this.getCommandBus(commandBusProps, channel);
-          return result;
-        }, {});
+      if (managerProps.listen == null) managerProps.listen = [name];
+      const commonProps   = { context: context.name, name };
+      const commandBuses  = this.getCommandBuses(context.name, name, managerProps.listen);
       const eventBusProps = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
-      const eventBus = this.getEventBus(eventBusProps, name);
-      const noopBus  = this.getEventBus(eventBusProps, 'NoOp');
+      const events        = this.getTypes(context.name, name, 'events');
+      const eventBus      = this.getEventBus(eventBusProps, context.name, name);
+      const noopBus       = this.getEventBus(eventBusProps, context.name, 'NoOp');
       const stateBusProps = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
-      const stateBus = this.getStateBus({ ...stateBusProps, eventBus }, name);
-
+      const stateBus      = this.getStateBus({ ...stateBusProps, eventBus }, context.name, name);
       const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
       const props   = { ...commonProps, commandBuses, stateBus, noopBus, eventBus, events
                       , commandHandlers, domainHandlers
@@ -157,17 +152,11 @@ export class Process extends Component.Component {
   protected getContextViews(context: Context.ContextProps, viewsProps: RecordMap) {
     return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
       const viewProps   = viewsProps[name];
+      if (viewProps.psubscribe == null) viewProps.psubscribe = [];
       const commonProps = { context: context.name, name };
-
-      const eventBuses = (viewProps.psubscribe || [name])
-        .reduce((result: View.EventBuses, stream: string) => {
-          const eventBusProps = { ...commonProps, ...context.EventBus, ...viewProps.EventBus };
-          result[stream] = this.getEventBus(eventBusProps, stream);
-          return result;
-        }, {});
+      const eventBuses  = this.getEventBuses(context.name, name, viewProps.psubscribe);
       const queryBusProps = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
-      const queryBus = this.getQueryBus({ ...queryBusProps, mode: 'server' }, name);
-
+      const queryBus    = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
       const { queryHandlers, updateHandlers } = this.getViewHandlers(context.name, name, viewProps);
       const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
       const view  = new View.View(props);
@@ -177,37 +166,17 @@ export class Process extends Component.Component {
     }, new Map());
   }
 
-  protected getContextProjections(context: Context.ContextProps, projectionsProps: RecordMap) {
-    return new Map();
-  }
-
   protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
     return Object.keys(servicesProps).reduce((result: Map<string, Service.Service>, name: string) => {
       const serviceProps = servicesProps[name];
-      const commonProps  = { context: context.name, name };
-
-      const commandBuses = (serviceProps.targets || [name])
-        .reduce((result: Manager.CommandBuses, channel: string) => {
-          const commandBusProps = { ...commonProps, ...context.CommandBus, ...serviceProps.CommandBus };
-          result[channel] = this.getCommandBus(commandBusProps, channel);
-          return result;
-        }, {});
-      const queryBuses = (serviceProps.views || [])
-        .reduce((result: Service.QueryBuses, view: string) => {
-          const serverQueryBusProps = (<any>context.views[view]).QueryBus || {};
-          const queryBusProps = { ...commonProps, ...context.QueryBus
-                                , ...serverQueryBusProps, ...serviceProps.QueryBus };
-          result[view] = this.getQueryBus({ ...queryBusProps, mode: 'client' }, view);
-          return result;
-        }, {});
-      const eventBuses = ['@DeadLetter'].concat(serviceProps.psubscribe || [name])
-        .reduce((result: Service.EventBuses, stream: string) => {
-          const eventBusProps = { ...commonProps, ...context.EventBus, ...serviceProps.EventBus };
-          result[stream] = this.getEventBus(eventBusProps, stream);
-          return result;
-        }, {});
-
-      const props = { ...commonProps, ...serviceProps, eventBuses, commandBuses, queryBuses };
+      if (serviceProps.targets == null) serviceProps.targets = [];
+      if (serviceProps.views == null) serviceProps.views = [];
+      if (serviceProps.psubscribe == null) serviceProps.psubscribe = [];
+      serviceProps.psubscribe.unshift('@DeadLetter');
+      const commandBuses = this.getCommandBuses(context.name, name, serviceProps.targets);
+      const queryBuses   = this.getQueryBuses(context.name, name, serviceProps.views, { mode: 'client' });
+      const eventBuses   = this.getEventBuses(context.name, name, serviceProps.psubscribe);
+      const props = { context: context.name, name, ...serviceProps, eventBuses, commandBuses, queryBuses };
       const path  = join(this.root, context.name, name + '.Service');
       const SubService = require(path)[name];
       if (SubService == null)
@@ -219,35 +188,68 @@ export class Process extends Component.Component {
       result.set(name, service);
       return result;
     }, new Map());
+  }
+
+  protected getContextProjections(context: Context.ContextProps, projectionsProps: RecordMap) {
     return new Map();
   }
 
-  protected getCommandBus(props: any, channel: string) {
-    if (props.transport == null) props.transport = './bus/AMQP.CommandBus';
-    const category = channel.split('.').shift();
-    const commands = this.getTypes(props.context, category, 'commands');
-    return new CommandBus({ ...props, channel, commands });
+  protected getCommandBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
+    return this.getBuses<CommandBus>('CommandBus', fromContext, name, views, extra);
   }
 
-  protected getQueryBus(props: any, view: string) {
-    if (props.transport == null) props.transport = './bus/HTTP.QueryBus';
-    const queries = this.getTypes(props.context, view, 'queries');
-    const replies = this.getTypes(props.context, view, 'replies');
-    return new QueryBus({ ...props, view, queries, replies });
+  protected getQueryBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
+    return this.getBuses<QueryBus>('QueryBus', fromContext, name, views, extra);
   }
 
-  protected getEventBus(props: any, stream: string) {
-    if (props.transport == null) props.transport = './bus/MySQL_Redis.EventBus';
-    const category = stream.split('-').shift();
-    const events   = this.getTypes(props.context, category, 'events');
-    return new EventBus({ ...props, stream, events });
+  protected getEventBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
+    return this.getBuses<EventBus>('EventBus', fromContext, name, views, extra);
   }
 
-  protected getStateBus(props: any, type: string) {
-    if (props.transport == null) props.transport = './bus/MySQL.StateBus';
-    const states = this.getTypes(props.context, type, 'state');
-    const state = states && states[type] || null;
-    return new StateBus({ ...props, state });
+  protected getBuses<T>(busType: string, from: string, name: string, targets: Array<string>, extra?: any) {
+    const result = <RecordMap<T>>{};
+    for (const path of targets) {
+      const { context, slot, as } = this.getBusPathContext(path, from);
+      const props = { name, context: from, ...extra, ...context[busType] };
+      result[as] = <T>this['get' + busType](props, context.name, slot);
+    }
+    return result;
+  }
+
+  protected getBusPathContext(path: string, defaultContextName: string) {
+    const match = /(?:([A-Z][a-zA-Z0-9]*)\.)?([A-Z][a-zA-Z0-9\-]*)(?::([A-Z][a-zA-Z0-9]*))?/.exec(path);
+    const name  = match[1] || defaultContextName;
+    const slot  = match[2];
+    const as    = match[3] || match[2];
+    const context = <Context.ContextProps>this.contexts.get(name);
+    return { context, as, slot };
+  }
+
+  protected getCommandBus(props: any, contextName: string, channel: string) {
+    const transport = props.transport || './bus/AMQP.CommandBus';
+    const category  = channel.split('-').shift();
+    const commands  = this.getTypes(contextName, category, 'commands');
+    return new CommandBus({ ...props, transport, channel, commands });
+  }
+
+  protected getQueryBus(props: any, contextName: string, view: string) {
+    const transport = props.transport || './bus/HTTP.QueryBus';
+    const queries   = this.getTypes(contextName, view, 'queries');
+    const replies   = this.getTypes(contextName, view, 'replies');
+    return new QueryBus({ ...props, transport, view, queries, replies });
+  }
+
+  protected getEventBus(props: any, contextName: string, stream: string) {
+    const transport = props.transport || './bus/MySQL_Redis.EventBus';
+    const events    = this.getTypes(contextName, stream, 'events');
+    return new EventBus({ ...props, transport, stream, events });
+  }
+
+  protected getStateBus(props: any, contextName: string, type: string) {
+    const transport = props.transport || './bus/MySQL.StateBus';
+    const states    = this.getTypes(contextName, type, 'state');
+    const state     = states && states[type] || null;
+    return new StateBus({ ...props, transport, state });
   }
 
   protected getTypes(contextName: string, category: string, kind: string) {

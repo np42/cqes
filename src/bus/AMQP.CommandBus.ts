@@ -29,7 +29,7 @@ export class Transport extends Component.Component implements CommandBus.Transpo
   protected lastConnection: number;
   protected connectFlag:    NodeJS.Timer;
   protected listeners:      Array<Listener>;
-  protected channels:       Map<string, amqp.Channel>;
+  protected channels:       Map<string, amqp.Channel | Array<any>>;
 
   constructor(props: props) {
     super(props);
@@ -45,6 +45,7 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     this.config    = props.AMQP;
     this.listeners = [];
     this.channels  = new Map();
+    debugger;
   }
 
   public start(): Promise<void> {
@@ -105,18 +106,31 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     });
   }
 
-  protected async getChannel(queue: string): Promise<amqp.Channel> {
-    if (this.channels.has(queue)) return this.channels.get(queue);
-    this.logger.log('Create Channel %red', queue);
-    const channel = await this.amqp.createConfirmChannel();
-    await channel.assertQueue(queue, this.config.channel);
-    await channel.prefetch(this.config.prefetch, false);
-    this.channels.set(queue, channel);
-    return channel;
+  protected getChannel(queue: string): Promise<amqp.Channel> {
+    return new Promise((resolve, reject) => {
+      const channel = this.channels.get(queue);
+      if (channel instanceof Array) return channel.push({ resolve, reject });
+      if (channel != null) return resolve(channel);
+      this.channels.set(queue, [{ resolve, reject }]);
+      this.logger.log('Create Channel %red', queue);
+      return (async function () {
+        try {
+          const channel = await this.amqp.createConfirmChannel();
+          await channel.assertQueue(queue, this.config.channel);
+          await channel.prefetch(this.config.prefetch, false);
+          const waiters = this.channels.get(queue);
+          this.channels.set(queue, channel);
+          waiters.forEach(({ resolve }: any) => resolve(channel));
+        } catch (e) {
+          this.channels.get(queue).forEach(({ reject }: any) => reject(e));
+        }
+      }).call(this);
+    });
   }
 
   public async send(command: Command<any>): Promise<void> {
-    const channel = await this.getChannel(this.name);
+    const queue   = command.meta && command.meta.queue || command.category;
+    const channel = await this.getChannel(queue);
     const content = Buffer.from(JSON.stringify(command));
     const sent    = await channel.publish('', command.category, content, this.config.publish);
     if (sent) return Promise.resolve();

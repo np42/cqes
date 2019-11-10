@@ -48,6 +48,7 @@ export class CommandBus extends Component.Component {
   }
 
   public start(): Promise<void> {
+    this.logger.log('Connecting to %s', this.channel);
     return this.transport.start();
   }
 

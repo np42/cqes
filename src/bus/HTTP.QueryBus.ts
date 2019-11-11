@@ -51,10 +51,11 @@ export class Transport extends Component.Component implements QueryBus.Transport
         const data = qsOffset < 0 ? {} : qsdecode(req.url.substring(qsOffset + 1));
         const meta = Object.keys(req.headers).reduce((accu: any, key: string) => {
           if (key.substring(0, 7) !== 'x-meta-') return accu;
-          const value = decodeURIComponent(String(req.headers[key]));
+          debugger;
+          const value = req.headers[key];
           const field = key.substring(7).replace(/-./g, c => c.substring(1).toUpperCase());
-          try { accu[decodeURIComponent(field)] = JSON.parse(value); }
-          catch (e) { accu[decodeURIComponent(field)] = value; }
+          try { accu[field] = JSON.parse(value); }
+          catch (e) { accu[field] = value; }
         }, {});
         const query = new Query(view, method, data, meta);
         this.queryHandler(query).then((reply: Reply) => {

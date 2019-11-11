@@ -45,7 +45,6 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     this.config    = props.AMQP;
     this.listeners = [];
     this.channels  = new Map();
-    debugger;
   }
 
   public start(): Promise<void> {

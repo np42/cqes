@@ -101,7 +101,10 @@ export class Service extends Component.Component {
       } else {
         this.queryBuses[view].request(method, data, meta)
           .catch((error: Error) => ee.emit('error', error))
-          .then((reply: Reply) => ee.emit(reply.type, reply.data));
+          .then((reply: Reply) => {
+            ee.emit(reply.type, reply.data);
+            ee.emit('end', reply);
+          });
       }
     });
     return ee;
@@ -122,7 +125,7 @@ export class Service extends Component.Component {
         const hook = (err: Error, event: Event) => {
           if (err) return ee.emit('error', err);
           ee.removeAllListeners('error').on('error', () => {});
-          return ee.emit(event.type, event);
+          return ee.emit(event.type, event.data, event);
         };
         this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId } });
         ee.on('error', () => this.callbacks.delete(meta.transactionId));

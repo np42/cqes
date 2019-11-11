@@ -233,10 +233,11 @@ export class Process extends Component.Component {
   }
 
   protected getQueryBus(props: any, contextName: string, view: string) {
-    const transport = props.transport || './bus/HTTP.QueryBus';
-    const queries   = this.getTypes(contextName, view, 'queries');
-    const replies   = this.getTypes(contextName, view, 'replies');
-    return new QueryBus({ ...props, transport, view, queries, replies });
+    const transport   = props.transport || './bus/HTTP.QueryBus';
+    const queries     = this.getTypes(contextName, view, 'queries');
+    const replies     = this.getTypes(contextName, view, 'replies');
+    const serverProps = props.mode == 'client' ? this.contexts.get(contextName).views[view].QueryBus : {};
+    return new QueryBus({ ...props, ...serverProps, transport, view, queries, replies });
   }
 
   protected getEventBus(props: any, contextName: string, stream: string) {

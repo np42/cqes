@@ -153,10 +153,10 @@ export class Process extends Component.Component {
     return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
       const viewProps   = viewsProps[name];
       if (viewProps.psubscribe == null) viewProps.psubscribe = [];
-      const commonProps = { context: context.name, name };
-      const eventBuses  = this.getEventBuses(context.name, name, viewProps.psubscribe);
+      const commonProps   = { context: context.name, name };
+      const eventBuses    = this.getEventBuses(context.name, name, viewProps.psubscribe);
       const queryBusProps = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
-      const queryBus    = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
+      const queryBus      = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
       const { queryHandlers, updateHandlers } = this.getViewHandlers(context.name, name, viewProps);
       const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
       const view  = new View.View(props);

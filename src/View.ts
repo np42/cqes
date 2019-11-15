@@ -1,9 +1,10 @@
 import * as Service   from './Service';
-import { Typer }        from 'cqes-type';
-import { QueryBus }     from './QueryBus';
-import { Event }        from './Event';
-import { Query }        from './Query';
-import { Reply }        from './Reply';
+import { Component }  from './Component';
+import { Typer }      from 'cqes-type';
+import { QueryBus }   from './QueryBus';
+import { Event }      from './Event';
+import { Query }      from './Query';
+import { Reply }      from './Reply';
 
 export type queryHandler = (query: Query) => Promise<Reply>;
 export type eventHandler = Service.eventHandler;
@@ -31,17 +32,15 @@ export class View extends Service.Service {
     this.subscriptions    = [];
   }
 
-  public start(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      super.start().catch(reject).then(async () => {
-        await this.queryBus.start();
-        this.queryBus.serve((query: Query) => this.handleViewQuery(query))
-          .then((subscription: Subscription) => {
-            this.subscriptions.push(subscription);
-            resolve();
-          }).catch(reject);
-      });
-    });
+  public async start(): Promise<void> {
+    await super.start()
+    await this.queryBus.start();
+    const sub = await this.queryBus.serve((query: Query) => this.handleViewQuery(query));
+    this.subscriptions.push(sub);
+    const eventHandlers = <Component><any>this.eventHandlers;
+    if (eventHandlers.start) await eventHandlers.start();
+    const queryHandlers = <Component><any>this.queryHandlers;
+    if (queryHandlers.start) await queryHandlers.start();
   }
 
   protected handleViewQuery(query: Query): Promise<Reply> {

@@ -115,8 +115,14 @@ export class Manager extends Component.Component {
         return ;
       }
       const newState = events.reduce((state, event) => {
-        const typer  = this.events[event.type];
-        if (typer != null) event.data = typer.from(event.data);
+        try {
+          const typer = this.events[event.type];
+          if (typer != null) event.data = typer.from(event.data);
+        } catch (e) {
+          this.logger.warn('Failed on Event: %s-%s %s', event.category, event.streamId, event.type);
+          this.logger.warn('Data: %s', event.data);
+          throw e;
+        }
         event.number = state.revision + 1;
         const newState = this.applyEvent(state, event);
         if (newState instanceof S) return newState;

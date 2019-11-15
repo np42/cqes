@@ -38,8 +38,14 @@ export class StateBus extends Component.Component {
       this.cache.delete(state.stateId);
       await this.transport.destroy(state.stateId);
     } else {
-      if (this.state != null)
-        state.data = this.state.from(state.data);
+      if (this.state != null) {
+        try { state.data = this.state.from(state.data); }
+        catch (e) {
+          this.logger.warn('Failed on State: %s', state.stateId);
+          this.logger.warn('Data: %j', state.data);
+          throw e;
+        }
+      }
       this.cache.set(state.stateId, state);
       await this.transport.save(state);
     }

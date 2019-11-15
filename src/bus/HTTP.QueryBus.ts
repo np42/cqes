@@ -51,11 +51,11 @@ export class Transport extends Component.Component implements QueryBus.Transport
         const data = qsOffset < 0 ? {} : qsdecode(req.url.substring(qsOffset + 1));
         const meta = Object.keys(req.headers).reduce((accu: any, key: string) => {
           if (key.substring(0, 7) !== 'x-meta-') return accu;
-          debugger;
           const value = req.headers[key];
           const field = key.substring(7).replace(/-./g, c => c.substring(1).toUpperCase());
-          try { accu[field] = JSON.parse(value); }
+          try { accu[field] = JSON.parse(String(value)); }
           catch (e) { accu[field] = value; }
+          return accu;
         }, {});
         const query = new Query(view, method, data, meta);
         this.queryHandler(query).then((reply: Reply) => {
@@ -91,7 +91,8 @@ export class Transport extends Component.Component implements QueryBus.Transport
     for (const key in meta) {
       const value = meta[key];
       const hKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-      headers['x-meta-' + hKey] = typeof value === 'object' ? JSON.stringify(value) : String(value);
+      headers['x-meta-' + hKey] = typeof value === 'object'
+        ? JSON.stringify(value) : String(value);
     }
     return new Promise((resolve, reject) => {
       const chunks = <Array<Buffer>>[];
@@ -107,7 +108,6 @@ export class Transport extends Component.Component implements QueryBus.Transport
               const reply = new Reply(value.type, value.data);
               return resolve(reply);
             } catch (e) {
-              debugger;
               return reject(e);
             }
           default: case 500:
@@ -119,7 +119,7 @@ export class Transport extends Component.Component implements QueryBus.Transport
   }
 
   public stop(): Promise<void> {
-    return new Promise(resolve => this.server.close(resolve));
+    return new Promise(resolve => this.server.close(() => resolve()));
   }
 
 }

@@ -6,17 +6,35 @@ import * as Service    from './Service';
 import * as Projection from './Projection';
 
 export interface ContextProps {
-  name:         string;
+  name: string;
 
   CommandBus:   Object;
   QueryBus:     Object;
   EventBus:     Object;
   StateBus:     Object;
 
-  managers:     { [name: string]: Manager.props };
-  views:        { [name: string]: View.props };
-  projections:  { [name: string]: Projection.props };
-  services:     { [name: string]: Service.props };
+  managers:     { [name: string]: ManagerProps };
+  views:        { [name: string]: ViewProps };
+  services:     { [name: string]: ServiceProps };
+  projections:  { [name: string]: ServiceProps };
+}
+
+export interface ManagerProps {
+  CommandBus: any;
+  EventBus:   any;
+  StateBus:   any;
+  listen: Array<string>;
+  views:  Array<string>;
+}
+
+export interface ServiceProps {
+  psubscribe: Array<string>;
+  targets:    Array<string>;
+  views:      Array<string>;
+}
+
+export interface ViewProps extends ServiceProps {
+  QueryBus: any;
 }
 
 export interface props extends Component.props {}

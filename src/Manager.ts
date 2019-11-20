@@ -21,7 +21,6 @@ export interface Subscription    { abort: () => Promise<void> };
 export interface props extends Component.props {
   commandBuses?:    CommandBuses;
   stateBus?:        StateBus;
-  noopBus?:         EventBus;
   eventBus?:        EventBus;
   commandHandlers?: CommandHandlers;
   domainHandlers?:  DomainHandlers;
@@ -31,7 +30,6 @@ export interface props extends Component.props {
 export class Manager extends Component.Component {
   protected commandBuses:    CommandBuses;
   protected stateBus:        StateBus;
-  protected noopBus:         EventBus;
   protected eventBus:        EventBus;
   protected commandHandlers: CommandHandlers;
   protected domainHandlers:  DomainHandlers;
@@ -42,7 +40,6 @@ export class Manager extends Component.Component {
   constructor(props: props) {
     super(props);
     this.commandBuses    = props.commandBuses    || {};
-    this.noopBus         = props.noopBus;
     this.eventBus        = props.eventBus;
     this.stateBus        = props.stateBus;
     this.commandHandlers = props.commandHandlers || {};
@@ -100,18 +97,19 @@ export class Manager extends Component.Component {
         if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
         else if (returnedEvents instanceof E) events.push(returnedEvents);
       } catch (e) {
-        const meta = { ...command.meta, stack: e.stack };
-        const data = { type: e.name, message: e.toString() };
-        const noop = new E('@DeadLetter', streamId, -2, 'Error', data, meta);
-        this.logger.log('%yellow %s-%s %j', 'Error:' + order, category, streamId, command.data);
-        await this.noopBus.emitEvents([noop]);
+        const meta  = { ...command.meta, persist: false, stack: e.stack };
+        const data  = { type: e.name, message: e.toString() };
+        const event = new E(category, streamId, -2, 'Error', data, meta);
+        this.logger.error('%yellow %s-%s %j', 'Error:' + order, category, streamId, command.data);
+        this.logger.error(e);
+        await this.eventBus.emitEvents([event]);
         return ;
       }
       if (events.length == 0) {
-        const meta = { ...command.meta, command: { category, order } };
-        const noop = new E('@DeadLetter', streamId, -2, 'NoOp', command.data, meta);
+        const meta  = { ...command.meta, persist: false, command: { category, order } };
+        const event = new E(category, streamId, -2, 'NoOp', command.data, meta);
         this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
-        await this.noopBus.emitEvents([noop]);
+        await this.eventBus.emitEvents([event]);
         return ;
       }
       const newState = events.reduce((state, event) => {

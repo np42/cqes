@@ -40,10 +40,11 @@ interface RecordMap<T = any> { [name: string]: T; };
 interface BusEndpoint { name: string, slot: string };
 
 export class Process extends Component.Component {
-  protected root:       string;
-  protected configFile: string;
-  protected vars:       Map<string, string>;
-  protected contexts:   Map<string, Context.ContextProps | Context.Context>;
+  protected root:          string;
+  protected configFile:    string;
+  protected vars:          Map<string, string>;
+  protected contextsProps: Map<string, Context.ContextProps>;
+  protected contexts:      Map<string, Context.Context>;
 
   static async readYaml(filepath: string) {
     return new Promise((resolve, reject) => {
@@ -62,10 +63,11 @@ export class Process extends Component.Component {
   constructor(props: props) {
     if (props.name == null) throw new Error('Need a <name> to start');
     super({ name: props.name, logger: 'Process:' + props.name });
-    this.root       = props.root || process.cwd();
-    this.configFile = join(this.root, props.config || 'cqesconfig.yml');
-    this.vars       = new Map();
-    this.contexts   = new Map();
+    this.root          = props.root || process.cwd();
+    this.configFile    = join(this.root, props.config || 'cqesconfig.yml');
+    this.vars          = new Map();
+    this.contextsProps = new Map();
+    this.contexts      = new Map();
     this.loadConstants();
   }
 
@@ -103,7 +105,7 @@ export class Process extends Component.Component {
       const props: Context.ContextProps = contexts[contextName] || {};
       props.name = contextName;
       this.setDefaultContextHandlersProps(props);
-      this.contexts.set(contextName, props);
+      this.contextsProps.set(contextName, props);
     }
   }
 
@@ -115,9 +117,8 @@ export class Process extends Component.Component {
   }
 
   protected loadContexts() {
-    for (const [contextName, contextProps] of this.contexts) {
-      if (contextProps instanceof Context.Context) continue ;
-      const context = new Context.Context(contextProps);
+    for (const [contextName, contextProps] of this.contextsProps) {
+      const context       = new Context.Context(contextProps);
       context.managers    = this.getContextManagers(contextProps, contextProps.managers);
       context.views       = this.getContextViews(contextProps, contextProps.views);
       context.projections = this.getContextProjections(contextProps, contextProps.projections);
@@ -128,6 +129,7 @@ export class Process extends Component.Component {
 
   protected getContextManagers(context: Context.ContextProps, managersProps: RecordMap) {
     return Object.keys(managersProps).reduce((result: Map<string, Manager.Manager>, name: string) => {
+      if (/^_/.test(name)) return this.logger.log('Skip manager %s', name.substr(1)), result;
       const managerProps = managersProps[name];
       if (managerProps.listen == null) managerProps.listen = [name];
       const commonProps   = { context: context.name, name };
@@ -135,11 +137,10 @@ export class Process extends Component.Component {
       const eventBusProps = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
       const events        = this.getTypes(context.name, name, 'events');
       const eventBus      = this.getEventBus(eventBusProps, context.name, name);
-      const noopBus       = this.getEventBus(eventBusProps, context.name, 'NoOp');
       const stateBusProps = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
       const stateBus      = this.getStateBus({ ...stateBusProps, eventBus }, context.name, name);
       const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
-      const props   = { ...commonProps, commandBuses, stateBus, noopBus, eventBus, events
+      const props   = { ...commonProps, commandBuses, stateBus, eventBus, events
                       , commandHandlers, domainHandlers
                       }
       const manager = new Manager.Manager(props);
@@ -151,6 +152,7 @@ export class Process extends Component.Component {
 
   protected getContextViews(context: Context.ContextProps, viewsProps: RecordMap) {
     return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
+      if (/^_/.test(name)) return this.logger.log('Skip view %s', name.substr(1)), result;
       const viewProps   = viewsProps[name];
       if (viewProps.psubscribe == null) viewProps.psubscribe = [];
       const commonProps   = { context: context.name, name };
@@ -168,11 +170,11 @@ export class Process extends Component.Component {
 
   protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
     return Object.keys(servicesProps).reduce((result: Map<string, Service.Service>, name: string) => {
+      if (/^_/.test(name)) return this.logger.log('Skip service %s', name.substr(1)), result;
       const serviceProps = servicesProps[name];
       if (serviceProps.targets == null) serviceProps.targets = [];
       if (serviceProps.views == null) serviceProps.views = [];
       if (serviceProps.psubscribe == null) serviceProps.psubscribe = [];
-      serviceProps.psubscribe.unshift('@DeadLetter');
       const commandBuses = this.getCommandBuses(context.name, name, serviceProps.targets);
       const queryBuses   = this.getQueryBuses(context.name, name, serviceProps.views, { mode: 'client' });
       const eventBuses   = this.getEventBuses(context.name, name, serviceProps.psubscribe);
@@ -194,21 +196,21 @@ export class Process extends Component.Component {
     return new Map();
   }
 
-  protected getCommandBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
-    return this.getBuses<CommandBus>('CommandBus', fromContext, name, views, extra);
+  protected getCommandBuses(fromContext: string, name: string, targets: Array<string>, extra?: any) {
+    return this.getBuses<CommandBus>('CommandBus', fromContext, name, targets, extra);
   }
 
   protected getQueryBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
     return this.getBuses<QueryBus>('QueryBus', fromContext, name, views, extra);
   }
 
-  protected getEventBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
-    return this.getBuses<EventBus>('EventBus', fromContext, name, views, extra);
+  protected getEventBuses(fromContext: string, name: string, streams: Array<string>, extra?: any) {
+    return this.getBuses<EventBus>('EventBus', fromContext, name, streams, extra);
   }
 
-  protected getBuses<T>(busType: string, from: string, name: string, targets: Array<string>, extra?: any) {
+  protected getBuses<T>(busType: string, from: string, name: string, slots: Array<string>, extra?: any) {
     const result = <RecordMap<T>>{};
-    for (const path of targets) {
+    for (const path of slots) {
       const { context, slot, as } = this.getBusPathContext(path, from);
       const props = { name, context: from, ...extra, ...context[busType] };
       result[as] = <T>this['get' + busType](props, context.name, slot);
@@ -221,7 +223,7 @@ export class Process extends Component.Component {
     const name  = match[1] || defaultContextName;
     const slot  = match[2];
     const as    = match[3] || match[2];
-    const context = <Context.ContextProps>this.contexts.get(name);
+    const context = this.contextsProps.get(name);
     return { context, as, slot };
   }
 
@@ -236,7 +238,9 @@ export class Process extends Component.Component {
     const transport   = props.transport || './bus/HTTP.QueryBus';
     const queries     = this.getTypes(contextName, view, 'queries');
     const replies     = this.getTypes(contextName, view, 'replies');
-    const serverProps = props.mode == 'client' ? this.contexts.get(contextName).views[view].QueryBus : {};
+    const serverProps = props.mode == 'client'
+      ? this.contextsProps.get(contextName).views[view].QueryBus
+      : {};
     return new QueryBus({ ...props, ...serverProps, transport, view, queries, replies });
   }
 

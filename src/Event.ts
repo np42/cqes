@@ -17,4 +17,8 @@ export class Event<A = any> {
     this.meta     = meta;
   }
 
+  public get stream() {
+    return this.category + '-' + this.streamId;
+  }
+
 }

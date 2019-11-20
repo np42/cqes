@@ -43,7 +43,14 @@ export class EventBus extends Component.Component {
 
   public psubscribe(name: string, handler: eventHandler): Promise<Subscription> {
     return this.transport.psubscribe(name, this.stream, (event: E) => {
-      if (event.type in this.events) event.data = this.events[event.type].from(event.data);
+      if (event.type in this.events) {
+        try { event.data = this.events[event.type].from(event.data); }
+        catch (e) {
+          const { number, streamId, category, type } = event;
+          this.logger.error('Failed when parsing event %s@%s-%s %s', number, category, streamId, type);
+          throw e;
+        }
+      }
       return handler(event);
     });
   }

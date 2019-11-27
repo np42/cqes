@@ -55,7 +55,16 @@ export class StateBus extends Component.Component {
     if (this.cache.has(stateId)) return this.cache.get(stateId).clone();
     let state = await this.transport.load(stateId);
     if (state == null) state = new State(stateId, -1, null);
-    if (this.state != null) state.data = this.state.from(state.data);
+    if (this.state != null) {
+      try { state.data = this.state.from(state.data); }
+      catch (e) {
+        if (state.revision == -1) {
+          throw new Error('State must handle empty value (revision = -1)');
+        } else {
+          throw e;
+        }
+      }
+    }
     if (upgrade != null) state = await upgrade(state);
     this.cache.set(stateId, state);
     return state.clone();

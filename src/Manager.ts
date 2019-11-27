@@ -100,7 +100,7 @@ export class Manager extends Component.Component {
         const meta  = { ...command.meta, persist: false, stack: e.stack };
         const data  = { type: e.name, message: e.toString() };
         const event = new E(category, streamId, -2, 'Error', data, meta);
-        this.logger.error('%yellow %s-%s %j', 'Error:' + order, category, streamId, command.data);
+        this.logger.error('%yellow %s-%s %d', 'Error:' + order, category, streamId, command.data);
         this.logger.error(e);
         await this.eventBus.emitEvents([event]);
         return ;
@@ -108,7 +108,7 @@ export class Manager extends Component.Component {
       if (events.length == 0) {
         const meta  = { ...command.meta, persist: false, command: { category, order } };
         const event = new E(category, streamId, -2, 'NoOp', command.data, meta);
-        this.logger.log('%yellow %s-%s %j', 'NoOp:' + order, category, streamId, command.data);
+        this.logger.log('%yellow %s-%s %d', 'NoOp:' + order, category, streamId, command.data);
         await this.eventBus.emitEvents([event]);
         return ;
       }
@@ -117,7 +117,7 @@ export class Manager extends Component.Component {
           const typer = this.events[event.type];
           if (typer != null) event.data = typer.from(event.data);
         } catch (e) {
-          this.logger.warn('Failed on Event: %s-%s %s', event.category, event.streamId, event.type);
+          this.logger.warn('Failed on Event: %s-%s %d', event.category, event.streamId, event.type);
           this.logger.warn('Data: %s', event.data);
           throw e;
         }

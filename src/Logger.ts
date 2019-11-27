@@ -157,19 +157,25 @@ export class Logger {
 
   _sprintf(pattern: string, args: Array<any>) {
     return pattern
-      .replace(/%(blue|red|green|yellow|cyan|magenta|grey|bold|e|s|j|J)/g, (_, fmt) => {
+      .replace(/%(blue|red|green|yellow|cyan|magenta|grey|bold|e|s|j|J|d)/g, (_, fmt) => {
         switch (fmt) {
         case 's': {
           const arg = args.shift();
           if (typeof arg === 'string') return arg;
           if (arg instanceof Error) return arg.toString();
-          return inspect(arg);
+          return inspect(arg, { compact: true });
         } break ;
         case 'e': {
           const arg = args.shift();
           if (arg instanceof Error) return arg.stack;
           return inspect(arg);
-        }
+        } break ;
+        case 'd': {
+          let arg = args.shift();
+          if (typeof arg !== 'string') arg = JSON.stringify(arg);
+          if (arg.length < 160) return arg;
+          return arg.substr(0, 156) + '[…]' + arg[arg.length - 1];
+        } break ;
         case 'j': case 'J': {
           const arg = args.shift();
           const str = JSON.stringify(arg, function (key: string, value: any) {

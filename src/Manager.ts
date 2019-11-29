@@ -71,63 +71,17 @@ export class Manager extends Component.Component {
   }
 
   protected async handleManagerCommand(command: C): Promise<void> {
-    const { category, streamId, order } = command;
-    const stateId = category + '-' + streamId;
+    const stateId = command.stream;
     await this.lock(stateId);
     try {
-      this.logger.log('%red %s %j', command.order, streamId, command.data);
-      const state = await this.stateBus.get(stateId, async (state: S) => {
-        await this.eventBus.readFrom(category, streamId, state.revision + 1, (event: E) => {
-          state = this.applyEvent(state, event);
-          return Promise.resolve();
-        });
-        return state;
-      });
-      const handler = this.getCommandHandler(command);
-      const events  = <Array<E>> [];
-      const emitter = (type: string | E, data?: any, meta?: any) => {
-        if (type instanceof E) {
-          events.push(type);
-        } else {
-          events.push(new E(category, streamId, -1, type, data, meta));
-        }
-      };
-      try {
-        const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
-        if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
-        else if (returnedEvents instanceof E) events.push(returnedEvents);
-      } catch (e) {
-        const meta  = { ...command.meta, persist: false, stack: e.stack };
-        const data  = { type: e.name, message: e.toString() };
-        const event = new E(category, streamId, -2, 'Error', data, meta);
-        this.logger.error('%yellow %s-%s %d', 'Error:' + order, category, streamId, command.data);
-        this.logger.error(e);
-        await this.eventBus.emitEvents([event]);
-        return ;
-      }
-      if (events.length == 0) {
-        const meta  = { ...command.meta, persist: false, command: { category, order } };
-        const event = new E(category, streamId, -2, 'NoOp', command.data, meta);
-        this.logger.log('%yellow %s-%s %d', 'NoOp:' + order, category, streamId, command.data);
-        await this.eventBus.emitEvents([event]);
-        return ;
-      }
-      const newState = events.reduce((state, event) => {
-        try {
-          const typer = this.events[event.type];
-          if (typer != null) event.data = typer.from(event.data);
-        } catch (e) {
-          this.logger.warn('Failed on Event: %s-%s %d', event.category, event.streamId, event.type);
-          this.logger.warn('Data: %s', event.data);
-          throw e;
-        }
-        event.number = state.revision + 1;
-        const newState = this.applyEvent(state, event);
-        if (newState instanceof S) return newState;
-        return state;
-      }, state);
+      this.logger.log('%red %s %j', command.order, command.streamId, command.data);
+      const state = await this.getState(stateId);
+      const events = await this.handleCommand(state, command);
+      for (let i = 0; i < events.length; i += 1)
+        event[i].number = state.revision + i + 1;
       try { await this.eventBus.emitEvents(events); }
       catch (e) { throw new ConcurencyError(e); }
+      const newState = this.applyEvents(state, events);
       this.stateBus.set(newState);
     } finally {
       this.unlock(stateId);
@@ -141,15 +95,73 @@ export class Manager extends Component.Component {
     return Promise.resolve();
   }
 
-  protected unlock(key: string): void {
-    const queue = this.queues.get(key);
-    if (queue.length > 0) setImmediate(queue.shift());
-    if (queue.length === 0) this.queues.delete(key);
+  protected getState(stateId: string): Promise<S> {
+    const offset = stateId.indexOf('-');
+    const category = stateId.substr(0, offset);
+    const streamId = stateId.substr(offset + 1);
+    return this.stateBus.get(stateId, async (state: S) => {
+      await this.eventBus.readFrom(category, streamId, state.revision + 1, (event: E) => {
+        state = this.applyEvent(state, event);
+        return Promise.resolve();
+      });
+      return state;
+    });
+  }
+
+  protected async handleCommand(state: S, command: C): Promise<Array<E>> {
+    const { category, streamId, order } = command;
+    const handler = this.getCommandHandler(command);
+    const events  = <Array<E>> [];
+    const emitter = (type: string | E, data?: any, meta?: any) => {
+      if (type instanceof E) {
+        events.push(type);
+      } else {
+        events.push(new E(category, streamId, -1, type, data, meta));
+      }
+    };
+    try {
+      const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
+      if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
+      else if (returnedEvents instanceof E) events.push(returnedEvents);
+    } catch (e) {
+      const meta  = { ...command.meta, persist: false, stack: e.stack };
+      const data  = { type: e.name, message: e.toString() };
+      const event = new E(category, streamId, -2, 'Error', data, meta);
+      this.logger.error('%yellow %s-%s %d', 'Error:' + order, category, streamId, command.data);
+      this.logger.error(e);
+      return [event];
+    }
+    if (events.length === 0) {
+      const meta  = { ...command.meta, persist: false, command: { category, order } };
+      const event = new E(category, streamId, -2, 'NoOp', command.data, meta);
+      this.logger.log('%yellow %s-%s %d', 'NoOp:' + order, category, streamId, command.data);
+      return [event];
+    } else {
+      return events;
+    }
+  }
+
+  protected applyEvents(state: S, events: Array<E>) {
+    for (const event of events) {
+      const newState = this.applyEvent(state, event);
+      if (!(newState instanceof S)) continue ;
+      state = newState;
+    }
+    return state;
   }
 
   protected applyEvent(state: S, event: E) {
+    if (event.meta.persist === false) return state;
     const applier = this.domainHandlers[event.type];
     if (applier != null) {
+      try {
+        const typer = this.events[event.type];
+        if (typer != null) event.data = typer.from(event.data);
+      } catch (e) {
+        this.logger.warn('Failed on Event: %s-%s %d', event.category, event.streamId, event.type);
+        this.logger.warn('Data: %s', event.data);
+        throw e;
+      }
       this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
       const newState = applier.call(this.domainHandlers, state, event) || state;
       newState.revision = state.revision + 1;
@@ -158,6 +170,12 @@ export class Manager extends Component.Component {
       state.revision += 1;
       return state;
     }
+  }
+
+  protected unlock(key: string): void {
+    const queue = this.queues.get(key);
+    if (queue.length > 0) setImmediate(queue.shift());
+    if (queue.length === 0) this.queues.delete(key);
   }
 
   public async stop(): Promise<void> {

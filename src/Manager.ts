@@ -78,7 +78,7 @@ export class Manager extends Component.Component {
       const state = await this.getState(stateId);
       const events = await this.handleCommand(state, command);
       for (let i = 0; i < events.length; i += 1)
-        event[i].number = state.revision + i + 1;
+        events[i].number = state.revision + i + 1;
       try { await this.eventBus.emitEvents(events); }
       catch (e) { throw new ConcurencyError(e); }
       const newState = this.applyEvents(state, events);
@@ -158,6 +158,7 @@ export class Manager extends Component.Component {
         const typer = this.events[event.type];
         if (typer != null) event.data = typer.from(event.data);
       } catch (e) {
+        debugger;
         this.logger.warn('Failed on Event: %s-%s %d', event.category, event.streamId, event.type);
         this.logger.warn('Data: %s', event.data);
         throw e;

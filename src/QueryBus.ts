@@ -46,8 +46,10 @@ export class QueryBus extends Component.Component {
 
   public async serve(handler: queryHandler): Promise<Subscription> {
     return this.transport.serve(async (query: Query) => {
-      if (query.method in this.queries)
-        query.data = this.queries[query.method].from(query.data);
+      if (query.method in this.queries) {
+        try { query.data = this.queries[query.method].from(query.data); }
+        catch (e) { debugger; throw e; }
+      }
       return handler(query);
     });
   }
@@ -55,7 +57,10 @@ export class QueryBus extends Component.Component {
   public async request(method: string, data: any, meta?: any): Promise<Reply> {
     const query = new Query(this.view, method, data, meta);
     const reply = await this.requestQuery(query);
-    if (reply.type in this.replies) reply.data = this.replies[reply.type].from(reply.data);
+    if (reply.type in this.replies) {
+      try { reply.data = this.replies[reply.type].from(reply.data); }
+      catch (e) { debugger; throw e; }
+    }
     return reply;
   }
 

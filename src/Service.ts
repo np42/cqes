@@ -76,7 +76,8 @@ export class Service extends Component.Component {
     };
     const handler = this.getEventHandler(event);
     if (handler != null) {
-      this.logger.log('%green %s-%s %j', handler.name, event.category, event.streamId, event.data);
+      const { number, category, streamId, data } = event;
+      this.logger.log('%green %s@%s-%s %j', handler.name, number, category, streamId, data);
       return handler.call(this.eventHandlers, event, sender);
     }
   }

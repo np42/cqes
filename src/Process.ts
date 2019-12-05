@@ -77,6 +77,8 @@ export class Process extends Component.Component {
     const environ     = environmentsAliases[environRaw] || environRaw;
     if (environ == 'unknown')
       this.logger.warn('Unknown environment type (e.g. developement, staging, production)');
+    if (environ !== 'production')
+      Error.stackTraceLimit = Infinity;
     process.env.NODE_ENV = environ;
     this.vars.set('hostname', hostname());
     this.vars.set('procuser', userInfo().username);

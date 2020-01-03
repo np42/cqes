@@ -131,6 +131,7 @@ export class Service extends Component.Component {
         this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId } });
         ee.on('error', () => this.callbacks.delete(meta.transactionId));
         this.commandBuses[category].send(streamId, order, data, meta)
+          .then(() => ee.emit('sent'))
           .catch(error => ee.emit('error', error));
       }
     });

@@ -5,7 +5,7 @@ import { QueryBus }         from './QueryBus';
 import { Event }            from './Event';
 import { Reply }            from './Reply';
 import { ExpireMap, genId } from 'cqes-util';
-import { EventEmitter }     from 'events';
+import * as events          from 'events';
 
 export type sender = (name: string, id: string, order: string, data: any, meta?: any) => Promise<void>;
 export type eventHandler = (event: Event, send: sender) => Promise<void>;
@@ -18,12 +18,18 @@ export interface EventHandlers { [name: string]: eventHandler };
 export interface Subscription  { abort: () => Promise<void> };
 export interface HookInfo      { category: string; streamId: string; };
 
+export interface EventEmitter  extends events.EventEmitter {
+  clear(): void;
+}
+
 export interface props extends Component.props {
   commandBuses?:  CommandBuses;
   eventBuses?:    EventBuses;
   eventHandlers?: EventHandlers;
   queryBuses?:    QueryBuses;
 }
+
+const noop = () => {};
 
 export class Service extends Component.Component {
   protected commandBuses:  CommandBuses;
@@ -92,7 +98,8 @@ export class Service extends Component.Component {
   }
 
   protected query(target: string, data: any, meta?: any): EventEmitter {
-    const ee = new EventEmitter();
+    const ee = <EventEmitter>new events.EventEmitter();
+    ee.clear = noop;
     setImmediate(() => {
       const offset = target.indexOf('.');
       const view   = target.substring(0, offset);
@@ -112,7 +119,8 @@ export class Service extends Component.Component {
   }
 
   protected command(target: string, streamId: string, data: any, meta?: any): EventEmitter {
-    const ee = new EventEmitter();
+    const ee = <EventEmitter>new events.EventEmitter();
+    ee.clear = noop;
     setImmediate(() => {
       const offset   = target.indexOf('.');
       const category = target.substring(0, offset);
@@ -122,6 +130,8 @@ export class Service extends Component.Component {
       } else {
         if (meta == null) meta = {};
         if (meta.transactionId == null) meta.transactionId = genId();
+        const transactionId = meta.transactionId;
+        ee.clear = () => this.callbacks.delete(transactionId);
         if (!(meta.ttl > 0)) meta.ttl = 10000;
         const hook = (err: Error, event: Event) => {
           if (err) return ee.emit('error', err);
@@ -129,7 +139,7 @@ export class Service extends Component.Component {
           return ee.emit(event.type, event.data, event);
         };
         this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId } });
-        ee.on('error', () => this.callbacks.delete(meta.transactionId));
+              ee.on('error', () => ee.clear());
         this.commandBuses[category].send(streamId, order, data, meta)
           .then(() => ee.emit('sent'))
           .catch(error => ee.emit('error', error));

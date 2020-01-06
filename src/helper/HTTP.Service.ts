@@ -14,6 +14,7 @@ export interface Request<T = any> extends NodeHttp.ClientRequest {
   url:           string;
   method:        string;
   query:         T;
+  headers:       { [name: string]: string };
   body:          T;
   remoteAddress: string;
 };

@@ -20,7 +20,7 @@ export class Command<A = any> {
     if (data == null)
       data = this.data;
     else if (data instanceof Array)
-      data = data.reduce((result, field) => { result[field] = data[field]; return result; }, {})
+      data = data.reduce((result, field) => { result[field] = this.data[field]; return result; }, {})
     else if (doMerge)
       data = merge(this.data, data);
     return new Event(this.category, this.streamId, -1, type, data, this.meta);

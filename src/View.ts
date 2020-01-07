@@ -9,9 +9,21 @@ import { Reply }      from './Reply';
 export type queryHandler = (query: Query) => Promise<Reply>;
 export type eventHandler = Service.eventHandler;
 export interface EventBuses extends Service.EventBuses {};
+export interface Subscription { abort: () => Promise<void> };
 export interface QueryHandlers { [name: string]: queryHandler };
 export interface UpdateHandlers { [name: string]: eventHandler };
-export interface Subscription { abort: () => Promise<void> };
+
+export function getset(target: Object, key: string, descriptor: PropertyDescriptor): PropertyDescriptor {
+  if (typeof target['get'] !== 'function') throw new Error('Missing .get method');
+  if (typeof target['set'] !== 'function') throw new Error('Missing .set method');
+  const handler = descriptor.value;
+  descriptor.value = async function (event: Event, sender: Service.sender) {
+    const data   = await this.get(event.streamId);
+    const result = await handler.call(this, data, event, sender);
+    await this.set(event.streamId, result || data);
+  };
+  return descriptor;
+};
 
 export interface props extends Service.props {
   queryBus?:       QueryBus;

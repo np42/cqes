@@ -100,6 +100,13 @@ export class Service extends Component.Component {
   protected query(target: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
     ee.clear = noop;
+    ee.on('error', (error: Error) => {
+      if (ee.listenerCount('error') == 1) throw error;
+    });
+    ee.on('end', (reply: Reply) => {
+      if (ee.listenerCount(reply.type) == 0 && ee.listenerCount('end') == 1)
+        this.logger.warn('Reply %blue not handled\n%j', reply.type, reply.data);
+    });
     setImmediate(() => {
       const offset = target.indexOf('.');
       const view   = target.substring(0, offset);
@@ -141,7 +148,7 @@ export class Service extends Component.Component {
         this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId } });
               ee.on('error', () => ee.clear());
         this.commandBuses[category].send(streamId, order, data, meta)
-          .then(() => ee.emit('sent'))
+          .then(() => ee.emit('sent', ee))
           .catch(error => ee.emit('error', error));
       }
     });

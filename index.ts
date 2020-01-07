@@ -17,5 +17,6 @@ export { C, Q, R, E, S };
 //--
 import { Index }      from './src/Index';
 import * as Service   from './src/Service';
+import * as View      from './src/View';
 
-export { Service, Index };
+export { Service, View, Index };

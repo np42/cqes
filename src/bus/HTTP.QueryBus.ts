@@ -59,7 +59,9 @@ export class Transport extends Component.Component implements QueryBus.Transport
         }, {});
         this.logger.log('Query %s %s %j', view, method, data);
         const query = new Query(view, method, data, meta);
-        this.queryHandler(query).then((reply: Reply) => {
+        this.queryHandler(query).then((reply: Reply | any) => {
+          if (reply == null) reply = new Reply('null');
+          else if (!(reply instanceof Reply)) reply = new Reply(reply.constructor.name, reply);
           res.writeHead(200, { 'content-type': 'application/json' });
           res.end(JSON.stringify(reply));
         }).catch((error: Error) => {

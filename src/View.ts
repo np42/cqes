@@ -18,9 +18,9 @@ export function getset(target: Object, key: string, descriptor: PropertyDescript
   if (typeof target['set'] !== 'function') throw new Error('Missing .set method');
   const handler = descriptor.value;
   descriptor.value = async function (event: Event, sender: Service.sender) {
-    const data   = await this.get(event.streamId);
+    const data   = await this.get(event.streamId, event);
     const result = await handler.call(this, data, event, sender);
-    await this.set(event.streamId, result || data);
+    await this.set(event.streamId, result || data, event);
   };
   return descriptor;
 };

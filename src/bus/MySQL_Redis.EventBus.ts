@@ -43,7 +43,6 @@ export class Subscription implements EventBus.Subscription {
 }
 
 export class Transport extends Component.Component implements EventBus.Transport {
-  protected context:       string;
   protected mysql:         MySQL.MySQL;
   protected redis:         redis.RedisClient;
 
@@ -55,7 +54,6 @@ export class Transport extends Component.Component implements EventBus.Transport
     if (props.MySQL.password == null) props.MySQL.password = 'changeit';
     if (props.MySQL.database == null) props.MySQL.database = 'cqes-' + props.name.toLowerCase();
     //props.MySQL.multipleStatements = true;
-    this.context = props.context;
     this.mysql   = new MySQL.MySQL(props.MySQL);
     this.redis   = redis.createClient(props.Redis);
   }

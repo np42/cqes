@@ -5,6 +5,7 @@ import { QueryBus }         from './QueryBus';
 import { Event }            from './Event';
 import { Reply }            from './Reply';
 import { ExpireMap, genId } from 'cqes-util';
+import { Typer }            from 'cqes-type';
 import * as events          from 'events';
 
 export type sender = (name: string, id: string, order: string, data: any, meta?: any) => Promise<void>;
@@ -36,6 +37,8 @@ export class Service extends Component.Component {
   protected eventBuses:    EventBuses;
   protected queryBuses:    QueryBuses;
   protected eventHandlers: EventHandlers;
+  protected commandTypes:  { [set: string]: { [name: string]: Typer } };
+  protected queryTypes:    { [set: string]: { [name: string]: Typer } };
   protected subscriptions: Array<Subscription>;
   protected callbacks:     ExpireMap<string, { hook: hook, info: HookInfo }>;
 
@@ -45,6 +48,8 @@ export class Service extends Component.Component {
     this.eventBuses    = props.eventBuses    || {};
     this.queryBuses    = props.queryBuses    || {};
     this.eventHandlers = props.eventHandlers || {};
+    this.commandTypes  = {};
+    this.queryTypes    = {};
     this.subscriptions = [];
     this.callbacks     = new ExpireMap();
     this.callbacks.on('expired', ({ value: { hook } }) => hook(new Error('Timed out')));
@@ -108,12 +113,12 @@ export class Service extends Component.Component {
         this.logger.warn('Reply %blue not handled\n%j', reply.type, reply.data);
     });
     setImmediate(() => {
-      const offset = target.indexOf('.');
-      const view   = target.substring(0, offset);
-      const method = target.substring(offset + 1);
+      const [context, view, method] = target.split(':')
       if (!(view in this.queryBuses)) {
-        ee.emit('error', new Error('View ' + view + ' not found'));
+        ee.emit('error', new Error('View ' + target + ' not found'));
       } else {
+        const typer = this.getQueryTyper(context, view, method);
+        if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
         this.queryBuses[view].request(method, data, meta)
           .catch((error: Error) => ee.emit('error', error))
           .then((reply: Reply) => {
@@ -127,18 +132,18 @@ export class Service extends Component.Component {
 
   protected command(target: string, streamId: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
+    ee.on('error', error => this.logger.warn(error.toString()));
     ee.clear = noop;
     setImmediate(() => {
-      const offset   = target.indexOf('.');
-      const category = target.substring(0, offset);
-      const order    = target.substring(offset + 1);
+      const [context, category, order] = target.split(':');
       if (!(category in this.commandBuses)) {
-        ee.emit('error', new Error('Manager ' + category + ' not found'));
+        ee.emit('error', new Error('Manager ' + target + ' not found'));
       } else {
+        const typer = this.getCommandTyper(context, category, order);
+        if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
         if (meta == null) meta = {};
         if (meta.transactionId == null) meta.transactionId = genId();
         const transactionId = meta.transactionId;
-        ee.clear = () => this.callbacks.delete(transactionId);
         if (!(meta.ttl > 0)) meta.ttl = 10000;
         const hook = (err: Error, event: Event) => {
           if (err) return ee.emit('error', err);
@@ -146,13 +151,36 @@ export class Service extends Component.Component {
           return ee.emit(event.type, event.data, event);
         };
         this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId } });
-              ee.on('error', () => ee.clear());
+        ee.clear = () => this.callbacks.delete(transactionId);
+        ee.on('error', () => ee.clear());
         this.commandBuses[category].send(streamId, order, data, meta)
           .then(() => ee.emit('sent', ee))
           .catch(error => ee.emit('error', error));
       }
     });
     return ee;
+  }
+
+  public getQueryTyper(context: string, view: string, method: string) {
+    const key = context + ':' + view;
+    if (key in this.queryTypes) {
+      return this.queryTypes[key][method];
+    } else {
+      const types = this.process.getTypes(context, view, 'queries');
+      this.queryTypes[key] = types;
+      return types[method];
+    }
+  }
+
+  public getCommandTyper(context: string, category: string, order: string) {
+    const key = context + ':' + category;
+    if (key in this.commandTypes) {
+      return this.commandTypes[key][order];
+    } else {
+      const types = this.process.getTypes(context, category, 'commands');
+      this.commandTypes[key] = types;
+      return types[order];
+    }
   }
 
   public stop(): Promise<void> {

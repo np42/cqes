@@ -3,6 +3,7 @@ import { Event }            from '../Event';
 import { merge }            from 'cqes-util';
 import { TypeError }        from 'cqes-type';
 
+import * as events          from 'events';
 import * as NodeHttp        from 'http';
 import * as NodeUrl         from 'url';
 import * as Express         from 'express';
@@ -73,7 +74,7 @@ export class HTTPService extends Service.Service {
       req.remoteAddress = this.extractRemoteAddress(req);
       return this[handlerName](req, res);
     } else {
-      this.logger.log('Reject %yellow %s %j', req.method, req.url, req.body);
+      this.logger.log('%red %yellow %s %j', 'Reject', req.method, req.url, req.body);
       res.writeHead(404, this.headers)
       res.end('{"message":"Endpoint not found"}');
     }
@@ -98,11 +99,7 @@ export class HTTPService extends Service.Service {
             res.end(JSON.stringify({ type: 'success', value: data }));
           }
         } else {
-          if (data instanceof Error || !(data instanceof Object)) {
-            res.end(JSON.stringify({ type: 'error', message: String(data) }));
-          } else {
-            res.end(JSON.stringify({ type: 'error', value: data }));
-          }
+          res.end(JSON.stringify({ type: 'error', message: String(data) }));
         }
       } else {
         this.logger.todo();

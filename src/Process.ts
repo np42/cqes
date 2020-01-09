@@ -180,7 +180,8 @@ export class Process extends Component.Component {
       const commandBuses = this.getCommandBuses(context.name, name, serviceProps.targets);
       const queryBuses   = this.getQueryBuses(context.name, name, serviceProps.views, { mode: 'client' });
       const eventBuses   = this.getEventBuses(context.name, name, serviceProps.psubscribe);
-      const props = { context: context.name, name, ...serviceProps, eventBuses, commandBuses, queryBuses };
+      const buses        = { eventBuses, commandBuses, queryBuses };
+      const props = { context: context.name, name, process: this, ...serviceProps, ...buses };
       const path  = join(this.root, context.name, name + '.Service');
       const SubService = require(path)[name];
       if (SubService == null)
@@ -259,7 +260,7 @@ export class Process extends Component.Component {
     return new StateBus({ ...props, transport, state });
   }
 
-  protected getTypes(contextName: string, category: string, kind: string) {
+  public getTypes(contextName: string, category: string, kind: string) {
     const path = join(this.root, contextName, category + '.' + kind);
     return safeRequire(path);
   }

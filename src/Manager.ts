@@ -88,13 +88,6 @@ export class Manager extends Component.Component {
     }
   }
 
-  protected lock(key: string): Promise<void> {
-    const queue = this.queues.get(key);
-    if (queue != null) return new Promise(resolve => queue.push(resolve));
-    this.queues.set(key, []);
-    return Promise.resolve();
-  }
-
   protected getState(stateId: string): Promise<S> {
     const offset = stateId.indexOf('-');
     const category = stateId.substr(0, offset);
@@ -173,10 +166,17 @@ export class Manager extends Component.Component {
     }
   }
 
+  protected lock(key: string): Promise<void> {
+    const queue = this.queues.get(key);
+    if (queue != null) return new Promise(resolve => queue.push(resolve));
+    this.queues.set(key, []);
+    return Promise.resolve();
+  }
+
   protected unlock(key: string): void {
     const queue = this.queues.get(key);
     if (queue.length > 0) setImmediate(queue.shift());
-    if (queue.length === 0) this.queues.delete(key);
+    else if (queue.length === 0) this.queues.delete(key);
   }
 
   public async stop(): Promise<void> {

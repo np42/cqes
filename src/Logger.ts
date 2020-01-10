@@ -19,6 +19,16 @@ export class Logger {
   constructor(pattern: string, ...args: Array<string>) {
     this.name       = this._sprintf(pattern, args);
     this.withColor  = globalOptions.has('withColor') ? globalOptions.get('withColor') : isTTY;
+    //
+    this.debugger   = this.debugger.bind(this);
+    this.todo       = this.todo.bind(this);
+    this.debug      = this.debug.bind(this);
+    this.stats      = this.stats.bind(this);
+    this.info       = this.info.bind(this);
+    this.warn       = this.warn.bind(this);
+    this.alert      = this.alert.bind(this);
+    this.trace      = this.trace.bind(this);
+    this.error      = this.error.bind(this);
   }
 
   debugger(...args: Array<any>) {

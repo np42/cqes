@@ -22,8 +22,8 @@ export class Transport extends Component.Component implements StateBus.Transport
 
   public async save(state: State) {
     const query = [ 'INSERT INTO `@states` (`stateId`, `revision`, `data`)'
-                  , 'VALUE (?, ?, ?)'
-                  , 'ON DUPLICATE KEY UPDATE `data` = ?'
+                  , 'VALUE (?, @revision := ?, @data := ?)'
+                  , 'ON DUPLICATE KEY UPDATE `revision` = @revision, `data` = @data'
                   ].join(' ');
     const data = JSON.stringify(state.data, (key, value) => {
       if (typeof value != 'object') return value;

@@ -114,7 +114,8 @@ export class Transport extends Component.Component implements EventBus.Transport
             const meta = { savedAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
             const event = new Event(category, id, row.number, row.type, data, meta);
             event.position = row.eventId;
-            await handler(event);
+            try { await handler(event); }
+            catch (e) { connection.destroy(); return reject(e); }
             connection.resume();
           })
           .on('end', () => {

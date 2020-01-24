@@ -215,6 +215,7 @@ export class Process extends Component.Component {
     const result = <RecordMap<T>>{};
     for (const path of slots) {
       const { context, slot, as } = this.getBusPathContext(path, from);
+      if (context == null) throw new Error('Please define how to access ' + path + ' : ' + busType);
       const props = { name, context: from, ...extra, ...context[busType] };
       result[as] = <T>this['get' + busType](props, context.name, slot);
     }

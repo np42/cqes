@@ -45,7 +45,6 @@ export class View extends Service.Service {
   }
 
   public async start(): Promise<void> {
-    await super.start()
     await this.queryBus.start();
     const sub = await this.queryBus.serve((query: Query) => this.handleViewQuery(query));
     this.subscriptions.push(sub);
@@ -53,6 +52,7 @@ export class View extends Service.Service {
     if (eventHandlers.start) await eventHandlers.start();
     const queryHandlers = <Component><any>this.queryHandlers;
     if (queryHandlers.start) await queryHandlers.start();
+    await super.start()
   }
 
   protected handleViewQuery(query: Query): Promise<Reply> {

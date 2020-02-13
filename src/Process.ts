@@ -11,7 +11,7 @@ import * as View                   from './View';
 import * as Projection             from './Projection';
 import * as Service                from './Service';
 
-import { clone, merge
+import { clone, merge, Tree, get, set
        , isConstructor }           from 'cqes-util';
 
 import { hostname, userInfo }      from 'os';
@@ -47,7 +47,7 @@ export class Process extends Component.Component {
   protected contexts:      Map<string, Context.Context>;
 
   static async readYaml(filepath: string) {
-    return new Promise((resolve, reject) => {
+    const content = await new Promise((resolve, reject) => {
       return fs.readFile(filepath, (err, content) => {
         if (err) return reject(err);
         try {
@@ -57,6 +57,25 @@ export class Process extends Component.Component {
           return reject(e);
         }
       });
+    });
+    return Tree.replace(content, (holder, key) => {
+      if (!(holder instanceof Object)) return holder;
+      if (holder instanceof Array) return holder;
+      const result = {};
+      for (const key in holder) {
+        if (key.substr(0, 2) === '&:') {
+          const lastOffset = key.lastIndexOf(':');
+          const target     = key.substr(lastOffset + 1);
+          const skip       = lastOffset === 1 ? 1 : Number(target);
+          const source     = key.substring(2, lastOffset > 1 ? lastOffset : key.length);
+          const value      = merge(get(content, source), holder[key]);
+          const output     = isNaN(skip) ? target : source.split('.').slice(skip).join('.');
+          set(result, output, value);
+        } else {
+          result[key] = holder[key];
+        }
+      }
+      return result;
     });
   }
 

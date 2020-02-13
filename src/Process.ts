@@ -275,13 +275,13 @@ export class Process extends Component.Component {
 
   protected getStateBus(props: any, contextName: string, type: string) {
     const transport = props.transport || './bus/MySQL.StateBus';
-    const states    = this.getTypes(contextName, type, 'state');
+    const states    = this.getTypes(contextName, type);
     const state     = states && states[type] || null;
     return new StateBus({ ...props, transport, state });
   }
 
-  public getTypes(contextName: string, category: string, kind: string) {
-    const path = join(this.root, contextName, category + '.' + kind);
+  public getTypes(contextName: string, category: string, kind?: string) {
+    const path = join(this.root, contextName, category + (kind ? '.' + kind : ''));
     return safeRequire(path);
   }
 

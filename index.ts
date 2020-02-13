@@ -1,9 +1,10 @@
 //--
 import * as Process    from './src/Process';
 import * as Component  from './src/Component';
+import * as Connected  from './src/Connected';
 import { Logger }      from './src/Logger';
 
-export { Process, Component, Logger };
+export { Process, Component, Connected, Logger };
 
 //--
 import { Command as C } from './src/Command';

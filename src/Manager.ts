@@ -13,10 +13,11 @@ export type commandHandler = (state: S, command: C, emit?: emitter) => Array<E> 
 export type domainHandler  = (state: S, event: E) => S;
 
 export interface Events          { [name: string]: Typer };
-export interface CommandHandlers { [name: string]: commandHandler };
 export interface CommandBuses    { [name: string]: CommandBus };
-export interface DomainHandlers  { [name: string]: domainHandler };
 export interface Subscription    { abort: () => Promise<void> };
+
+export interface CommandHandlers { [name: string]: commandHandler };
+export interface DomainHandlers  { [name: string]: domainHandler };
 
 export interface props extends Component.props {
   commandBuses?:    CommandBuses;

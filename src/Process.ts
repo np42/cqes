@@ -292,9 +292,11 @@ export class Process extends Component.Component {
       throw new Error('Constructor CommandHandlers from ' + path + ' expected');
     if (!isConstructor(DomainHandlers))
       throw new Error('Constructor DomainHandlers from ' + path + ' expected');
-    const childProps      = { name: contextName + '.' + name, ...props };
-    const commandHandlers = new CommandHandlers(childProps);
-    const domainHandlers  = new DomainHandlers(childProps);
+    const baseProps       = { context: contextName, name };
+    const queryBuses      = this.getQueryBuses(contextName, name, props.views, { mode: 'client' });
+    const commandProps    = { ...baseProps, ...props, queryBuses };
+    const commandHandlers = new CommandHandlers(commandProps);
+    const domainHandlers  = new DomainHandlers({ ...baseProps, ...props });
     return { commandHandlers, domainHandlers };
   }
 

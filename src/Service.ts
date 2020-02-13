@@ -1,9 +1,7 @@
-import * as Component       from './Component';
+import * as Connected       from './Connected';
 import { CommandBus }       from './CommandBus';
 import { EventBus }         from './EventBus';
-import { QueryBus }         from './QueryBus';
 import { Event }            from './Event';
-import { Reply }            from './Reply';
 import { ExpireMap, genId } from 'cqes-util';
 import { Typer }            from 'cqes-type';
 import * as events          from 'events';
@@ -14,31 +12,27 @@ export type hook = (err: Error, event?: Event) => void;
 
 export interface CommandBuses  { [name: string]: CommandBus };
 export interface EventBuses    { [name: string]: EventBus };
-export interface QueryBuses    { [name: string]: QueryBus };
 export interface EventHandlers { [name: string]: eventHandler };
 export interface Subscription  { abort: () => Promise<void> };
 export interface HookInfo      { category: string; streamId: string; };
 
-export interface EventEmitter  extends events.EventEmitter {
+export interface EventEmitter extends events.EventEmitter {
   clear(): void;
 }
 
-export interface props extends Component.props {
+export interface props extends Connected.props {
   commandBuses?:  CommandBuses;
   eventBuses?:    EventBuses;
   eventHandlers?: EventHandlers;
-  queryBuses?:    QueryBuses;
 }
 
 const noop = () => {};
 
-export class Service extends Component.Component {
+export class Service extends Connected.Connected {
   protected commandBuses:  CommandBuses;
   protected eventBuses:    EventBuses;
-  protected queryBuses:    QueryBuses;
   protected eventHandlers: EventHandlers;
   protected commandTypes:  { [set: string]: { [name: string]: Typer } };
-  protected queryTypes:    { [set: string]: { [name: string]: Typer } };
   protected subscriptions: Array<Subscription>;
   protected callbacks:     ExpireMap<string, { hook: hook, info: HookInfo }>;
 
@@ -46,16 +40,12 @@ export class Service extends Component.Component {
     super(props);
     this.commandBuses  = props.commandBuses  || {};
     this.eventBuses    = props.eventBuses    || {};
-    this.queryBuses    = props.queryBuses    || {};
     this.eventHandlers = props.eventHandlers || {};
     this.commandTypes  = {};
-    this.queryTypes    = {};
     this.subscriptions = [];
     this.callbacks     = new ExpireMap();
     this.callbacks.on('expired', ({ value: { hook } }) => hook(new Error('Timed out')));
-  }
 
-  public start(): Promise<void> {
     let lastTransactionId = <string>null;
     this.eventHandlers.any = (event: Event) => {
       const transactionId = (event.meta || {}).transactionId;
@@ -68,9 +58,10 @@ export class Service extends Component.Component {
       lastTransactionId = transactionId;
       return Promise.resolve();
     };
-    const qSubscriptions = Object.keys(this.queryBuses).map(name => {
-      return this.queryBuses[name].start();
-    });
+  }
+
+  public start(): Promise<void> {
+    const superPromise = super.start();
     const eSubscriptions = Object.keys(this.eventBuses).map(name => {
       const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
       return this.eventBuses[name].psubscribe(subscription, (event: Event) => {
@@ -78,7 +69,7 @@ export class Service extends Component.Component {
       });
     });
     const cChannels = Object.values(this.commandBuses).map(bus => <any>bus.start());
-    return <any> Promise.all([eSubscriptions, qSubscriptions, ...cChannels]);
+    return <any> Promise.all([superPromise, ...eSubscriptions, ...cChannels]);
   }
 
   protected async handleServiceEvent(event: Event): Promise<void> {
@@ -100,34 +91,6 @@ export class Service extends Component.Component {
     if (shortname in this.eventHandlers) return this.eventHandlers[shortname];
     const wildname = 'any';
     if (wildname in this.eventHandlers) return this.eventHandlers[wildname];
-  }
-
-  protected query(target: string, data: any, meta?: any): EventEmitter {
-    const ee = <EventEmitter>new events.EventEmitter();
-    ee.clear = noop;
-    ee.on('error', (error: Error) => {
-      if (ee.listenerCount('error') == 1) throw error;
-    });
-    ee.on('end', (reply: Reply) => {
-      if (ee.listenerCount(reply.type) == 0 && ee.listenerCount('end') == 1)
-        this.logger.warn('Reply %blue not handled\n%j', reply.type, reply.data);
-    });
-    setImmediate(() => {
-      const [context, view, method] = target.split(':')
-      if (!(view in this.queryBuses)) {
-        ee.emit('error', new Error('View ' + target + ' not found'));
-      } else {
-        const typer = this.getQueryTyper(context, view, method);
-        if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
-        this.queryBuses[view].request(method, data, meta)
-          .catch((error: Error) => ee.emit('error', error))
-          .then((reply: Reply) => {
-            ee.emit(reply.type, reply.data);
-            ee.emit('end', reply);
-          });
-      }
-    });
-    return ee;
   }
 
   protected command(target: string, streamId: string, data: any, meta?: any): EventEmitter {
@@ -159,17 +122,6 @@ export class Service extends Component.Component {
       }
     });
     return ee;
-  }
-
-  public getQueryTyper(context: string, view: string, method: string) {
-    const key = context + ':' + view;
-    if (key in this.queryTypes) {
-      return this.queryTypes[key][method];
-    } else {
-      const types = this.process.getTypes(context, view, 'queries');
-      this.queryTypes[key] = types;
-      return types[method];
-    }
   }
 
   public getCommandTyper(context: string, category: string, order: string) {

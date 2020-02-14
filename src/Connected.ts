@@ -1,10 +1,14 @@
 import * as Component       from './Component';
 import { QueryBus }         from './QueryBus';
 import { Reply }            from './Reply';
-import { Typer }            from 'cqes-type';
-import { EventEmitter }     from 'events';
+import { Typer, IValue }    from 'cqes-type';
+import * as events          from 'events';
 
 export interface QueryBuses { [name: string]: QueryBus };
+
+export interface EventEmitter extends events.EventEmitter {
+  expect<T>(type: { new (): T }): Promise<T>;
+}
 
 export interface props extends Component.props {
   queryBuses?:    QueryBuses;
@@ -29,7 +33,20 @@ export class Connected extends Component.Component {
   }
 
   protected query(target: string, data: any, meta?: any): EventEmitter {
-    const ee = new EventEmitter();
+    const ee = <EventEmitter>new events.EventEmitter();
+    (<any>ee).expect = (typer: IValue) => new Promise(resolve => {
+      let done = false;
+      ee.on(typer.name, result => {
+        done = true;
+        resolve(result);
+      });
+      ee.on('end', (reply: Reply) => {
+        if (done) return ;
+        if (reply.type == null) return resolve(null);
+        this.logger.warn('Query %s expected %s got %s', target, typer.name, reply.type);
+        return resolve(null);
+      });
+    });
     ee.on('error', (error: Error) => {
       if (ee.listenerCount('error') == 1) throw error;
     });

@@ -70,7 +70,7 @@ export class Transport extends Component.Component implements EventBus.Transport
     const date    = new Date();
     const isodate = date.toISOString();
     events.forEach((event, offset) => {
-      if (event.meta.persist === false) return ;
+      if (event.meta?.persist === false) return ;
       const number = event.number === -2 ? null : event.number;
       rows.push('(?, ?, ?, ?, ?, ?, ?, ?)');
       params.push( event.category, event.streamId, number, event.type
@@ -82,7 +82,7 @@ export class Transport extends Component.Component implements EventBus.Transport
     if (rows.length > 0) {
       const result = <any>await this.mysql.request(query + rows.join(', '), params);
       events.forEach((event, offset) => {
-        if (event.meta.persist !== false) {
+        if (event.meta?.persist !== false) {
           event.position = result.insertId + offset
           event.meta = Object.assign(event.meta || {}, { savedAt: date });
         }

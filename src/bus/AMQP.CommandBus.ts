@@ -98,7 +98,7 @@ export class Transport extends Component.Component implements CommandBus.Transpo
       try { await handler(command); }
       catch (e) {
         const err = <ConcurencyError>e;
-        if (err.retry) return nack(message, true, () => this.logger.log('Command retry'))
+        if (err.retry) return nack(message, true, () => this.logger.log('Command retry (OCC) %s', e))
         else return nack(message, false, () => this.logger.warn('Command rejected', err))
       }
       return ack(message)

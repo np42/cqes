@@ -16,6 +16,9 @@ import { State as S }   from './src/State';
 export { C, Q, R, E, S };
 
 //--
+export { emitter }   from './src/Manager';
+
+//--
 import { Index }      from './src/Index';
 import * as Service   from './src/Service';
 import * as View      from './src/View';

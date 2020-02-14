@@ -65,6 +65,7 @@ export class QueryBus extends Component.Component {
   }
 
   public requestQuery(query: Query): Promise<Reply> {
+    if (query.method in this.queries) query.data = this.queries[query.method].from(query.data);
     return this.transport.request(query);
   }
 

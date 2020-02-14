@@ -7,7 +7,8 @@ export type commandHandler = (commmand: Command) => Promise<void>;
 export class ConcurencyError extends Error {
   public retry: boolean;
   constructor(e: Error) {
-    super(e.toString().substring(7));
+    const message = String(e);
+    super(message.substring(message.indexOf(' ') + 1));
     this.stack = e.stack;
     this.retry = true;
   }

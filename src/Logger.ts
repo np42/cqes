@@ -172,7 +172,10 @@ export class Logger {
         case 's': {
           const arg = args.shift();
           if (typeof arg === 'string') return arg;
-          if (arg instanceof Error) return arg.toString();
+          if (arg instanceof Error) {
+            const message = String(arg);
+            return message.substring(message.indexOf(' ') + 1);
+          }
           return inspect(arg, { compact: true });
         } break ;
         case 'e': {

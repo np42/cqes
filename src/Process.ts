@@ -161,7 +161,7 @@ export class Process extends Component.Component {
       const stateBusProps = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
       const stateBus      = this.getStateBus({ ...stateBusProps, eventBus }, context.name, name);
       const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
-      const props   = { ...commonProps, commandBuses, stateBus, eventBus, events
+      const props   = { ...commonProps, process: this, commandBuses, stateBus, eventBus, events
                       , commandHandlers, domainHandlers
                       }
       const manager = new Manager.Manager(props);
@@ -181,7 +181,7 @@ export class Process extends Component.Component {
       const queryBusProps = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
       const queryBus      = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
       const { queryHandlers, updateHandlers } = this.getViewHandlers(context.name, name, viewProps);
-      const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
+      const props = { ...commonProps, process: this, queryBus, eventBuses, queryHandlers, updateHandlers };
       const view  = new View.View(props);
       this.logger.log('%blue %cyan.%cyan found', 'View', context.name, name);
       result.set(name, view);
@@ -219,14 +219,17 @@ export class Process extends Component.Component {
   }
 
   protected getCommandBuses(fromContext: string, name: string, targets: Array<string>, extra?: any) {
+    if (targets == null) return {};
     return this.getBuses<CommandBus>('CommandBus', fromContext, name, targets, extra);
   }
 
   protected getQueryBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
+    if (views == null) return {};
     return this.getBuses<QueryBus>('QueryBus', fromContext, name, views, extra);
   }
 
   protected getEventBuses(fromContext: string, name: string, streams: Array<string>, extra?: any) {
+    if (streams == null) return {};
     return this.getBuses<EventBus>('EventBus', fromContext, name, streams, extra);
   }
 
@@ -292,7 +295,7 @@ export class Process extends Component.Component {
       throw new Error('Constructor CommandHandlers from ' + path + ' expected');
     if (!isConstructor(DomainHandlers))
       throw new Error('Constructor DomainHandlers from ' + path + ' expected');
-    const baseProps       = { context: contextName, name };
+    const baseProps       = { context: contextName, name, process: this };
     const queryBuses      = this.getQueryBuses(contextName, name, props.views, { mode: 'client' });
     const commandProps    = { ...baseProps, ...props, queryBuses };
     const commandHandlers = new CommandHandlers(commandProps);
@@ -307,7 +310,8 @@ export class Process extends Component.Component {
       throw new Error('Constructor QueryHandlers from ' + path + ' expected');
     if (!isConstructor(UpdateHandlers))
       throw new Error('Constructor UpdateHandlers from ' + path + ' expected');
-    const childProps     = { name: contextName + '.' + name, ...props };
+    const queryBuses     = this.getQueryBuses(contextName, name, props.views, { mode: 'client' });
+    const childProps     = { context: contextName, name, process: this, ...props, queryBuses };
     const queryHandlers  = new QueryHandlers(childProps);
     const updateHandlers = new UpdateHandlers(childProps);
     return { queryHandlers, updateHandlers };

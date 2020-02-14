@@ -83,7 +83,8 @@ export class Manager extends Component.Component {
       try { await this.eventBus.emitEvents(events); }
       catch (e) { throw new ConcurencyError(e); }
       const newState = this.applyEvents(state, events);
-      this.stateBus.set(newState);
+      if (newState.revision > state.revision)
+        this.stateBus.set(newState);
     } finally {
       this.unlock(stateId);
     }

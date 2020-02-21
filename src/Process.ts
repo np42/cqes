@@ -8,7 +8,7 @@ import { StateBus }                from './StateBus';
 
 import * as Manager                from './Manager';
 import * as View                   from './View';
-import * as Projection             from './Projection';
+import * as Trigger                from './Trigger';
 import * as Service                from './Service';
 
 import { clone, merge, Tree, get, set
@@ -38,6 +38,13 @@ export interface props {
 
 interface RecordMap<T = any> { [name: string]: T; };
 interface BusEndpoint { name: string, slot: string };
+type SlotConfig = string
+  | { path:      string;
+      context?:  Context.Context;
+      slot?:     string;
+      as?:       string;
+      props?:    any;
+    };
 
 export class Process extends Component.Component {
   protected root:          string;
@@ -131,20 +138,20 @@ export class Process extends Component.Component {
   }
 
   protected setDefaultContextHandlersProps(props: Context.ContextProps) {
-    if (props.managers == null)    props.managers    = {};
-    if (props.views == null)       props.views       = {};
-    if (props.services == null)    props.services    = {};
-    if (props.projections == null) props.projections = {};
+    if (props.managers == null) props.managers = {};
+    if (props.views == null)    props.views    = {};
+    if (props.services == null) props.services = {};
+    if (props.triggers == null) props.triggers = {};
   }
 
   protected loadContexts() {
     for (const [contextName, contextProps] of this.contextsProps) {
       const context       = new Context.Context(contextProps);
-      context.managers    = this.getContextManagers(contextProps, contextProps.managers);
-      context.views       = this.getContextViews(contextProps, contextProps.views);
-      context.projections = this.getContextProjections(contextProps, contextProps.projections);
-      context.services    = this.getContextServices(contextProps, contextProps.services);
       this.contexts.set(contextName, context);
+      context.views    = this.getContextViews(contextProps, contextProps.views);
+      context.managers = this.getContextManagers(contextProps, contextProps.managers);
+      context.triggers = this.getContextTriggers(contextProps, contextProps.triggers);
+      context.services = this.getContextServices(contextProps, contextProps.services);
     }
   }
 
@@ -159,7 +166,7 @@ export class Process extends Component.Component {
       const events        = this.getTypes(context.name, name, 'events');
       const eventBus      = this.getEventBus(eventBusProps, context.name, name);
       const stateBusProps = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
-      const stateBus      = this.getStateBus({ ...stateBusProps, eventBus }, context.name, name);
+      const stateBus      = this.getStateBus(stateBusProps, context.name, name);
       const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
       const props   = { ...commonProps, process: this, commandBuses, stateBus, eventBus, events
                       , commandHandlers, domainHandlers
@@ -214,8 +221,23 @@ export class Process extends Component.Component {
     }, new Map());
   }
 
-  protected getContextProjections(context: Context.ContextProps, projectionsProps: RecordMap) {
-    return new Map();
+  protected getContextTriggers(context: Context.ContextProps, triggersProps: RecordMap) {
+    return Object.keys(triggersProps).reduce((result: Map<string, Trigger.Trigger>, name: string) => {
+      if (/^_/.test(name)) return this.logger.log('Skip trigger %s', name.substr(1)), result;
+      const triggerProps = triggersProps[name];
+      if (triggerProps.psubscribe == null || triggerProps.psubscribe.length === 0)
+        return this.logger.warn('Skip trigger %s, missing persistent subscription', name), result;
+      const commonProps   = { context: context.name, name };
+      const eventBuses    = this.getEventBuses(context.name, name, triggerProps.psubscribe);
+      const triggerHooks  = this.getTriggerHandlers(context.name, name, triggerProps);
+      const stateBusProps = { ...commonProps, ...context.StateBus, ...triggerProps.StateBus };
+      const stateBus      = this.getStateBus(stateBusProps, context.name, name);
+      const props         = { ...commonProps, process: this, eventBuses, stateBus, ...triggerHooks };
+      const trigger       = new Trigger.Trigger(props);
+      this.logger.log('%magenta %cyan.%cyan found', 'Trigger', context.name, name);
+      result.set(name, trigger);
+      return result;
+    }, new Map());
   }
 
   protected getCommandBuses(fromContext: string, name: string, targets: Array<string>, extra?: any) {
@@ -233,13 +255,14 @@ export class Process extends Component.Component {
     return this.getBuses<EventBus>('EventBus', fromContext, name, streams, extra);
   }
 
-  protected getBuses<T>(busType: string, from: string, name: string, slots: Array<string>, extra?: any) {
+  protected getBuses<T>(busType: string, from: string, name: string, slots: Array<SlotConfig>, extra?: any) {
     const result = <RecordMap<T>>{};
-    for (const path of slots) {
-      const { context, slot, as } = this.getBusPathContext(path, from);
-      if (context == null) throw new Error('Please define how to access ' + path + ' : ' + busType);
-      const props = { name, context: from, ...extra, ...context[busType] };
-      result[as] = <T>this['get' + busType](props, context.name, slot);
+    for (let item of slots) {
+      if (typeof item === 'string') item = { path: item };
+      Object.assign(item, this.getBusPathContext(item.path, from));
+      if (item.context == null) throw new Error('Please define how to access ' + item.path + ' : ' + busType);
+      const props = { name, context: from, ...extra, ...item.context[busType], ...item.props };
+      result[item.as] = <T>this['get' + busType](props, item.context.name, item.slot);
     }
     return result;
   }
@@ -261,13 +284,21 @@ export class Process extends Component.Component {
   }
 
   protected getQueryBus(props: any, contextName: string, view: string) {
-    const transport   = props.transport || './bus/HTTP.QueryBus';
-    const queries     = this.getTypes(contextName, view, 'queries');
-    const replies     = this.getTypes(contextName, view, 'replies');
-    const serverProps = props.mode == 'client'
-      ? this.contextsProps.get(contextName).views[view].QueryBus
-      : {};
-    return new QueryBus({ ...props, ...serverProps, transport, view, queries, replies });
+    const transport = props.transport || './bus/HTTP.QueryBus';
+    const queries   = this.getTypes(contextName, view, 'queries');
+    const replies   = this.getTypes(contextName, view, 'replies');
+    const parts     = { transport, view, queries, replies };
+    if (props.mode == 'client') {
+      const contextViews = this.contextsProps.get(contextName).views;
+      if (!(view in contextViews)) {
+        return new QueryBus({ ...props, ...parts });
+      } else {
+        const serverProps  = contextViews[view].QueryBus;
+        return new QueryBus({ ...props, ...serverProps, ...parts });
+      }
+    } else {
+      return new QueryBus({ ...props, ...parts });
+    }
   }
 
   protected getEventBus(props: any, contextName: string, stream: string) {
@@ -317,8 +348,16 @@ export class Process extends Component.Component {
     return { queryHandlers, updateHandlers };
   }
 
-  protected getProjectionHandlers(contextName: string, name: string) {
-
+  protected getTriggerHandlers(contextName: string, name: string, props: any) {
+    const path = join(this.root, contextName, name + '.Trigger');
+    const { TriggerHandlers, partition } = require(path);
+    if (!isConstructor(TriggerHandlers))
+      throw new Error('Constructor UpdateHandlers from ' + path + ' expected');
+    const queryBuses      = this.getQueryBuses(contextName, name, props.views, { mode: 'client' });
+    const commandBuses    = this.getCommandBuses(contextName, name, props.targets);
+    const childProps      = { context: contextName, name, process: this, ...props, queryBuses, commandBuses };
+    const triggerHandlers = new TriggerHandlers(childProps);
+    return { triggerHandlers, partition };
   }
 
   protected startComponents(): Promise<void> {
@@ -327,7 +366,7 @@ export class Process extends Component.Component {
       if (!(context instanceof Context.Context)) continue ;
       for (const [name, manager] of context.managers) promises.push(manager.start());
       for (const [name, view] of context.views) promises.push(view.start());
-      for (const [name, projection] of context.projections) promises.push(projection.start());
+      for (const [name, trigger] of context.triggers) promises.push(trigger.start());
       for (const [name, service] of context.services) promises.push(service.start());
     }
     return <any> Promise.all(promises);

@@ -1,58 +1,48 @@
 import * as Component      from './Component';
+import { Repository }      from './Repository';
 import { CommandBus }      from './CommandBus';
 import { ConcurencyError } from './CommandBus';
 import { EventBus }        from './EventBus';
-import { StateBus }        from './StateBus';
 import { Command as C }    from './Command';
 import { Event   as E }    from './Event';
 import { State   as S }    from './State';
-import { Typer }           from 'cqes-type';
 
 export type emitter        = (type: string, data: any, meta?: any) => void
 export type commandHandler = (state: S, command: C, emit?: emitter) => Array<E> | E | void;
-export type domainHandler  = (state: S, event: E) => S;
 
-export interface Events          { [name: string]: Typer };
 export interface CommandBuses    { [name: string]: CommandBus };
 export interface Subscription    { abort: () => Promise<void> };
 
 export interface CommandHandlers { [name: string]: commandHandler };
-export interface DomainHandlers  { [name: string]: domainHandler };
 
 export interface props extends Component.props {
   commandBuses?:    CommandBuses;
-  stateBus?:        StateBus;
-  eventBus?:        EventBus;
+  repository?:      Repository;
   commandHandlers?: CommandHandlers;
-  domainHandlers?:  DomainHandlers;
-  events?:          Events;
+  eventBus?:        EventBus;
 }
 
 export class Manager extends Component.Component {
   protected commandBuses:    CommandBuses;
-  protected stateBus:        StateBus;
-  protected eventBus:        EventBus;
-  protected commandHandlers: CommandHandlers;
-  protected domainHandlers:  DomainHandlers;
-  protected events:          Events;
   protected subscriptions:   Array<Subscription>;
   protected queues:          Map<string, Array<() => void>>;
+  protected repository:      Repository;
+  protected commandHandlers: CommandHandlers;
+  protected eventBus:        EventBus;
 
   constructor(props: props) {
     super(props);
     this.commandBuses    = props.commandBuses    || {};
-    this.eventBus        = props.eventBus;
-    this.stateBus        = props.stateBus;
-    this.commandHandlers = props.commandHandlers || {};
-    this.domainHandlers  = props.domainHandlers  || {};
-    this.events          = props.events          || {};
     this.subscriptions   = [];
     this.queues          = new Map();
+    this.repository      = props.repository;
+    this.commandHandlers = props.commandHandlers || {};
+    this.eventBus        = props.eventBus;
   }
 
   public async start(): Promise<void> {
     await this.eventBus.start();
-    await this.stateBus.start();
+    await this.repository.start();
     await Promise.all(Object.values(this.commandBuses).map(async bus => {
       await bus.start();
       await bus.listen((command: C) => this.handleManagerCommand(command))
@@ -72,35 +62,30 @@ export class Manager extends Component.Component {
   }
 
   protected async handleManagerCommand(command: C): Promise<void> {
-    const stateId = command.stream;
-    await this.lock(stateId);
+    const stream = command.stream;
+    await this.lock(stream);
     try {
       this.logger.log('%red %s %j', command.order, command.streamId, command.data);
-      const state = await this.getState(stateId);
+      const state = await this.repository.get(stream);
       const events = await this.handleCommand(state, command);
       for (let i = 0; i < events.length; i += 1)
         events[i].number = state.revision + i + 1;
-      try { await this.eventBus.emitEvents(events); }
-      catch (e) { throw new ConcurencyError(e); }
-      const newState = this.applyEvents(state, events);
-      if (newState.revision > state.revision)
-        this.stateBus.set(newState);
+      try {
+        await this.eventBus.emitEvents(events);
+      } catch (e) {
+        this.repository.expire(stream);
+        throw new ConcurencyError(e);
+      }
     } finally {
-      this.unlock(stateId);
+      process.nextTick(() => this.unlock(stream));
     }
   }
 
-  protected getState(stateId: string): Promise<S> {
-    const offset = stateId.indexOf('-');
-    const category = stateId.substr(0, offset);
-    const streamId = stateId.substr(offset + 1);
-    return this.stateBus.get(stateId, async (state: S) => {
-      await this.eventBus.readFrom(category, streamId, state.revision + 1, (event: E) => {
-        state = this.applyEvent(state, event);
-        return Promise.resolve();
-      });
-      return state;
-    });
+  protected lock(key: string): Promise<void> {
+    const queue = this.queues.get(key);
+    if (queue != null) return new Promise(resolve => queue.push(resolve));
+    this.queues.set(key, []);
+    return Promise.resolve();
   }
 
   protected async handleCommand(state: S, command: C): Promise<Array<E>> {
@@ -136,45 +121,6 @@ export class Manager extends Component.Component {
     }
   }
 
-  protected applyEvents(state: S, events: Array<E>) {
-    for (const event of events) {
-      const newState = this.applyEvent(state, event);
-      if (!(newState instanceof S)) continue ;
-      state = newState;
-    }
-    return state;
-  }
-
-  protected applyEvent(state: S, event: E) {
-    if (event.meta.persist === false) return state;
-    const applier = this.domainHandlers[event.type];
-    if (applier != null) {
-      try {
-        const typer = this.events[event.type];
-        if (typer != null) event.data = typer.from(event.data);
-      } catch (e) {
-        debugger;
-        this.logger.warn('Failed on Event: %s-%s %d', event.category, event.streamId, event.type);
-        this.logger.warn('Data: %s', event.data);
-        throw e;
-      }
-      this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
-      const newState = applier.call(this.domainHandlers, state, event) || state;
-      newState.revision = state.revision + 1;
-      return newState;
-    } else {
-      state.revision += 1;
-      return state;
-    }
-  }
-
-  protected lock(key: string): Promise<void> {
-    const queue = this.queues.get(key);
-    if (queue != null) return new Promise(resolve => queue.push(resolve));
-    this.queues.set(key, []);
-    return Promise.resolve();
-  }
-
   protected unlock(key: string): void {
     const queue = this.queues.get(key);
     if (queue.length > 0) setImmediate(queue.shift());
@@ -184,8 +130,8 @@ export class Manager extends Component.Component {
   public async stop(): Promise<void> {
     await Promise.all(this.subscriptions.map(subscription => subscription.abort()));
     await Promise.all(Object.values(this.commandBuses).map(bus => bus.stop()));
+    await this.repository.stop();
     await this.eventBus.stop();
-    await this.stateBus.stop();
   }
 
 }

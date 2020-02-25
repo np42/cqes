@@ -8,6 +8,7 @@ export interface Transport {
   start:       () => Promise<void>;
   save:        (events: Array<E>) => Promise<void>;
   readFrom:    (category: string, id: string, number: number, handler: eventHandler) => Promise<void>;
+  readLast:    (category: string, id: string, count: number) => Promise<Array<E>>;
   subscribe:   (category: string, handler: eventHandler) => Promise<Subscription>;
   psubscribe:  (name: string, category: string, handler: eventHandler) => Promise<Subscription> ;
   stop:        () => Promise<void>;
@@ -67,6 +68,10 @@ export class EventBus extends Component.Component {
 
   public readFrom(category: string, streamId: string, number: number, handler: eventHandler) {
     return this.transport.readFrom(category, streamId, number, handler);
+  }
+
+  public readLast(category: string, streamId: string, count: number) {
+    return this.transport.readLast(category, streamId, count);
   }
 
 }

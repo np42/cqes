@@ -88,7 +88,9 @@ export class Transport extends Component.Component implements EventBus.Transport
         }
       });
     }
-    const channel = '/' + this.context + '/' + this.name;
+    const context  = this.context;
+    const category = events[0].category;
+    const channel  = '/' + context + '/' + category;
     this.redis.publish(channel, JSON.stringify(events));
   }
 
@@ -124,6 +126,24 @@ export class Transport extends Component.Component implements EventBus.Transport
             resolve()
           });
       });
+    });
+  }
+
+  public async readLast(category: string, id: string, count: number): Promise<Array<Event>> {
+    const sql =
+      [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
+      , 'FROM `@events`'
+      , 'WHERE `category` = ? AND `streamId` = ?'
+      , 'ORDER BY `number` DESC'
+      , 'LIMIT ?'
+      ].join(' ');
+    const rows = await this.mysql.request(sql, [category, id, count]);
+    return rows.map(row => {
+      const data = JSON.parse(row.data);
+      const meta = { savedAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
+      const event = new Event(category, id, row.number, row.type, data, meta);
+      event.position = row.eventId;
+      return event;
     });
   }
 

@@ -7,6 +7,7 @@ import { EventBus }                from './EventBus';
 import { StateBus }                from './StateBus';
 
 import * as Manager                from './Manager';
+import * as Repository             from './Repository';
 import * as View                   from './View';
 import * as Trigger                from './Trigger';
 import * as Service                from './Service';
@@ -34,6 +35,7 @@ export interface props {
   name:    string;
   root?:   string;
   config?: string;
+  argv?:   Array<string>;
 }
 
 interface RecordMap<T = any> { [name: string]: T; };
@@ -52,6 +54,7 @@ export class Process extends Component.Component {
   protected vars:          Map<string, string>;
   protected contextsProps: Map<string, Context.ContextProps>;
   protected contexts:      Map<string, Context.Context>;
+  readonly  argv:          Array<string>;
 
   static async readYaml(filepath: string) {
     const content = await new Promise((resolve, reject) => {
@@ -65,7 +68,12 @@ export class Process extends Component.Component {
         }
       });
     });
-    return Tree.replace(content, (holder, key) => {
+    return Process.inflateConfig(content);
+  }
+
+  static inflateConfig(data: any, root?: any) {
+    if (root == null) root = data;
+    return Tree.replace(data, (holder, key) => {
       if (!(holder instanceof Object)) return holder;
       if (holder instanceof Array) return holder;
       const result = {};
@@ -75,7 +83,7 @@ export class Process extends Component.Component {
           const target     = key.substr(lastOffset + 1);
           const skip       = lastOffset === 1 ? 1 : Number(target);
           const source     = key.substring(2, lastOffset > 1 ? lastOffset : key.length);
-          const value      = merge(get(content, source), holder[key]);
+          const value      = merge(get(root, source), Process.inflateConfig(holder[key], root));
           const output     = isNaN(skip) ? target : source.split('.').slice(skip).join('.');
           set(result, output, value);
         } else {
@@ -91,6 +99,7 @@ export class Process extends Component.Component {
     super({ name: props.name, logger: 'Process:' + props.name });
     this.root          = props.root || process.cwd();
     this.configFile    = join(this.root, props.config || 'cqesconfig.yml');
+    this.argv          = props.argv || [];
     this.vars          = new Map();
     this.contextsProps = new Map();
     this.contexts      = new Map();
@@ -127,6 +136,7 @@ export class Process extends Component.Component {
 
   protected async loadConfig() {
     const configFileContent = await Process.readYaml(this.configFile);
+    //console.log(JSON.stringify(configFileContent[this.name], null, 2));
     const contexts = configFileContent[this.name] || {};
     for (const contextName in contexts) {
       this.logger.log('%magenta %cyan found', 'Context', contextName);
@@ -160,7 +170,7 @@ export class Process extends Component.Component {
       if (/^_/.test(name)) return this.logger.log('Skip manager %s', name.substr(1)), result;
       const managerProps = managersProps[name];
       if (managerProps.listen == null) managerProps.listen = [name];
-      const commonProps   = { context: context.name, name };
+      const commonProps   = { context: context.name, name, process: this };
       const commandBuses  = this.getCommandBuses(context.name, name, managerProps.listen);
       const eventBusProps = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
       const events        = this.getTypes(context.name, name, 'events');
@@ -168,9 +178,9 @@ export class Process extends Component.Component {
       const stateBusProps = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
       const stateBus      = this.getStateBus(stateBusProps, context.name, name);
       const { commandHandlers, domainHandlers } = this.getManagerHandlers(context.name, name, managerProps);
-      const props   = { ...commonProps, process: this, commandBuses, stateBus, eventBus, events
-                      , commandHandlers, domainHandlers
-                      }
+      const repositoryProps = { stateBus, eventBus, events, domainHandlers };
+      const repository      = new Repository.Repository({ ...commonProps, ...repositoryProps });
+      const props   = { ...commonProps, commandBuses, repository, commandHandlers, eventBus };
       const manager = new Manager.Manager(props);
       this.logger.log('%red %cyan.%cyan found', 'Manager', context.name, name);
       result.set(name, manager);
@@ -181,7 +191,7 @@ export class Process extends Component.Component {
   protected getContextViews(context: Context.ContextProps, viewsProps: RecordMap) {
     return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip view %s', name.substr(1)), result;
-      const viewProps   = viewsProps[name];
+      const viewProps     = viewsProps[name];
       if (viewProps.psubscribe == null) viewProps.psubscribe = [];
       const commonProps   = { context: context.name, name };
       const eventBuses    = this.getEventBuses(context.name, name, viewProps.psubscribe);
@@ -200,14 +210,17 @@ export class Process extends Component.Component {
     return Object.keys(servicesProps).reduce((result: Map<string, Service.Service>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip service %s', name.substr(1)), result;
       const serviceProps = servicesProps[name];
-      if (serviceProps.targets == null) serviceProps.targets = [];
-      if (serviceProps.views == null) serviceProps.views = [];
+      if (serviceProps.targets == null)    serviceProps.targets    = [];
+      if (serviceProps.views == null)      serviceProps.views      = [];
       if (serviceProps.psubscribe == null) serviceProps.psubscribe = [];
-      const commandBuses = this.getCommandBuses(context.name, name, serviceProps.targets);
-      const queryBuses   = this.getQueryBuses(context.name, name, serviceProps.views, { mode: 'client' });
-      const eventBuses   = this.getEventBuses(context.name, name, serviceProps.psubscribe);
-      const buses        = { eventBuses, commandBuses, queryBuses };
-      const props = { context: context.name, name, process: this, ...serviceProps, ...buses };
+      if (serviceProps.streams == null)    serviceProps.streams    = [];
+      const commandBuses  = this.getCommandBuses(context.name, name, serviceProps.targets);
+      const queryBuses    = this.getQueryBuses(context.name, name, serviceProps.views, { mode: 'client' });
+      const eventBuses1   = this.getEventBuses(context.name, name, serviceProps.psubscribe);
+      const subscriptions = Object.keys(eventBuses1);
+      const eventBuses2   = this.getEventBuses(context.name, name, serviceProps.streams);
+      const buses         = { eventBuses: { ...eventBuses1, ...eventBuses2 }, commandBuses, queryBuses };
+      const props = { context: context.name, name, process: this, ...serviceProps, ...buses, subscriptions };
       const path  = join(this.root, context.name, name + '.Service');
       const SubService = require(path)[name];
       if (SubService == null)

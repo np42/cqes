@@ -21,6 +21,7 @@ export interface CommandEventEmitter extends events.EventEmitter {
 
 export interface props extends Connected.props {
   eventBuses?:    EventBuses;
+  subscriptions?: Array<string>;
   eventHandlers?: EventHandlers;
 }
 
@@ -29,14 +30,14 @@ const noop = () => {};
 export class Service extends Connected.Connected {
   protected eventBuses:    EventBuses;
   protected eventHandlers: EventHandlers;
-  protected subscriptions: Array<Subscription>;
+  protected subscriptions: Array<string | Subscription>;
   protected callbacks:     ExpireMap<string, { hook: hook, info: HookInfo }>;
 
   constructor(props: props) {
     super(props);
     this.eventBuses    = props.eventBuses    || {};
     this.eventHandlers = props.eventHandlers || {};
-    this.subscriptions = [];
+    this.subscriptions = props.subscriptions || [];
     this.callbacks     = new ExpireMap();
     this.callbacks.on('expired', ({ value: { hook, info: { ee } } }) => {
       hook(new Error('Timed out'))
@@ -56,15 +57,24 @@ export class Service extends Connected.Connected {
     };
   }
 
-  public start(): Promise<void> {
-    const superPromise = super.start();
-    const eSubscriptions = Object.keys(this.eventBuses).map(name => {
+  public async start(): Promise<void> {
+    const superPromise   = await super.start();
+    const eSubscriptions = this.subscriptions.map((name: string) => {
+      if (typeof name != 'string') return Promise.resolve(null);
       const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
       return this.eventBuses[name].psubscribe(subscription, (event: Event) => {
         return this.handleServiceEvent(event)
       });
     });
-    return <any> Promise.all([superPromise, ...<any>eSubscriptions]);
+    return new Promise((resolve, reject) => {
+      Promise.all(eSubscriptions).then(result => {
+        for (let i = 0; i < result.length; i += 1) {
+          if (result[i] != null)
+            this.subscriptions[i] = result[i];
+        }
+        return resolve();
+      }).catch(reject);
+    });
   }
 
   protected async handleServiceEvent(event: Event): Promise<void> {
@@ -113,7 +123,10 @@ export class Service extends Connected.Connected {
   }
 
   public stop(): Promise<void> {
-    return <any> Promise.all(this.subscriptions.map(subscription => subscription.abort()));
+    return <any> Promise.all(this.subscriptions.map(subscription => {
+      if (typeof subscription != 'string')
+        subscription.abort();
+    }));
   }
 
 }

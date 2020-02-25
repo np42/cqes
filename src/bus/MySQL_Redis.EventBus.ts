@@ -156,6 +156,7 @@ export class Transport extends Component.Component implements EventBus.Transport
       return Promise.resolve();
     };
     const subscription = new Subscription(handler, abort);
+    this.logger.log('Subscribing %s', channel);
     this.redis.subscribe(channel);
     this.redis.on('message', (channel, message) => {
       const events = JSON.parse(message);

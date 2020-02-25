@@ -37,11 +37,11 @@ export class View extends Service.Service {
 
   constructor(props: props) {
     super({ logger: 'View:' + props.name, ...props });
-    this.eventBuses       = props.eventBuses     || {};
-    this.queryBus         = props.queryBus;
-    this.eventHandlers    = props.updateHandlers || {};
-    this.queryHandlers    = props.queryHandlers  || {};
-    this.subscriptions    = [];
+    this.eventBuses     = props.eventBuses     || {};
+    this.queryBus       = props.queryBus;
+    this.eventHandlers  = props.updateHandlers || {};
+    this.queryHandlers  = props.queryHandlers  || {};
+    this.subscriptions  = [];
   }
 
   public async start(): Promise<void> {

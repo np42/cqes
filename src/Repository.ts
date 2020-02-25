@@ -14,7 +14,6 @@ export interface DomainHandlers  { [name: string]: domainHandler };
 export interface props extends Component.props {
   stateBus?:        StateBus;
   eventBus?:        EventBus;
-  events?:          Events;
   domainHandlers?:  DomainHandlers;
   cacheSize?:       number;
 }
@@ -25,7 +24,6 @@ export class Repository extends Component.Component {
   protected eventBus:       EventBus;
   protected subscription:   Subscription;
   protected domainHandlers: DomainHandlers;
-  protected events:         Events;
 
   constructor(props: props) {
     super(props);
@@ -33,7 +31,6 @@ export class Repository extends Component.Component {
     this.cache          = new CachingMap({ size: props.cacheSize || 1000 });
     this.eventBus       = props.eventBus;
     this.domainHandlers = props.domainHandlers;
-    this.events         = props.events;
   }
 
   public async start(): Promise<void> {
@@ -82,15 +79,6 @@ export class Repository extends Component.Component {
     if (event.meta.persist === false) return state;
     const applier = this.domainHandlers[event.type];
     if (applier != null) {
-      try {
-        const typer = this.events[event.type];
-        if (typer != null) event.data = typer.from(event.data);
-      } catch (e) {
-        debugger;
-        this.logger.warn('Failed on Event: %s-%s %d', event.category, event.streamId, event.type);
-        this.logger.warn('Data: %s', event.data);
-        throw e;
-      }
       this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
       const newState = applier.call(this.domainHandlers, state, event) || state;
       newState.revision = state.revision + 1;

@@ -38,6 +38,7 @@ export class Trigger extends Component.Component {
   }
 
   public async start(): Promise<void> {
+    if (this.started) return ;
     await super.start();
     await this.stateBus.start()
     await this.triggerHandlers.start();
@@ -83,6 +84,7 @@ export class Trigger extends Component.Component {
   }
 
   public async stop() {
+    if (!this.started) return ;
     await Promise.all(Object.values(this.subscriptions).map(sub => sub.abort()));
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.stop()));
     await this.triggerHandlers.stop();

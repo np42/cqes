@@ -44,6 +44,7 @@ export class Manager extends Component.Component {
   }
 
   public async start(): Promise<void> {
+    if (this.started) return ;
     await this.eventBus.start();
     await this.repository.start();
     await this.commandHandlers.start();
@@ -129,6 +130,7 @@ export class Manager extends Component.Component {
   }
 
   public async stop(): Promise<void> {
+    if (!this.started) return ;
     await Promise.all(this.subscriptions.map(subscription => subscription.abort()));
     await Promise.all(Object.values(this.commandBuses).map(bus => bus.stop()));
     await this.commandHandlers.stop();

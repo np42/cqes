@@ -76,7 +76,10 @@ export class Service extends Component.Component {
   }
 
   public async start(): Promise<void> {
+    if (this.started) return ;
     await super.start();
+    await Promise.all(Object.values(this.commandBuses).map(bus => bus.start()));
+    await Promise.all(Object.values(this.queryBuses).map(bus => bus.start()));
     await this.eventHandlers.start();
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.start()));
     this.subscriptions = await Promise.all(this.subscriptions.map((name: string) => {
@@ -131,6 +134,7 @@ export class Service extends Component.Component {
   }
 */
   public async stop(): Promise<void> {
+    if (!this.started) return ;
     await Promise.all(this.subscriptions.map(sub => (<any>sub).abort()));
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.stop()));
     await this.eventHandlers.stop();

@@ -44,4 +44,19 @@ export class Handlers extends Component.Component {
     StateAble.extend(this, props);
   }
 
+  public async start(): Promise<void> {
+    if (this.started) return ;
+    await super.start();
+    await Promise.all(Object.values(this.queryBuses).map(bus => bus.start()));
+    await Promise.all(Object.values(this.commandBuses).map(bus => bus.start()));
+    await Promise.all(Object.values(this.repositories).map(repo => repo.start()));
+  }
+
+  public async stop(): Promise<void> {
+    if (!this.started) return ;
+    await Promise.all(Object.values(this.queryBuses).map(bus => bus.stop()));
+    await Promise.all(Object.values(this.commandBuses).map(bus => bus.stop()));
+    await Promise.all(Object.values(this.repositories).map(repo => repo.stop()));
+    await super.stop();
+  }
 }

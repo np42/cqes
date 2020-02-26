@@ -38,6 +38,7 @@ export class View extends Component.Component {
   }
 
   public async start(): Promise<void> {
+    if (this.started) return ;
     await super.start();
     await this.updateHandlers.start();
     await this.queryHandlers.start();
@@ -85,6 +86,7 @@ export class View extends Component.Component {
   }
 
   public async stop() {
+    if (!this.started) return ;
     await Promise.all(this.subscriptions.map(sub => sub.abort()));
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.stop()));
     await this.queryBus.stop();

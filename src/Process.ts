@@ -176,7 +176,8 @@ export class Process extends Component.Component {
       const eventBus            = this.getEventBus(eventBusProps, context.name, name);
       const stateBusProps       = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
       const stateBus            = this.getStateBus(stateBusProps, context.name, name);
-      const { domainHandlers }  = this.getDomainHandlers(context.name, name, managerProps.repository);
+      const domainProps         = { ...commonProps, ...managerProps.repository };
+      const { domainHandlers }  = this.getDomainHandlers(context.name, name, domainProps);
       const repositoryProps     = { stateBus, eventBus, domainHandlers };
       const repository          = new Repository.Repository({ ...commonProps, ...repositoryProps });
       const cHandlersProps      = { ...commonProps, queryBuses, ...managerProps };
@@ -193,31 +194,41 @@ export class Process extends Component.Component {
   protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
     return Object.keys(servicesProps).reduce((result: Map<string, Service.Service>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip service %s', name.substr(1)), result;
-      const path               = join(this.root, context.name, name + '.Service');
-      const Package            = require(path);
+      const path            = join(this.root, context.name, name + '.Service');
+      const Package         = require(path);
       if (Package == null) throw new Error('Missing ' + name + ' in ' + path);
       if (!('Service' in Package)) Package.Service = Service;
-      const serviceProps       = servicesProps[name];
-      if (serviceProps.targets == null)    serviceProps.targets    = [];
-      if (serviceProps.views == null)      serviceProps.views      = [];
-      if (serviceProps.psubscribe == null) serviceProps.psubscribe = [];
-      if (serviceProps.streams == null)    serviceProps.streams    = [];
-      const commonProps        = { context: context.name, name, process: this };
-      const commandBuses       = this.getCommandBuses(context.name, name, serviceProps.targets);
-      const queryBuses         = this.getQueryBuses(context.name, name, serviceProps.views);
-      const eventBuses1        = this.getEventBuses(context.name, name, serviceProps.psubscribe);
-      const eventBuses2        = this.getEventBuses(context.name, name, serviceProps.streams);
-      const eventBuses         = { ...eventBuses1, ...eventBuses2 };
-      const subscriptions      = Object.keys(eventBuses1);
-      const eventBusProps      = { ...commonProps, ...context.EventBus, ...serviceProps.EventBus };
-      const eventBus           = this.getEventBus(eventBusProps, context.name, name);
-      const repositories       = this.getRepositories(context.name, name, serviceProps.repositories);
-      const eHandlersProps     = { queryBuses, repositories };
-      const { eventHandlers }  = new Package.EventHandlers({ ...commonProps, ...eHandlersProps, ...serviceProps });
-      const buses              = { eventBuses, commandBuses, queryBuses };
-      const props              = { ...commonProps, ...serviceProps, buses, subscriptions, eventHandlers };
-      const service            = new Package.Service(props);
-      eventHandlers.service    = service;
+      const serviceProps    = servicesProps[name];
+      if (serviceProps.targets == null)      serviceProps.targets      = [];
+      if (serviceProps.views == null)        serviceProps.views        = [];
+      if (serviceProps.psubscribe == null)   serviceProps.psubscribe   = [];
+      if (serviceProps.streams == null)      serviceProps.streams      = [];
+      if (serviceProps.repositories == null) serviceProps.repositories = [];
+      const commonProps     = { context: context.name, name, process: this };
+      const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.targets);
+      const queryBuses      = this.getQueryBuses(context.name, name, serviceProps.views);
+      const eventBuses1     = this.getEventBuses(context.name, name, serviceProps.psubscribe);
+      const eventBuses2     = this.getEventBuses(context.name, name, serviceProps.streams);
+      const eventBuses      = { ...eventBuses1, ...eventBuses2 };
+      const subscriptions   = Object.keys(eventBuses1);
+      const eventBusProps   = { ...commonProps, ...context.EventBus, ...serviceProps.EventBus };
+      const eventBus        = this.getEventBus(eventBusProps, context.name, name);
+      const repoStateBus    = { ...context.StateBus, ...serviceProps.StateBus };
+      const repoEventBus    = { ...context.EventBus, ...serviceProps.EventBus };
+      const repoProps       = { ...serviceProps, StateBus: repoStateBus, EventBus: repoEventBus };
+      const repositories    = this.getRepositories(context.name, name, serviceProps.repositories, repoProps);
+      const buses           = { eventBuses, commandBuses, queryBuses };
+      const props           = { ...commonProps, ...serviceProps, ...buses, subscriptions, eventHandlers: null };
+      if ('EventHandlers' in Package) {
+        const eHandlersProps    = { queryBuses, repositories };
+        const { eventHandlers } = new Package.EventHandlers({ ...commonProps, ...eHandlersProps, ...serviceProps });
+        props.eventHandlers = eventHandlers;
+      } else {
+        const eHandlersProps    = { queryBuses: {}, repositories: {} };
+        props.eventHandlers     = new Service.Event.Handlers({ ...commonProps, ...eHandlersProps });
+      }
+      const service               = new Package[name](props);
+      props.eventHandlers.service = service;
       if (!(service instanceof Service.Service))
         throw new Error('Service ' + name + ' must be type of Service');
       this.logger.log('%yellow %cyan.%cyan found', 'Service', context.name, name);
@@ -237,7 +248,10 @@ export class Process extends Component.Component {
       const eventBuses         = this.getEventBuses(context.name, name, viewProps.psubscribe);
       const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
       const queryBus           = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
-      const repositories       = this.getRepositories(context.name, name, viewProps.repositories);
+      const repoStateBus       = { ...context.StateBus, ...viewProps.StateBus };
+      const repoEventBus       = { ...context.EventBus, ...viewProps.EventBus };
+      const repoProps          = { ...viewProps, StateBus: repoStateBus, EventBus: repoEventBus };
+      const repositories       = this.getRepositories(context.name, name, viewProps.repositories, repoProps);
       const commandBuses       = this.getCommandBuses(context.name, name, viewProps.targets);
       const queryBuses         = this.getQueryBuses(context.name, name, viewProps.views);
       const handlersDeps       = { queryBuses, commandBuses, repositories };
@@ -350,13 +364,20 @@ export class Process extends Component.Component {
     return new StateBus({ ...props, transport, state });
   }
 
-  protected getRepositories(contextName: string, name: string, repositories: Array<string>) {
+  protected getRepositories(contextName: string, name: string, repositories: Array<string>, extra: any) {
     const result = {};
     repositories.forEach(name => {
-      const config     = this.parseRepository(name);
-      const props      = { context: contextName, name, process: this, ...config.props };
-      const repository = new Repository.Repository(props);
-      result[config.name] = repository;
+      const commonProps        = { context: contextName, name, process: this };
+      const config             = this.parseRepository(name);
+      const stateBusProps      = { ...commonProps, ...extra.StateBus };
+      const stateBus           = this.getStateBus(stateBusProps, contextName, name);
+      const eventBusProps      = { ...commonProps, ...extra.EventBus };
+      const eventBus           = this.getEventBus(eventBusProps, config.context, config.name);
+      const { domainHandlers } = this.getDomainHandlers(config.context, config.name, extra);
+      const deps               = { stateBus, eventBus, domainHandlers };
+      const props              = { ...commonProps, ...deps, ...config.props };
+      const repository         = new Repository.Repository(props);
+      result[config.name]      = repository;
     });
     return result;
   }

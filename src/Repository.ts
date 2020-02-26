@@ -1,20 +1,21 @@
 import * as Component             from './Component';
 import { StateBus }               from './StateBus';
 import { EventBus, Subscription } from './EventBus';
+import * as Domain                from './DomainHandlers';
 import { State as S }             from './State';
 import { Event as E }             from './Event';
 import { Typer }                  from 'cqes-type';
 const CachingMap                  = require('caching-map');
 
-export type domainHandler  = (state: S, event: E) => S;
+export { Domain };
 
 export interface Events          { [name: string]: Typer };
-export interface DomainHandlers  { [name: string]: domainHandler };
+export interface DomainHandlers  { [name: string]: Domain.handler };
 
 export interface props extends Component.props {
   stateBus?:        StateBus;
   eventBus?:        EventBus;
-  domainHandlers?:  DomainHandlers;
+  domainHandlers?:  Domain.Handlers;
   cacheSize?:       number;
 }
 
@@ -23,7 +24,7 @@ export class Repository extends Component.Component {
   protected cache:          Map<string, S>
   protected eventBus:       EventBus;
   protected subscription:   Subscription;
-  protected domainHandlers: DomainHandlers;
+  protected domainHandlers: Domain.Handlers;
 
   constructor(props: props) {
     super(props);
@@ -34,12 +35,12 @@ export class Repository extends Component.Component {
   }
 
   public async start(): Promise<void> {
-    await this.eventBus.start();
-    this.subscription = await this.eventBus.subscribe((event: E) => {
-      this.handleEvent(event);
-      return Promise.resolve();
-    });
+    if (this.started) return ;
+    await super.start();
     await this.stateBus.start();
+    await this.domainHandlers.start();
+    await this.eventBus.start();
+    this.subscription = await this.eventBus.subscribe(event => this.handleEvent(event));
   }
 
   public async get(stream: string) {
@@ -58,12 +59,13 @@ export class Repository extends Component.Component {
     return state;
   }
 
-  protected handleEvent(event: E) {
+  protected handleEvent(event: E): Promive<void> {
     const cached = this.cache.get(event.stream);
-    if (cached == null) return ;
+    if (cached == null) return Promise.resolve();
     const state = this.applyEvent(cached, event);
     this.cache.set(event.stream, state);
     this.stateBus.set(state);
+    return Promise.resolve();
   }
 
   protected applyEvents(state: S, events: Array<E>) {
@@ -94,9 +96,12 @@ export class Repository extends Component.Component {
   }
 
   public async stop(): Promise<void> {
+    if (!this.started) return ;
     await this.subscription.abort();
     await this.eventBus.stop();
+    await this.domainHandlers.stop();
     await this.stateBus.stop();
+    await super.stop();
   }
 
 }

@@ -59,7 +59,7 @@ export class Repository extends Component.Component {
     return state;
   }
 
-  protected handleEvent(event: E): Promive<void> {
+  protected handleEvent(event: E): Promise<void> {
     const cached = this.cache.get(event.stream);
     if (cached == null) return Promise.resolve();
     const state = this.applyEvent(cached, event);

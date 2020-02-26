@@ -173,17 +173,19 @@ export class Process extends Component.Component {
       const commonProps         = { context: context.name, name, process: this };
       const queryBuses          = this.getQueryBuses(context.name, name, managerProps.views);
       const eventBusProps       = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
-      const eventBus            = this.getEventBus(eventBusProps, context.name, name);
+      const eventBusIn          = this.getEventBus(eventBusProps, context.name, name);
+      const eventBusOut         = this.getEventBus(eventBusProps, context.name, name);
       const stateBusProps       = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
       const stateBus            = this.getStateBus(stateBusProps, context.name, name);
       const domainProps         = { ...commonProps, ...managerProps.repository };
       const { domainHandlers }  = this.getDomainHandlers(context.name, name, domainProps);
-      const repositoryProps     = { stateBus, eventBus, domainHandlers };
+      const repositoryProps     = { stateBus, eventBus: eventBusIn, domainHandlers };
       const repository          = new Repository.Repository({ ...commonProps, ...repositoryProps });
       const cHandlersProps      = { ...commonProps, queryBuses, ...managerProps };
       const { commandHandlers } = this.getCommandHandlers(context.name, name, cHandlersProps);
       const commandBuses        = this.getCommandBuses(context.name, name, managerProps.listen);
-      const props               = { ...commonProps, commandBuses, commandHandlers, repository, eventBus };
+      const buses               = { commandBuses, eventBus: eventBusOut }
+      const props               = { ...commonProps, commandHandlers, ...buses, repository };
       const manager             = new Manager.Manager(props);
       this.logger.log('%red %cyan.%cyan found', 'Manager', context.name, name);
       result.set(name, manager);
@@ -255,7 +257,7 @@ export class Process extends Component.Component {
       const commandBuses       = this.getCommandBuses(context.name, name, viewProps.targets);
       const queryBuses         = this.getQueryBuses(context.name, name, viewProps.views);
       const handlersDeps       = { queryBuses, commandBuses, repositories };
-      const handlersProps      = { ...commonProps, ...handlersDeps, ...viewProps };
+      const handlersProps      = { ...commonProps, ...viewProps, ...handlersDeps };
       const { queryHandlers }  = this.getQueryHandlers(context.name, name, handlersProps);
       const { updateHandlers } = this.getUpdateHandlers(context.name, name, handlersProps);
       const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
@@ -366,14 +368,16 @@ export class Process extends Component.Component {
 
   protected getRepositories(contextName: string, name: string, repositories: Array<string>, extra: any) {
     const result = {};
-    repositories.forEach(name => {
+    repositories.forEach(path => {
       const commonProps        = { context: contextName, name, process: this };
-      const config             = this.parseRepository(name);
+      const config             = this.parseRepository(path);
       const stateBusProps      = { ...commonProps, ...extra.StateBus };
       const stateBus           = this.getStateBus(stateBusProps, contextName, name);
-      const eventBusProps      = { ...commonProps, ...extra.EventBus };
+      const remoteEventBus     = (this.contextsProps.get(config.context) || {}).EventBus;
+      const eventBusProps      = { ...commonProps, ...remoteEventBus, ...extra.EventBus };
       const eventBus           = this.getEventBus(eventBusProps, config.context, config.name);
-      const { domainHandlers } = this.getDomainHandlers(config.context, config.name, extra);
+      const handlersProps      = { ...commonProps, ...extra };
+      const { domainHandlers } = this.getDomainHandlers(config.context, config.name, handlersProps);
       const deps               = { stateBus, eventBus, domainHandlers };
       const props              = { ...commonProps, ...deps, ...config.props };
       const repository         = new Repository.Repository(props);

@@ -43,7 +43,8 @@ export function extend(holder: any, props: props) {
     setImmediate(() => {
       const [context, view, method] = target.split(':');
       if (!(view in this.queryBuses)) {
-        ee.emit('error', new Error('View ' + target + ' not found'));
+        const views = Object.keys(this.queryBuses).join(', ');
+        ee.emit('error', new Error('View ' + target + ' not found within ' + views));
       } else {
         const typer = this.getQueryTyper(context, view, method);
         if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }

@@ -25,8 +25,8 @@ export interface props extends Component.props {
 
 export class EventBus extends Component.Component {
   protected transport: Transport;
-  protected stream:    string;
   protected events:    EventTypes;
+  readonly  stream:    string;
 
   constructor(props: props) {
     super({ logger: 'EventBus:' + props.name, ...props });

@@ -40,8 +40,11 @@ export class QueryBus extends Component.Component {
     this.view         = props.view    || props.name;
   }
 
-  public start(): Promise<void> {
-    return this.transport.start();
+  public async start(): Promise<void> {
+    if (this.started) return ;
+    this.logger.log('Connecting to %s', this.view);
+    await super.start();
+    await this.transport.start();
   }
 
   public async serve(handler: queryHandler): Promise<Subscription> {
@@ -69,8 +72,10 @@ export class QueryBus extends Component.Component {
     return this.transport.request(query);
   }
 
-  public stop(): Promise<void> {
-    return this.transport.stop();
+  public async stop(): Promise<void> {
+    if (!this.started) return ;
+    await this.transport.stop();
+    await super.stop();
   }
 
 }

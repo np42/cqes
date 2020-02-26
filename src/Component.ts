@@ -30,14 +30,18 @@ export class Component {
     this.started = false;
   }
 
+  get fqn() {
+    return this.constructor.name + ':' + this.context + '.' + this.name;
+  }
+
   public start(): Promise<void> {
-    if (this.started === true) throw new Error('Already started');
+    if (this.started === true) throw new Error(this.fqn + ' is already started');
     this.started = true;
     return Promise.resolve();
   }
 
   public stop(): Promise<void> {
-    if (this.started === false) throw new Error('Already stopped');
+    if (this.started === false) throw new Error(this.fqn + ' is already stopped');
     this.started = false;
     return Promise.resolve();
   }

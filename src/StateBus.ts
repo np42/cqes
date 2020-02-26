@@ -27,6 +27,13 @@ export class StateBus extends Component.Component {
     this.state      = props.state;
   }
 
+  public async start(): Promise<void> {
+    if (this.started) return ;
+    this.logger.log('is Statefull');
+    await super.start();
+    await this.transport.start();
+  }
+
   public async set(state: State): Promise<void> {
     if (state.revision == -1) {
       await this.transport.destroy(state.stateId);
@@ -57,6 +64,12 @@ export class StateBus extends Component.Component {
       }
     }
     return state.clone();
+  }
+
+  public async stop(): Promise<void> {
+    if (!this.started) return ;
+    await this.transport.stop();
+    await super.stop();
   }
 
 }

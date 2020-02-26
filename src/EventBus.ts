@@ -38,6 +38,13 @@ export class EventBus extends Component.Component {
     this.events     = props.events || {};
   }
 
+  public async start(): Promise<void> {
+    if (this.started) return ;
+    this.logger.log('Connecting to %s', this.stream);
+    await super.start();
+    await this.transport.start();
+  }
+
   public subscribe(handler: eventHandler): Promise<Subscription> {
     return this.transport.subscribe(this.stream, handler);
   }
@@ -72,6 +79,12 @@ export class EventBus extends Component.Component {
 
   public readLast(category: string, streamId: string, count: number) {
     return this.transport.readLast(category, streamId, count);
+  }
+
+  public async stop(): Promise<void> {
+    if (!this.started) return ;
+    await this.transport.stop();
+    await super.stop();
   }
 
 }

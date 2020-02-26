@@ -48,9 +48,11 @@ export class CommandBus extends Component.Component {
     this.category  = offset === -1 ? this.channel : this.channel.substring(0, offset);
   }
 
-  public start(): Promise<void> {
+  public async start(): Promise<void> {
+    if (this.started) return ;
     this.logger.log('Connecting to %s', this.channel);
-    return this.transport.start();
+    await super.start();
+    await this.transport.start();
   }
 
   public listen(handler: commandHandler): Promise<Subscription> {
@@ -74,11 +76,14 @@ export class CommandBus extends Component.Component {
   }
 
   public sendCommand(command: Command): Promise<void> {
+    this.logger.log('Sending %red %s %s', 'Command', command.stream, command.order);
     return this.transport.send(command);
   }
 
-  public stop(): Promise<void> {
-    return this.transport.stop();
+  public async stop(): Promise<void> {
+    if (!this.started) return ;
+    await this.transport.stop();
+    await super.stop();
   }
 
 }

@@ -45,7 +45,7 @@ export class View extends Component.Component {
     await this.queryBus.start();
     this.subscriptions = await Promise.all(Object.values(this.eventBuses).map(async bus => {
       await bus.start();
-      const subscription = [this.name, this.constructor.name, bus.stream].join(':');
+      const subscription = [this.name, this.constructor.name, bus.category].join(':');
       return bus.psubscribe(subscription, event => this.handleUpdateEvent(event));
     }));
     this.subscriptions.push(await this.queryBus.serve(query => this.handleViewQuery(query)));

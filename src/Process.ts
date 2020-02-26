@@ -353,10 +353,11 @@ export class Process extends Component.Component {
     }
   }
 
-  protected getEventBus(props: any, contextName: string, stream: string) {
-    const transport = props.transport || './bus/MySQL_Redis.EventBus';
-    const events    = this.getTypes(contextName, stream, 'events');
-    return new EventBus({ ...props, transport, stream, events });
+  protected getEventBus(props: any, contextName: string, category: string) {
+    const transport     = props.transport || './bus/MySQL_Redis.EventBus';
+    const events        = this.getTypes(contextName, category, 'events');
+    const originContext = contextName;
+    return new EventBus({ ...props, transport, originContext, category, events });
   }
 
   protected getStateBus(props: any, contextName: string, type: string) {
@@ -374,7 +375,8 @@ export class Process extends Component.Component {
       const stateBusProps      = { ...commonProps, ...extra.StateBus };
       const stateBus           = this.getStateBus(stateBusProps, contextName, name);
       const remoteEventBus     = (this.contextsProps.get(config.context) || {}).EventBus;
-      const eventBusProps      = { ...commonProps, ...remoteEventBus, ...extra.EventBus };
+      const ebProps            = { originContext: config.context, category: config.name };
+      const eventBusProps      = { ...commonProps, ...remoteEventBus, ...extra.EventBus, ...ebProps };
       const eventBus           = this.getEventBus(eventBusProps, config.context, config.name);
       const handlersProps      = { ...commonProps, ...extra };
       const { domainHandlers } = this.getDomainHandlers(config.context, config.name, handlersProps);

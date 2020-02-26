@@ -7,9 +7,9 @@ import * as redis     from 'redis';
 export type eventHandler = EventBus.eventHandler;
 
 export interface props extends Component.props {
-  context: string;
-  MySQL:   MySQL.props;
-  Redis:   redis.ClientOpts;
+  originContext?: string;
+  MySQL:          MySQL.props;
+  Redis:          redis.ClientOpts;
 }
 
 export class Subscription implements EventBus.Subscription {
@@ -45,6 +45,7 @@ export class Subscription implements EventBus.Subscription {
 export class Transport extends Component.Component implements EventBus.Transport {
   protected mysql:         MySQL.MySQL;
   protected redis:         redis.RedisClient;
+  protected originContext: string;
 
   constructor(props: props) {
     super(props);
@@ -53,9 +54,9 @@ export class Transport extends Component.Component implements EventBus.Transport
     if (props.MySQL.user == null)     props.MySQL.user = 'cqes';
     if (props.MySQL.password == null) props.MySQL.password = 'changeit';
     if (props.MySQL.database == null) props.MySQL.database = 'cqes-' + props.name.toLowerCase();
-    //props.MySQL.multipleStatements = true;
-    this.mysql   = new MySQL.MySQL(props.MySQL);
-    this.redis   = redis.createClient(props.Redis);
+    this.mysql         = new MySQL.MySQL(props.MySQL);
+    this.redis         = redis.createClient(props.Redis);
+    this.originContext = props.originContext || props.context;
   }
 
   public async save(events: Array<Event>): Promise<void> {
@@ -148,7 +149,7 @@ export class Transport extends Component.Component implements EventBus.Transport
   }
 
   public subscribe(category: string, handler: eventHandler): Promise<Subscription> {
-    const channel = '/' + this.context + '/' + category;
+    const channel = '/' + this.originContext + '/' + category;
     const abort = (err?: Error) => {
       this.redis.unsubscribe();
       if (err) this.logger.error('Subscription %s failed', channel, err);

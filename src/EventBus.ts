@@ -18,48 +18,57 @@ export interface Subscription { abort: () => Promise<void>; }
 export interface EventTypes   { [name: string]: Typer };
 
 export interface props extends Component.props {
-  transport:  string;
-  stream:     string;
-  events:     EventTypes;
+  transport:      string;
+  originContext?: string;
+  category:       string;
+  events:         EventTypes;
 }
 
 export class EventBus extends Component.Component {
   protected transport: Transport;
   protected events:    EventTypes;
-  readonly  stream:    string;
+  readonly  category:  string;
 
   constructor(props: props) {
     super({ logger: 'EventBus:' + props.name, ...props });
     const Transport = require(props.transport).Transport;
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
-    if (props.stream == null) throw new Error('Missing stream reference');
+    if (props.category == null) throw new Error('Missing category reference');
     this.transport  = new Transport(props);
-    this.stream     = props.stream;
+    this.category   = props.category;
     this.events     = props.events || {};
   }
 
   public async start(): Promise<void> {
     if (this.started) return ;
-    this.logger.log('Connecting to %s', this.stream);
+    this.logger.log('Connecting to %s', this.category);
     await super.start();
     await this.transport.start();
   }
 
+  public typeEvent(event: E) {
+    if (event.type in this.events) {
+      try { event.data = this.events[event.type].from(event.data); }
+      catch (e) {
+        debugger;
+        const { number, streamId, category, type } = event;
+        this.logger.error('Failed when parsing event %s@%s-%s %s', number, category, streamId, type);
+        throw e;
+      }
+    }
+    return event;
+  }
+
   public subscribe(handler: eventHandler): Promise<Subscription> {
-    return this.transport.subscribe(this.stream, handler);
+    return this.transport.subscribe(this.category, (rawEvent: E) => {
+      const event = this.typeEvent(rawEvent);
+      return handler(event);
+    });
   }
 
   public psubscribe(name: string, handler: eventHandler): Promise<Subscription> {
-    return this.transport.psubscribe(name, this.stream, (event: E) => {
-      if (event.type in this.events) {
-        try { event.data = this.events[event.type].from(event.data); }
-        catch (e) {
-          debugger;
-          const { number, streamId, category, type } = event;
-          this.logger.error('Failed when parsing event %s@%s-%s %s', number, category, streamId, type);
-          throw e;
-        }
-      }
+    return this.transport.psubscribe(name, this.category, (rawEvent: E) => {
+      const event = this.typeEvent(rawEvent);
       return handler(event);
     });
   }

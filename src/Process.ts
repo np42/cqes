@@ -12,9 +12,6 @@ import * as View                   from './View';
 import * as Trigger                from './Trigger';
 import * as Service                from './Service';
 
-import * as Connected              from './Connected';
-import * as Statefull              from './Statefull';
-
 import { clone, merge, Tree, get, set
        , isConstructor }           from 'cqes-util';
 
@@ -171,58 +168,24 @@ export class Process extends Component.Component {
   protected getContextManagers(context: Context.ContextProps, managersProps: RecordMap) {
     return Object.keys(managersProps).reduce((result: Map<string, Manager.Manager>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip manager %s', name.substr(1)), result;
-      const stream          = context.name + '.' + name;
-      const managerProps    = managersProps[name];
+      const managerProps        = managersProps[name];
       if (managerProps.listen == null) managerProps.listen = [name];
-      if (managerProps.repository == null) managerProps.repository = {};
-      if (managerProps.repository.streams == null) managerProps.repository.streams = [];
-      if (!~managerProps.repository.streams.indexOf(stream)) managerProps.repository.streams.push(stream);
-      const commonProps     = { context: context.name, name, process: this };
-      const eventBusProps   = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
-      const eventBus        = this.getEventBus(eventBusProps, context.name, name);
-      const stateBusProps   = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
-      const stateBus        = this.getStateBus(stateBusProps, context.name, name);
-      const domainHandlers  = this.getRepositoryHandlers(context.name, name, managerProps.repository);
-      const repositoryProps = { stateBus, eventBus, domainHandlers };
-      const repository      = new Repository.Repository({ ...commonProps, ...repositoryProps });
-      const commandHandlers = this.getManagerHandlers(context.name, name, managerProps);
-      const commandBuses    = this.getCommandBuses(context.name, name, managerProps.listen);
-      const props           = { ...commonProps, commandBuses, commandHandlers, repository, eventBus };
-      const manager         = new Manager.Manager(props);
+      const commonProps         = { context: context.name, name, process: this };
+      const queryBuses          = this.getQueryBuses(context.name, name, managerProps.views);
+      const eventBusProps       = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
+      const eventBus            = this.getEventBus(eventBusProps, context.name, name);
+      const stateBusProps       = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
+      const stateBus            = this.getStateBus(stateBusProps, context.name, name);
+      const { domainHandlers }  = this.getDomainHandlers(context.name, name, managerProps.repository);
+      const repositoryProps     = { stateBus, eventBus, domainHandlers };
+      const repository          = new Repository.Repository({ ...commonProps, ...repositoryProps });
+      const cHandlersProps      = { ...commonProps, queryBuses, ...managerProps };
+      const { commandHandlers } = this.getCommandHandlers(context.name, name, cHandlersProps);
+      const commandBuses        = this.getCommandBuses(context.name, name, managerProps.listen);
+      const props               = { ...commonProps, commandBuses, commandHandlers, repository, eventBus };
+      const manager             = new Manager.Manager(props);
       this.logger.log('%red %cyan.%cyan found', 'Manager', context.name, name);
       result.set(name, manager);
-      return result;
-    }, new Map());
-  }
-
-  protected getContextViews(context: Context.ContextProps, viewsProps: RecordMap) {
-    return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
-      if (/^_/.test(name)) return this.logger.log('Skip view %s', name.substr(1)), result;
-      const viewProps     = viewsProps[name];
-      if (viewProps.psubscribe == null) viewProps.psubscribe = [];
-      const commonProps   = { context: context.name, name, process: this };
-      const eventBuses    = this.getEventBuses(context.name, name, viewProps.psubscribe);
-      const queryBusProps = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
-      const queryBus      = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
-      const { queryHandlers, updateHandlers } = this.getViewHandlers(context.name, name, viewProps);
-      const repositories  = <Statefull.Repositories>{};
-      if (viewProps.repositories?.length > 0) {
-        const stateBusProps   = { ...commonProps, ...context.StateBus, ...viewProps.StateBus };
-        const stateBus        = this.getStateBus(stateBusProps, context.name, name);
-        for (const repositoryPath of viewProps.repositories) {
-          const repo              = this.parseRepository(repositoryPath);
-          const domainHandlers    = this.getRepositoryHandlers(repo.context, repo.name, repo.props);
-          debugger;
-          const eventBusProps     = { ...commonProps }; // TODO
-          const eventBus          = this.getEventBus(eventBusProps, repo.context, repo.name);
-          const repositoryProps   = { stateBus, eventBus, domainHandlers };
-          repositories[repo.name] = new Repository.Repository({ ...commonProps, ...repositoryProps });
-        }
-      }
-      const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers, repositories };
-      const view = new View.View(props);
-      this.logger.log('%blue %cyan.%cyan found', 'View', context.name, name);
-      result.set(name, view);
       return result;
     }, new Map());
   }
@@ -230,30 +193,65 @@ export class Process extends Component.Component {
   protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
     return Object.keys(servicesProps).reduce((result: Map<string, Service.Service>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip service %s', name.substr(1)), result;
-      const serviceProps = servicesProps[name];
+      const path               = join(this.root, context.name, name + '.Service');
+      const Package            = require(path);
+      if (Package == null) throw new Error('Missing ' + name + ' in ' + path);
+      if (!('Service' in Package)) Package.Service = Service;
+      const serviceProps       = servicesProps[name];
       if (serviceProps.targets == null)    serviceProps.targets    = [];
       if (serviceProps.views == null)      serviceProps.views      = [];
       if (serviceProps.psubscribe == null) serviceProps.psubscribe = [];
       if (serviceProps.streams == null)    serviceProps.streams    = [];
-      const commandBuses  = this.getCommandBuses(context.name, name, serviceProps.targets);
-      const queryBuses    = this.getQueryBuses(context.name, name, serviceProps.views, { mode: 'client' });
-      const eventBuses1   = this.getEventBuses(context.name, name, serviceProps.psubscribe);
-      const subscriptions = Object.keys(eventBuses1);
-      const eventBuses2   = this.getEventBuses(context.name, name, serviceProps.streams);
-      const buses         = { eventBuses: { ...eventBuses1, ...eventBuses2 }, commandBuses, queryBuses };
-      const props = { context: context.name, name, process: this, ...serviceProps, ...buses, subscriptions };
-      const path  = join(this.root, context.name, name + '.Service');
-      const SubService = require(path)[name];
-      if (SubService == null)
-        throw new Error('Missing ' + name + ' in ' + path);
-      const service = new SubService(props);
+      const commonProps        = { context: context.name, name, process: this };
+      const commandBuses       = this.getCommandBuses(context.name, name, serviceProps.targets);
+      const queryBuses         = this.getQueryBuses(context.name, name, serviceProps.views);
+      const eventBuses1        = this.getEventBuses(context.name, name, serviceProps.psubscribe);
+      const eventBuses2        = this.getEventBuses(context.name, name, serviceProps.streams);
+      const eventBuses         = { ...eventBuses1, ...eventBuses2 };
+      const subscriptions      = Object.keys(eventBuses1);
+      const eventBusProps      = { ...commonProps, ...context.EventBus, ...serviceProps.EventBus };
+      const eventBus           = this.getEventBus(eventBusProps, context.name, name);
+      const repositories       = this.getRepositories(context.name, name, serviceProps.repositories);
+      const eHandlersProps     = { queryBuses, repositories };
+      const { eventHandlers }  = new Package.EventHandlers({ ...commonProps, ...eHandlersProps, ...serviceProps });
+      const buses              = { eventBuses, commandBuses, queryBuses };
+      const props              = { ...commonProps, ...serviceProps, buses, subscriptions, eventHandlers };
+      const service            = new Package.Service(props);
+      eventHandlers.service    = service;
       if (!(service instanceof Service.Service))
-        throw new Error('Service ' + name + ' must be tye of Service');
+        throw new Error('Service ' + name + ' must be type of Service');
       this.logger.log('%yellow %cyan.%cyan found', 'Service', context.name, name);
       result.set(name, service);
       return result;
     }, new Map());
   }
+
+  protected getContextViews(context: Context.ContextProps, viewsProps: RecordMap) {
+    return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
+      if (/^_/.test(name)) return this.logger.log('Skip view %s', name.substr(1)), result;
+      const viewProps          = viewsProps[name];
+      if (viewProps.psubscribe == null)   viewProps.psubscribe = [];
+      if (viewProps.targets == null)      viewProps.targets = [];
+      if (viewProps.repositories == null) viewProps.repositories = [];
+      const commonProps        = { context: context.name, name, process: this };
+      const eventBuses         = this.getEventBuses(context.name, name, viewProps.psubscribe);
+      const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
+      const queryBus           = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
+      const repositories       = this.getRepositories(context.name, name, viewProps.repositories);
+      const commandBuses       = this.getCommandBuses(context.name, name, viewProps.targets);
+      const queryBuses         = this.getQueryBuses(context.name, name, viewProps.views);
+      const handlersDeps       = { queryBuses, commandBuses, repositories };
+      const handlersProps      = { ...commonProps, ...handlersDeps, ...viewProps };
+      const { queryHandlers }  = this.getQueryHandlers(context.name, name, handlersProps);
+      const { updateHandlers } = this.getUpdateHandlers(context.name, name, handlersProps);
+      const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
+      const view  = new View.View(props);
+      this.logger.log('%blue %cyan.%cyan found', 'View', context.name, name);
+      result.set(name, view);
+      return result;
+    }, new Map());
+  }
+
 
   protected getContextTriggers(context: Context.ContextProps, triggersProps: RecordMap) {
     return Object.keys(triggersProps).reduce((result: Map<string, Trigger.Trigger>, name: string) => {
@@ -261,19 +259,23 @@ export class Process extends Component.Component {
       const triggerProps = triggersProps[name];
       if (triggerProps.psubscribe == null || triggerProps.psubscribe.length === 0)
         return this.logger.warn('Skip trigger %s, missing persistent subscription', name), result;
-      const commonProps   = { context: context.name, name };
-      const eventBuses    = this.getEventBuses(context.name, name, triggerProps.psubscribe);
-      const triggerHooks  = this.getTriggerHandlers(context.name, name, triggerProps);
-      const stateBusProps = { ...commonProps, ...context.StateBus, ...triggerProps.StateBus };
-      const stateBus      = this.getStateBus(stateBusProps, context.name, name);
-      const props         = { ...commonProps, process: this, eventBuses, stateBus, ...triggerHooks };
-      const trigger       = new Trigger.Trigger(props);
+      const commonProps    = { context: context.name, name, process: this };
+      const eventBuses     = this.getEventBuses(context.name, name, triggerProps.psubscribe);
+      const queryBuses     = this.getQueryBuses(context.name, name, triggerProps.views);
+      const commandBuses   = this.getCommandBuses(context.name, name, triggerProps.targets);
+      const handlersProps  = { ...commonProps, queryBuses, commandBuses, ...triggerProps };
+      const triggerOptions = this.getTriggerHandlers(context.name, name, handlersProps);
+      const stateBusProps  = { ...commonProps, ...context.StateBus, ...triggerProps.StateBus };
+      const stateBus       = this.getStateBus(stateBusProps, context.name, name);
+      const props          = { ...commonProps, eventBuses, stateBus, ...triggerOptions };
+      const trigger        = new Trigger.Trigger(props);
       this.logger.log('%magenta %cyan.%cyan found', 'Trigger', context.name, name);
       result.set(name, trigger);
       return result;
     }, new Map());
   }
 
+  // Buses
   protected getCommandBuses(fromContext: string, name: string, targets: Array<string>, extra?: any) {
     if (targets == null) return {};
     return this.getBuses<CommandBus>('CommandBus', fromContext, name, targets, extra);
@@ -281,7 +283,7 @@ export class Process extends Component.Component {
 
   protected getQueryBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {
     if (views == null) return {};
-    return this.getBuses<QueryBus>('QueryBus', fromContext, name, views, extra);
+    return this.getBuses<QueryBus>('QueryBus', fromContext, name, views, { mode: 'client', ...extra });
   }
 
   protected getEventBuses(fromContext: string, name: string, streams: Array<string>, extra?: any) {
@@ -348,57 +350,15 @@ export class Process extends Component.Component {
     return new StateBus({ ...props, transport, state });
   }
 
-  public getTypes(contextName: string, category: string, kind?: string) {
-    const path = join(this.root, contextName, category + (kind ? '.' + kind : ''));
-    return safeRequire(path);
-  }
-
-  protected getManagerHandlers(contextName: string, name: string, props: any) {
-    const path = join(this.root, contextName, name + '.Manager');
-    const { CommandHandlers } = require(path);
-    if (!isConstructor(CommandHandlers))
-      throw new Error('Constructor CommandHandlers from ' + path + ' expected');
-    const baseProps       = { context: contextName, name, process: this };
-    const queryBuses      = this.getQueryBuses(contextName, name, props.views, { mode: 'client' });
-    const commandProps    = { ...baseProps, ...props, queryBuses };
-    const commandHandlers = new CommandHandlers(commandProps);
-    return { commandHandlers };
-  }
-
-  protected getRepositoryHandlers(contextName: string, name: string, props: any) {
-    const path = join(this.root, contextName, name + '.Repository');
-    const { DomainHandlers } = require(path);
-    if (!isConstructor(DomainHandlers))
-      throw new Error('Constructor DomainHandlers from ' + path + ' expected');
-    const baseProps       = { context: contextName, name, process: this };
-    const domainHandlers  = new DomainHandlers({ ...baseProps, ...props });
-    return { domainHandlers };
-  }
-
-  protected getViewHandlers(contextName: string, name: string, props: any) {
-    const path = join(this.root, contextName, name + '.View');
-    const { QueryHandlers, UpdateHandlers } = require(path);
-    if (!isConstructor(QueryHandlers))
-      throw new Error('Constructor QueryHandlers from ' + path + ' expected');
-    if (!isConstructor(UpdateHandlers))
-      throw new Error('Constructor UpdateHandlers from ' + path + ' expected');
-    const queryBuses     = this.getQueryBuses(contextName, name, props.views, { mode: 'client' });
-    const childProps     = { context: contextName, name, process: this, ...props, queryBuses };
-    const queryHandlers  = new QueryHandlers(childProps);
-    const updateHandlers = new UpdateHandlers(childProps);
-    return { queryHandlers, updateHandlers };
-  }
-
-  protected getTriggerHandlers(contextName: string, name: string, props: any) {
-    const path = join(this.root, contextName, name + '.Trigger');
-    const { TriggerHandlers, partition } = require(path);
-    if (!isConstructor(TriggerHandlers))
-      throw new Error('Constructor UpdateHandlers from ' + path + ' expected');
-    const queryBuses      = this.getQueryBuses(contextName, name, props.views, { mode: 'client' });
-    const commandBuses    = this.getCommandBuses(contextName, name, props.targets);
-    const childProps      = { context: contextName, name, process: this, ...props, queryBuses, commandBuses };
-    const triggerHandlers = new TriggerHandlers(childProps);
-    return { triggerHandlers, partition };
+  protected getRepositories(contextName: string, name: string, repositories: Array<string>) {
+    const result = {};
+    repositories.forEach(name => {
+      const config     = this.parseRepository(name);
+      const props      = { context: contextName, name, process: this, ...config.props };
+      const repository = new Repository.Repository(props);
+      result[config.name] = repository;
+    });
+    return result;
   }
 
   protected parseRepository(path: string | any) {
@@ -408,6 +368,57 @@ export class Process extends Component.Component {
     } else {
       throw new Error('Not implemented');
     }
+  }
+
+  public getTypes(contextName: string, category: string, kind?: string) {
+    const path = join(this.root, contextName, category + (kind ? '.' + kind : ''));
+    return safeRequire(path);
+  }
+
+  // Handlers
+  protected getCommandHandlers(contextName: string, name: string, props: any) {
+    const path = join(this.root, contextName, name + '.Command');
+    const { CommandHandlers } = require(path);
+    if (!isConstructor(CommandHandlers))
+      throw new Error('Constructor CommandHandlers from ' + path + ' expected');
+    const commandHandlers = new CommandHandlers(props);
+    return { commandHandlers };
+  }
+
+  protected getDomainHandlers(contextName: string, name: string, props: any) {
+    const path = join(this.root, contextName, name + '.Domain');
+    const { DomainHandlers } = require(path);
+    if (!isConstructor(DomainHandlers))
+      throw new Error('Constructor DomainHandlers from ' + path + ' expected');
+    const domainHandlers  = new DomainHandlers(props);
+    return { domainHandlers };
+  }
+
+  protected getQueryHandlers(contextName: string, name: string, props: any) {
+    const path = join(this.root, contextName, name + '.Query');
+    const { QueryHandlers } = require(path);
+    if (!isConstructor(QueryHandlers))
+      throw new Error('Constructor QueryHandlers from ' + path + ' expected');
+    const queryHandlers  = new QueryHandlers(props);
+    return { queryHandlers };
+  }
+
+  protected getUpdateHandlers(contextName: string, name: string, props: any) {
+    const path = join(this.root, contextName, name + '.Update');
+    const { UpdateHandlers } = require(path);
+    if (!isConstructor(UpdateHandlers))
+      throw new Error('Constructor UpdateHandlers from ' + path + ' expected');
+    const updateHandlers = new UpdateHandlers(props);
+    return { updateHandlers };
+  }
+
+  protected getTriggerHandlers(contextName: string, name: string, props: any) {
+    const path = join(this.root, contextName, name + '.Trigger');
+    const { TriggerHandlers, partition } = require(path);
+    if (!isConstructor(TriggerHandlers))
+      throw new Error('Constructor TriggerHandlers from ' + path + ' expected');
+    const triggerHandlers = new TriggerHandlers(props);
+    return { triggerHandlers, partition };
   }
 
   protected startComponents(): Promise<void> {
@@ -428,7 +439,15 @@ export class Process extends Component.Component {
   }
 
   public async stop() {
-    
+    const promises = <Array<Promise<void>>>[];
+    for (const [contextName, context] of this.contexts) {
+      if (!(context instanceof Context.Context)) continue ;
+      for (const [name, manager] of context.managers) promises.push(manager.stop());
+      for (const [name, view] of context.views) promises.push(view.stop());
+      for (const [name, trigger] of context.triggers) promises.push(trigger.stop());
+      for (const [name, service] of context.services) promises.push(service.stop());
+    }
+    return <any> Promise.all(promises);
   }
 
 };

@@ -1,74 +1,96 @@
-import * as Service   from './Service';
-import { Component }  from './Component';
-import { Typer }      from 'cqes-type';
-import { QueryBus }   from './QueryBus';
-import { Event }      from './Event';
-import { Query }      from './Query';
-import { Reply }      from './Reply';
+import * as Component  from './Component';
+import * as Query      from './QueryHandlers';
+import * as Update     from './UpdateHandlers';
+import { EventBus }    from './EventBus';
+import { QueryBus }    from './QueryBus';
+import { Event as E }  from './Event';
+import { Query as Q }  from './Query';
+import { Reply as R }  from './Reply';
 
-export type queryHandler = (query: Query) => Promise<Reply>;
-export type eventHandler = Service.eventHandler;
-export interface EventBuses extends Service.EventBuses {};
+export { Query, Update };
+
+export interface EventBuses { [name: string]: EventBus };
 export interface Subscription { abort: () => Promise<void> };
-export interface QueryHandlers { [name: string]: queryHandler };
-export interface UpdateHandlers { [name: string]: eventHandler };
 
-export function getset(target: Object, key: string, descriptor: PropertyDescriptor): PropertyDescriptor {
-  if (typeof target['get'] !== 'function') throw new Error('Missing .get method');
-  if (typeof target['set'] !== 'function') throw new Error('Missing .set method');
-  const handler = descriptor.value;
-  descriptor.value = async function (event: Event, sender: Service.sender) {
-    const data   = await this.get(event.streamId, event);
-    const result = await handler.call(this, data, event, sender);
-    await this.set(event.streamId, result || data, event);
-  };
-  return descriptor;
-};
-
-export interface props extends Service.props {
+export interface props extends Component.props {
+  eventBuses?:     EventBuses;
+  updateHandlers?: Update.Handlers;
   queryBus?:       QueryBus;
-  queryHandlers?:  QueryHandlers;
-  updateHandlers?: UpdateHandlers;
+  queryHandlers?:  Query.Handlers;
 }
 
-export class View extends Service.Service {
+export class View extends Component.Component {
+  protected eventBuses:     EventBuses;
+  protected updateHandlers: Update.Handlers;
   protected queryBus:       QueryBus;
-  protected queryHandlers:  QueryHandlers;
+  protected queryHandlers:  Query.Handlers;
+  protected subscriptions:  Array<Subscription>;
 
   constructor(props: props) {
+    if (!(props.updateHandlers instanceof Update.Handlers)) throw new Error('Bad Update Handlers');
+    if (!(props.queryHandlers instanceof Query.Handlers)) throw new Error('Bad Query Handlers');
     super({ logger: 'View:' + props.name, ...props });
-    this.eventBuses     = props.eventBuses     || {};
+    this.eventBuses     = props.eventBuses;
+    this.updateHandlers = props.updateHandlers;
     this.queryBus       = props.queryBus;
-    this.eventHandlers  = props.updateHandlers || {};
-    this.queryHandlers  = props.queryHandlers  || {};
+    this.queryHandlers  = props.queryHandlers;
     this.subscriptions  = [];
   }
 
   public async start(): Promise<void> {
+    await super.start();
+    await this.updateHandlers.start();
+    await this.queryHandlers.start();
     await this.queryBus.start();
-    const sub = await this.queryBus.serve((query: Query) => this.handleViewQuery(query));
-    this.subscriptions.push(sub);
-    const eventHandlers = <Component><any>this.eventHandlers;
-    if (eventHandlers.start) await eventHandlers.start();
-    const queryHandlers = <Component><any>this.queryHandlers;
-    if (queryHandlers.start) await queryHandlers.start();
-    await super.start()
+    this.subscriptions = await Promise.all(Object.values(this.eventBuses).map(async bus => {
+      await bus.start();
+      const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
+      return bus.psubscribe(subscription, event => this.handleUpdateEvent(event));
+    }));
+    this.subscriptions.push(await this.queryBus.serve(query => this.handleViewQuery(query)));
   }
 
-  protected handleViewQuery(query: Query): Promise<Reply> {
-    const handler = this.getQueryHandler(query);
-    return handler.call(this.queryHandlers, query);
+  protected getUpdateHandler(event: E): Update.handler {
+    const fullname = event.category + '_' + event.type;
+    if (fullname in this.updateHandlers) return this.updateHandlers[fullname];
+    const shortname = event.type;
+    if (shortname in this.updateHandlers) return this.updateHandlers[shortname];
+    const wildname = 'any';
+    if (wildname in this.updateHandlers) return this.updateHandlers[wildname];
   }
 
-  public getQueryHandler(query: Query): queryHandler {
+  protected handleUpdateEvent(event: E) {
+    const handler  = this.getUpdateHandler(event);
+    if (handler != null) {
+      const { number, category, streamId, data } = event;
+      this.logger.log('%blue %s@%s-%s %j', handler.name, number, category, streamId, data);
+      return handler.call(this.updateHandlers, event);
+    }
+  }
+
+  protected getQueryHandler(query: Q): Query.handler {
     const shortname = query.method;
     if (shortname in this.queryHandlers) return this.queryHandlers[shortname];
     const wildname = 'any';
     if (wildname in this.queryHandlers) return this.queryHandlers[wildname];
-    return (query: Query) => {
+    return (query: Q) => {
       this.logger.warn('Query %s not handled: %j', query.method, query.data);
-      return Promise.resolve(new Reply('NotHandled', { method: query.method }));
+      return Promise.resolve(new R('NotHandled', { method: query.method }));
     };
+  }
+
+  protected handleViewQuery(query: Q): Promise<R> {
+    const handler = this.getQueryHandler(query);
+    return handler.call(this.queryHandlers, query);
+  }
+
+  public async stop() {
+    await Promise.all(this.subscriptions.map(sub => sub.abort()));
+    await Promise.all(Object.values(this.eventBuses).map(bus => bus.stop()));
+    await this.queryBus.stop();
+    await this.queryHandlers.stop();
+    await this.updateHandlers.stop();
+    await super.stop();
   }
 
 }

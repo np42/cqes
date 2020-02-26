@@ -1,11 +1,14 @@
-import * as Component      from './Component';
-import { Repository }      from './Repository';
-import { CommandBus }      from './CommandBus';
-import { ConcurencyError } from './CommandBus';
-import { EventBus }        from './EventBus';
-import { Command as C }    from './Command';
-import { Event   as E }    from './Event';
-import { State   as S }    from './State';
+import * as Component       from './Component';
+import { Repository }       from './Repository';
+import { CommandBus }       from './CommandBus';
+import * as Command         from './CommandHandlers';
+import { ConcurencyError }  from './CommandBus';
+import { EventBus }         from './EventBus';
+import { Command as C }     from './Command';
+import { Event   as E }     from './Event';
+import { State   as S }     from './State';
+
+export { Command };
 
 export type emitter        = (type: string, data: any, meta?: any) => void
 export type commandHandler = (state: S, command: C, emit?: emitter) => Array<E> | E | void;
@@ -13,40 +16,48 @@ export type commandHandler = (state: S, command: C, emit?: emitter) => Array<E> 
 export interface CommandBuses    { [name: string]: CommandBus };
 export interface Subscription    { abort: () => Promise<void> };
 
-export interface CommandHandlers { [name: string]: commandHandler };
-
 export interface props extends Component.props {
   commandBuses?:    CommandBuses;
   repository?:      Repository;
-  commandHandlers?: CommandHandlers;
+  commandHandlers?: Command.Handlers;
   eventBus?:        EventBus;
 }
 
 export class Manager extends Component.Component {
   protected commandBuses:    CommandBuses;
+  protected repository:      Repository;
+  protected commandHandlers: Command.Handlers;
+  protected eventBus:        EventBus;
+  //
   protected subscriptions:   Array<Subscription>;
   protected queues:          Map<string, Array<() => void>>;
-  protected repository:      Repository;
-  protected commandHandlers: CommandHandlers;
-  protected eventBus:        EventBus;
 
   constructor(props: props) {
+    if (!(props.commandHandlers instanceof Command.Handlers)) throw new Error('Bad Command Handlers');
     super(props);
-    this.commandBuses    = props.commandBuses    || {};
+    this.commandBuses    = props.commandBuses;
+    this.repository      = props.repository;
+    this.commandHandlers = props.commandHandlers;
+    this.eventBus        = props.eventBus;
     this.subscriptions   = [];
     this.queues          = new Map();
-    this.repository      = props.repository;
-    this.commandHandlers = props.commandHandlers || {};
-    this.eventBus        = props.eventBus;
   }
 
   public async start(): Promise<void> {
     await this.eventBus.start();
     await this.repository.start();
-    await Promise.all(Object.values(this.commandBuses).map(async bus => {
+    await this.commandHandlers.start();
+    this.subscriptions = await Promise.all(Object.values(this.commandBuses).map(async bus => {
       await bus.start();
-      await bus.listen((command: C) => this.handleManagerCommand(command))
+      return bus.listen((command: C) => this.handleManagerCommand(command))
     }));
+  }
+
+  protected lock(key: string): Promise<void> {
+    const queue = this.queues.get(key);
+    if (queue != null) return new Promise(resolve => queue.push(resolve));
+    this.queues.set(key, []);
+    return Promise.resolve();
   }
 
   protected getCommandHandler(command: C) {
@@ -81,23 +92,13 @@ export class Manager extends Component.Component {
     }
   }
 
-  protected lock(key: string): Promise<void> {
-    const queue = this.queues.get(key);
-    if (queue != null) return new Promise(resolve => queue.push(resolve));
-    this.queues.set(key, []);
-    return Promise.resolve();
-  }
-
   protected async handleCommand(state: S, command: C): Promise<Array<E>> {
     const { category, streamId, order } = command;
     const handler = this.getCommandHandler(command);
     const events  = <Array<E>> [];
     const emitter = (type: string | E, data?: any, meta?: any) => {
-      if (type instanceof E) {
-        events.push(type);
-      } else {
-        events.push(new E(category, streamId, -1, type, data, meta));
-      }
+      if (type instanceof E) events.push(type);
+      else events.push(new E(category, streamId, -1, type, data, meta));
     };
     try {
       const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
@@ -130,6 +131,7 @@ export class Manager extends Component.Component {
   public async stop(): Promise<void> {
     await Promise.all(this.subscriptions.map(subscription => subscription.abort()));
     await Promise.all(Object.values(this.commandBuses).map(bus => bus.stop()));
+    await this.commandHandlers.stop();
     await this.repository.stop();
     await this.eventBus.stop();
   }

@@ -28,9 +28,13 @@ export interface ManagerProps {
 }
 
 export interface ServiceProps {
-  psubscribe: Array<string>;
-  targets:    Array<string>;
-  views:      Array<string>;
+  EventBus:     any;
+  StateBus:     any;
+  psubscribe:   Array<string>;
+  targets:      Array<string>;
+  views:        Array<string>;
+  streams:      Array<string>;
+  repositories: Array<string>;
 }
 
 export interface ViewProps extends ServiceProps {

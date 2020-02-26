@@ -1,27 +1,27 @@
 //--
 import * as Process    from './src/Process';
 import * as Component  from './src/Component';
-import * as Connected  from './src/Connected';
-import * as Statefull  from './src/Statefull';
 import { Logger }      from './src/Logger';
 
-export { Process, Component, Connected, Statefull, Logger };
+export { Process, Component, Logger };
+
+//--
+import * as Manager       from './src/Manager';
+import * as Repository    from './src/Repository';
+import * as Service       from './src/Service';
+import * as View          from './src/View';
+import * as Trigger       from './src/Trigger';
+
+export { Manager, Repository, Service, View, Trigger };
 
 //--
 import { Command as C } from './src/Command';
-import { Query as Q }   from './src/Query';
-import { Reply as R }   from './src/Reply';
-import { Event as E }   from './src/Event';
-import { State as S }   from './src/State';
+import { Query   as Q } from './src/Query';
+import { Reply   as R } from './src/Reply';
+import { Event   as E } from './src/Event';
+import { State   as S } from './src/State';
 
 export { C, Q, R, E, S };
 
 //--
-export { emitter }   from './src/Manager';
-
-//--
-import { Index }      from './src/Index';
-import * as Service   from './src/Service';
-import * as View      from './src/View';
-
-export { Service, View, Index };
+export { Index }     from './src/Index';

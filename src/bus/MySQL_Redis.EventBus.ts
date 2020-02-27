@@ -160,9 +160,18 @@ export class Transport extends Component.Component implements EventBus.Transport
     this.logger.log('Subscribing %s', channel);
     this.redis.subscribe(channel);
     this.redis.on('message', (channel, message) => {
-      const events = JSON.parse(message);
-      subscription.append(events);
-      subscription.drain();
+      const array = JSON.parse(message);
+      if (!(array instanceof Array)) {
+        this.logger.warn('Bad data received as event array:', array);
+      } else {
+        const events = array.map(raw => {
+          const event = new Event(raw.category, raw.streamId, raw.number, raw.type, raw.data, raw.meta);
+          event.position = raw.position;
+          return event;
+        });
+        subscription.append(events);
+        subscription.drain();
+      }
     });
     return Promise.resolve(subscription);
   }
@@ -229,6 +238,7 @@ export class Transport extends Component.Component implements EventBus.Transport
             }
             subscriptionHandler = async event => {
               await handler(event);
+              if (event.meta?.persist === false) return ;
               await this.upsertPSubscriptionPosition(id, event.position)
             };
             return resolve(subscription);

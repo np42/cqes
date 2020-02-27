@@ -6,7 +6,9 @@ import { genId }      from 'cqes-util';
 export interface Buses { [name: string]: CommandBus; }
 export interface Types { [name: string]: Typer; }
 
-export interface EventEmitter extends events.EventEmitter {}
+export interface EventEmitter extends events.EventEmitter {
+  wait(): Promise<void>;
+}
 
 export interface props {
   commandBuses?: Buses;
@@ -18,6 +20,7 @@ export function extend(holder: any, props: props) {
 
   holder.command = function (target: string, streamId: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
+    (<any>ee).wait = () => new Promise((resolve, reject) => ee.on('sent', resolve).on('error', reject));
     ee.on('error', error => this.logger.warn(error.toString()));
     setImmediate(() => {
       const [context, category, order] = target.split(':');

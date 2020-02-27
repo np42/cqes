@@ -48,8 +48,10 @@ export class Service extends Component.Component {
   //protected callbacks:     ExpireMap<string, { hook: hook, info: HookInfo }>;
 
   constructor(props: props) {
+    if (props.context == null) throw new Error('Context is required');
+    if (props.name    == null) throw new Error('Name is required');
     if (!(props.eventHandlers instanceof Event.Handlers)) throw new Error('Bad Event Handlers');
-    super({ logger: 'Service:' + props.name, ...props });
+    super({ type: 'Service', ...props });
     CommandAble.extend(this, props);
     QueryAble.extend(this, props);
     this.eventBuses    = props.eventBuses;
@@ -85,7 +87,7 @@ export class Service extends Component.Component {
     this.subscriptions = await Promise.all(this.subscriptions.map((name: string) => {
       if (typeof name != 'string') return Promise.resolve(null);
       const bus = this.eventBuses[name];
-      const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
+      const subscription = [this.fqn, bus.category].join(':');
       return bus.psubscribe(subscription, event => this.handleServiceEvent(event));
     }));
   }

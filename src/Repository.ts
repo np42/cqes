@@ -56,6 +56,7 @@ export class Repository extends Component.Component {
       return Promise.resolve();
     });
     this.cache.set(stream, state);
+    this.stateBus.set(state);
     return state;
   }
 

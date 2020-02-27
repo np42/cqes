@@ -27,9 +27,11 @@ export class View extends Component.Component {
   protected subscriptions:  Array<Subscription>;
 
   constructor(props: props) {
+    if (props.context == null) throw new Error('Context is required');
+    if (props.name    == null) throw new Error('Name is required');
     if (!(props.updateHandlers instanceof Update.Handlers)) throw new Error('Bad Update Handlers');
     if (!(props.queryHandlers instanceof Query.Handlers)) throw new Error('Bad Query Handlers');
-    super({ logger: 'View:' + props.name, ...props });
+    super({ type: 'View', ...props });
     this.eventBuses     = props.eventBuses;
     this.updateHandlers = props.updateHandlers;
     this.queryBus       = props.queryBus;
@@ -45,7 +47,7 @@ export class View extends Component.Component {
     await this.queryBus.start();
     this.subscriptions = await Promise.all(Object.values(this.eventBuses).map(async bus => {
       await bus.start();
-      const subscription = [this.name, this.constructor.name, bus.category].join(':');
+      const subscription = [this.fqn, bus.category].join(':');
       return bus.psubscribe(subscription, event => this.handleUpdateEvent(event));
     }));
     this.subscriptions.push(await this.queryBus.serve(query => this.handleViewQuery(query)));

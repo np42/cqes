@@ -33,8 +33,10 @@ export class Manager extends Component.Component {
   protected queues:          Map<string, Array<() => void>>;
 
   constructor(props: props) {
+    if (props.context == null) throw new Error('Context is required');
+    if (props.name    == null) throw new Error('Name is required');
     if (!(props.commandHandlers instanceof Command.Handlers)) throw new Error('Bad Command Handlers');
-    super(props);
+    super({ type: 'Manager', ...props });
     this.commandBuses    = props.commandBuses;
     this.repository      = props.repository;
     this.commandHandlers = props.commandHandlers;

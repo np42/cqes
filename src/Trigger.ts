@@ -28,8 +28,10 @@ export class Trigger extends Component.Component {
   protected partition:     (event: Event) => string;
 
   constructor(props: props) {
+    if (props.context == null) throw new Error('Context is required');
+    if (props.name    == null) throw new Error('Name is required');
     if (!(props.triggerHandlers instanceof React.Handlers)) throw new Error('Bad Trigger Handlers');
-    super({ logger: 'Trigger:' + props.name, ...props });
+    super({ type: 'Trigger', ...props });
     this.eventBuses      = props.eventBuses;
     this.triggerHandlers = props.triggerHandlers;
     this.stateBus        = props.stateBus;
@@ -44,7 +46,7 @@ export class Trigger extends Component.Component {
     await this.triggerHandlers.start();
     this.subscriptions = await Promise.all(Object.values(this.eventBuses).map(async bus => {
       await bus.start();
-      const subscription = [this.name, this.constructor.name].join('.') + ':' + name;
+      const subscription = [this.fqn, bus.category].join(':');
       return bus.psubscribe(subscription, event => this.handleTriggerEvent(event));
     }));
   }
@@ -73,7 +75,7 @@ export class Trigger extends Component.Component {
       const stateId  = this.partition(event);
       const state    = await this.getState(stateId);
       const newState = await handler.call(this.triggerHandlers, state, event);
-      if (newState != null) this.setState(stateId, newState);
+      //if (newState != null) this.setState(stateId, newState);
     }
   }
 

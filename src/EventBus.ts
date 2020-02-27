@@ -16,6 +16,9 @@ export interface Transport {
 
 export interface Subscription { abort: () => Promise<void>; }
 export interface EventTypes   { [name: string]: Typer };
+export interface Options {
+  raw: boolean;
+}
 
 export interface props extends Component.props {
   transport:      string;
@@ -30,7 +33,7 @@ export class EventBus extends Component.Component {
   readonly  category:  string;
 
   constructor(props: props) {
-    super({ logger: 'EventBus:' + props.name, ...props });
+    super(props);
     const Transport = require(props.transport).Transport;
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
     if (props.category == null) throw new Error('Missing category reference');
@@ -46,6 +49,43 @@ export class EventBus extends Component.Component {
     await this.transport.start();
   }
 
+  public subscribe(handler: eventHandler, options?: Options): Promise<Subscription> {
+    options = this.parseOptions(options);
+    return this.transport.subscribe(this.category, (event: E) => {
+      return handler(options.raw ? event : this.typeEvent(event));
+    });
+  }
+
+  public psubscribe(name: string, handler: eventHandler, options?: Options): Promise<Subscription> {
+    options = this.parseOptions(options);
+    return this.transport.psubscribe(name, this.category, (event: E) => {
+      return handler(options.raw ? event : this.typeEvent(event));
+    });
+  }
+
+  public emit(category: string, streamId: string, number: number, name: string, data: any, meta?: any) {
+    const event = new E(category, streamId, number, name, data, meta);
+    return this.emitEvents([event]);
+  }
+
+  public emitEvents(events: Array<E>) {
+    return this.transport.save(events);
+  }
+
+  public readFrom(category: string, streamId: string, number: number, handler: eventHandler, options?: Options) {
+    options = this.parseOptions(options);
+    return this.transport.readFrom(category, streamId, number, (event: E) => {
+      return handler(options.raw ? event : this.typeEvent(event));
+    });
+  }
+
+  public async readLast(category: string, streamId: string, count: number, options?: Options) {
+    options = this.parseOptions(options);
+    const result = await this.transport.readLast(category, streamId, count);
+    if (options.raw) return result;
+    else return result.map(event => this.typeEvent(event));
+  }
+
   public typeEvent(event: E) {
     if (event.type in this.events) {
       try { event.data = this.events[event.type].from(event.data); }
@@ -59,35 +99,10 @@ export class EventBus extends Component.Component {
     return event;
   }
 
-  public subscribe(handler: eventHandler): Promise<Subscription> {
-    return this.transport.subscribe(this.category, (rawEvent: E) => {
-      const event = this.typeEvent(rawEvent);
-      return handler(event);
-    });
-  }
-
-  public psubscribe(name: string, handler: eventHandler): Promise<Subscription> {
-    return this.transport.psubscribe(name, this.category, (rawEvent: E) => {
-      const event = this.typeEvent(rawEvent);
-      return handler(event);
-    });
-  }
-
-  public emit(category: string, streamId: string, number: number, name: string, data: any, meta?: any) {
-    const event = new E(category, streamId, number, name, data, meta);
-    return this.emitEvents([event]);
-  }
-
-  public emitEvents(events: Array<E>) {
-    return this.transport.save(events);
-  }
-
-  public readFrom(category: string, streamId: string, number: number, handler: eventHandler) {
-    return this.transport.readFrom(category, streamId, number, handler);
-  }
-
-  public readLast(category: string, streamId: string, count: number) {
-    return this.transport.readLast(category, streamId, count);
+  public parseOptions(options?: Options): Options {
+    if (options == null) options = <any>{};
+    if (options.raw == null) options.raw = false;
+    return options;
   }
 
   public async stop(): Promise<void> {

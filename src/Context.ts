@@ -53,7 +53,7 @@ export class Context extends Component.Component {
   public services: Map<string, Service.Service>;
 
   constructor(props: props) {
-    super({ logger: 'Context:' + props.name, ...props });
+    super(props);
     this.managers  = new Map();
     this.views     = new Map();
     this.triggers  = new Map();

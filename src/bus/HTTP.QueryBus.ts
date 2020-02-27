@@ -86,13 +86,13 @@ export class Transport extends Component.Component implements QueryBus.Transport
   }
 
   public request(query: Query): Promise<Reply> {
-    const { view, method, data, meta } = query;
+    const { view, method, data } = query;
     const { host: hostname, port } = this.config;
     const qs   = qsencode(data);
     const path = '/' + view + '/' + method + '?' + qs;
     const headers = <any>{};
-    for (const key in meta) {
-      const value = meta[key];
+    for (const key in query.meta) {
+      const value = query.meta[key];
       const hKey = key.replace(/([A-Z])/g, '-$1').toLowerCase();
       headers['x-meta-' + hKey] = typeof value === 'object'
         ? JSON.stringify(value) : String(value);
@@ -100,7 +100,7 @@ export class Transport extends Component.Component implements QueryBus.Transport
     return new Promise((resolve, reject) => {
       const chunks = <Array<Buffer>>[];
       this.logger.log('%s.View %s:%s %s', view, hostname, port, path);
-      http.get(<any>{ hostname, port, path, headers }, (response: http.IncomingMessage) => {
+      const request = http.get(<any>{ hostname, port, path, headers }, (response: http.IncomingMessage) => {
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
         response.on('end', () => {
           const payload = Buffer.concat(chunks).toString();
@@ -117,6 +117,12 @@ export class Transport extends Component.Component implements QueryBus.Transport
             return reject(new Error(payload));
           }
         });
+      });
+      request.on('error', err => {
+        const tryCount = query.meta?.tryCount || 0;
+        this.logger.error('Error append %s, Query failed (%s), will retry later', err, tryCount);
+        query.meta = { ...query.meta, tryCount: tryCount + 1 };
+        setTimeout(() => this.request(query).then(resolve).catch(reject), 1000);
       });
     });
   }

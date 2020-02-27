@@ -20,7 +20,7 @@ export class StateBus extends Component.Component {
   protected state:     Typer;
 
   constructor(props: props) {
-    super({ logger: 'StateBus:' + props.name, ...props });
+    super(props);
     const Transport = require(props.transport).Transport;
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
     this.transport  = new Transport(props);
@@ -38,21 +38,17 @@ export class StateBus extends Component.Component {
     if (state.revision == -1) {
       await this.transport.destroy(state.stateId);
     } else {
-      if (this.state != null) {
-        try { state.data = this.state.from(state.data); }
-        catch (e) {
-          this.logger.warn('Failed on State: %s', state.stateId);
-          this.logger.warn('Data: %j', state.data);
-          throw e;
-        }
-      }
-      await this.transport.save(state);
+      await this.transport.save(this.typeState(state));
     }
   }
 
   public async get(stateId: string): Promise<State> {
     const state = await this.transport.load(stateId);
-    if (state == null) return new State(stateId, -1, null);
+    if (state == null) return this.typeState(new State(stateId, -1, null));
+    return this.typeState(state);
+  }
+
+  protected typeState(state: State) {
     if (this.state != null) {
       try { state.data = this.state.from(state.data); }
       catch (e) {
@@ -63,7 +59,7 @@ export class StateBus extends Component.Component {
         }
       }
     }
-    return state.clone();
+    return state;
   }
 
   public async stop(): Promise<void> {

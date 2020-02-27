@@ -3,35 +3,42 @@ import { Helper  } from './Helper';
 import { Process } from './Process';
 
 export interface props {
-  context?: string;
+  context:  string;
   name:     string;
-  logger?:  string | Logger;
-  process?: Process;
+  type?:    string;
+  process:  Process;
   helpers?: { [name: string]: Helper };
 }
 
 export class Component {
-  readonly  context: string;
-  readonly  name:    string;
-  protected started: boolean;
-  protected process: Process;
-  protected logger:  Logger;
-  protected helpers: { [name: string]: Helper };
+  readonly  context?: string;
+  readonly  name:     string;
+  readonly  type:     string;
+  protected started:  boolean;
+  protected process:  Process;
+  protected logger:   Logger;
+  protected helpers:  { [name: string]: Helper };
 
   constructor(props: props) {
-    if (typeof props.name !== 'string') throw new Error('name property is required');
-    if (props.logger == null) props.logger = props.name;
-    if (typeof props.logger == 'string') props.logger = new Logger(props.logger);
-    this.context = props.context || '(none)';
+    this.context = props.context;
     this.name    = props.name;
-    this.logger  = props.logger;
+    this.type    = props.type || (this.constructor.name != props.name ? this.constructor.name : 'Component');
     this.process = props.process;
     this.helpers = props.helpers || {};
+    this.logger  = new Logger(this.fqn);
     this.started = false;
   }
 
   get fqn() {
-    return this.constructor.name + ':' + this.context + '.' + this.name;
+    if (this.context == null) {
+      return this.name + ':' + this.type;
+    } else {
+      return this.context + '.' + this.name + ':' + this.type;
+    }
+  }
+
+  public mkprops(props: any) {
+    return { context: this.context, name: this.name, ...props };
   }
 
   public start(): Promise<void> {

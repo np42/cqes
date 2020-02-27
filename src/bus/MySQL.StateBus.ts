@@ -46,7 +46,7 @@ export class Transport extends Component.Component implements StateBus.Transport
   }
 
   public destroy(id: string): Promise<void> {
-    const query = 'SELECT FROM `@states` WHERE `owner` ? AND `stateId` = ?';
+    const query = 'DELETE FROM `@states` WHERE `owner` = ? AND `stateId` = ?';
     return <any> this.mysql.request(query, [this.owner, id]);
   }
 

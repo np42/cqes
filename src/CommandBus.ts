@@ -37,7 +37,7 @@ export class CommandBus extends Component.Component {
   protected category:  string;
 
   constructor(props: props) {
-    super({ logger: 'CommandBus:' + props.name, ...props });
+    super(props);
     const Transport = require(props.transport).Transport;
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
     if (props.channel == null) throw new Error('Missing channel reference');

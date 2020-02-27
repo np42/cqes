@@ -96,7 +96,7 @@ export class Process extends Component.Component {
 
   constructor(props: props) {
     if (props.name == null) throw new Error('Need a <name> to start');
-    super({ name: props.name, logger: 'Process:' + props.name });
+    super({ context: null, name: props.name, process: null });
     this.root          = props.root || process.cwd();
     this.configFile    = join(this.root, props.config || 'cqesconfig.yml');
     this.argv          = props.argv || [];
@@ -156,7 +156,7 @@ export class Process extends Component.Component {
 
   protected loadContexts() {
     for (const [contextName, contextProps] of this.contextsProps) {
-      const context       = new Context.Context(contextProps);
+      const context       = new Context.Context({ context: contextProps.name, name: 'This', process: this });
       this.contexts.set(contextName, context);
       context.views    = this.getContextViews(contextProps, contextProps.views);
       context.managers = this.getContextManagers(contextProps, contextProps.managers);
@@ -309,12 +309,16 @@ export class Process extends Component.Component {
 
   protected getBuses<T>(busType: string, from: string, name: string, slots: Array<SlotConfig>, extra?: any) {
     const result = <RecordMap<T>>{};
-    for (let item of slots) {
-      if (typeof item === 'string') item = { path: item };
-      Object.assign(item, this.getBusPathContext(item.path, from));
-      if (item.context == null) throw new Error('Please define how to access ' + item.path + ' : ' + busType);
-      const props = { name, context: from, ...extra, ...item.context[busType], ...item.props };
-      result[item.as] = <T>this['get' + busType](props, item.context.name, item.slot);
+    const commonProps = { context: from, name, process: this };
+    for (const item of slots) {
+      const config = typeof item === 'string' ? { path: item } : item
+      Object.assign(config, this.getBusPathContext(config.path, from));
+      if (config.context != null) {
+        const props = { ...commonProps, ...extra, ...config.context[busType], ...config.props };
+        result[config.as] = <T>this['get' + busType](props, config.context.name, config.slot);
+      } else {
+        throw new Error('Please define how to access ' + config.path + ' : ' + busType);
+      }
     }
     return result;
   }
@@ -324,7 +328,7 @@ export class Process extends Component.Component {
     const name  = match[1] || defaultContextName;
     const slot  = match[2];
     const as    = match[3] || match[2];
-    const context = this.contextsProps.get(name);
+    const context = this.contextsProps.get(name) || { name };
     return { context, as, slot };
   }
 
@@ -341,16 +345,13 @@ export class Process extends Component.Component {
     const replies   = this.getTypes(contextName, view, 'replies');
     const parts     = { transport, view, queries, replies };
     if (props.mode == 'client') {
-      const contextViews = this.contextsProps.get(contextName).views;
-      if (!(view in contextViews)) {
-        return new QueryBus({ ...props, ...parts });
-      } else {
-        const serverProps  = contextViews[view].QueryBus;
+      const clientContext = this.contextsProps.get(contextName);
+      if (clientContext?.views != null && view in clientContext.views) {
+        const serverProps  = clientContext.views[view].QueryBus;
         return new QueryBus({ ...props, ...serverProps, ...parts });
       }
-    } else {
-      return new QueryBus({ ...props, ...parts });
     }
+    return new QueryBus({ ...props, ...parts });
   }
 
   protected getEventBus(props: any, contextName: string, category: string) {
@@ -373,7 +374,7 @@ export class Process extends Component.Component {
       const commonProps        = { context: contextName, name, process: this };
       const config             = this.parseRepository(path);
       const stateBusProps      = { ...commonProps, ...extra.StateBus };
-      const stateBus           = this.getStateBus(stateBusProps, contextName, name);
+      const stateBus           = this.getStateBus(stateBusProps, config.context, config.name);
       const remoteEventBus     = (this.contextsProps.get(config.context) || {}).EventBus;
       const ebProps            = { originContext: config.context, category: config.name };
       const eventBusProps      = { ...commonProps, ...remoteEventBus, ...extra.EventBus, ...ebProps };

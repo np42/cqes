@@ -14,6 +14,6 @@
   , "outDir": "dist"
   , "sourceMap": true
   }
-, "include": [ "index.ts", "src/bus/*.ts", "src/helper/*.ts", "test/*.ts" ]
+, "include": [ "index.ts", "src/*.ts", "src/bus/*.ts", "src/helper/*.ts", "test/*.ts" ]
 , "exclude": [ "node_modules", "**/*.spec.ts" ]
 }

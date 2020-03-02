@@ -12,14 +12,19 @@ import * as View                   from './View';
 import * as Trigger                from './Trigger';
 import * as Service                from './Service';
 
-import { clone, merge, Tree, get, set
+import { clone, merge, get, set
+       , Content
        , isConstructor }           from 'cqes-util';
 
 import { hostname, userInfo }      from 'os';
-import * as fs                     from 'fs';
 import { join, dirname, basename } from 'path';
+import * as yargs                  from 'yargs';
 
-const yaml                         = require('js-yaml');
+
+export interface argv {
+  _:       Array<string>;
+  config?: string;
+}
 
 function safeRequire(path: string) {
   try {
@@ -56,50 +61,13 @@ export class Process extends Component.Component {
   protected contexts:      Map<string, Context.Context>;
   readonly  argv:          Array<string>;
 
-  static async readYaml(filepath: string) {
-    const content = await new Promise((resolve, reject) => {
-      return fs.readFile(filepath, (err, content) => {
-        if (err) return reject(err);
-        try {
-          const config = yaml.safeLoad(content.toString());
-          return resolve(config);
-        } catch (e) {
-          return reject(e);
-        }
-      });
-    });
-    return Process.inflateConfig(content);
-  }
-
-  static inflateConfig(data: any, root?: any) {
-    if (root == null) root = data;
-    return Tree.replace(data, (holder, key) => {
-      if (!(holder instanceof Object)) return holder;
-      if (holder instanceof Array) return holder;
-      const result = {};
-      for (const key in holder) {
-        if (key.substr(0, 2) === '&:') {
-          const lastOffset = key.lastIndexOf(':');
-          const target     = key.substr(lastOffset + 1);
-          const skip       = lastOffset === 1 ? 1 : Number(target);
-          const source     = key.substring(2, lastOffset > 1 ? lastOffset : key.length);
-          const value      = merge(get(root, source), Process.inflateConfig(holder[key], root));
-          const output     = isNaN(skip) ? target : source.split('.').slice(skip).join('.');
-          set(result, output, value);
-        } else {
-          result[key] = holder[key];
-        }
-      }
-      return result;
-    });
-  }
-
   constructor(props: props) {
-    if (props.name == null) throw new Error('Need a <name> to start');
-    super({ context: null, name: props.name, process: null });
+    const argv         = <argv>yargs.argv;
+    if (argv._.length == 0) throw new Error('Need a <name> to start');
+    super({ context: null, name: argv._[0], process: null });
     this.root          = props.root || process.cwd();
-    this.configFile    = join(this.root, props.config || 'cqesconfig.yml');
-    this.argv          = props.argv || [];
+    this.configFile    = join(this.root, argv.config || 'cqesconfig.yml');
+    this.argv          = argv._.slice(1) || [];
     this.vars          = new Map();
     this.contextsProps = new Map();
     this.contexts      = new Map();
@@ -135,7 +103,7 @@ export class Process extends Component.Component {
   }
 
   protected async loadConfig() {
-    const configFileContent = await Process.readYaml(this.configFile);
+    const configFileContent = await Process.getContent(this.configFile);
     //console.log(JSON.stringify(configFileContent[this.name], null, 2));
     const contexts = configFileContent[this.name] || {};
     for (const contextName in contexts) {

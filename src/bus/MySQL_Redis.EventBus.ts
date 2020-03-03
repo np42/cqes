@@ -1,6 +1,7 @@
 import * as Component from '../Component';
 import * as EventBus  from '../EventBus';
 import { Event }      from '../Event';
+import { merge }      from 'cqes-util';
 import * as MySQL     from 'cqes-mysql';
 import * as redis     from 'redis';
 
@@ -8,8 +9,12 @@ export type eventHandler = EventBus.eventHandler;
 
 export interface props extends Component.props {
   originContext?: string;
-  MySQL:          MySQL.props;
-  Redis:          redis.ClientOpts;
+  host?:          string;
+  user?:          string;
+  password?:      string;
+  database?:      string;
+  MySQL?:         { url: string } & MySQL.props;
+  Redis?:         redis.ClientOpts;
 }
 
 export class Subscription implements EventBus.Subscription {
@@ -50,13 +55,20 @@ export class Transport extends Component.Component implements EventBus.Transport
   constructor(props: props) {
     super(props);
     if (props.MySQL == null)          props.MySQL = <any>{};
-    if (props.MySQL.name == null)     props.MySQL.name = props.name;
-    if (props.MySQL.user == null)     props.MySQL.user = 'cqes';
-    if (props.MySQL.password == null) props.MySQL.password = 'changeit';
-    if (props.MySQL.database == null) props.MySQL.database = 'cqes-' + props.name.toLowerCase();
-    this.mysql         = new MySQL.MySQL(props.MySQL);
+    if (props.MySQL.url != null)      props.MySQL = merge(props.MySQL, MySQL.parseURL(props.MySQL.url));
+    if (props.MySQL.host == null)     props.MySQL.host = props.host || '127.0.0.1';
+    if (props.MySQL.user == null)     props.MySQL.user = props.user || this.process.vars.get('profile');
+    if (props.MySQL.password == null) props.MySQL.password = props.password || 'changeit';
+    if (props.MySQL.database == null) props.MySQL.database = props.database || 'cqes-' + props.name.toLowerCase();
+    if (props.Redis == null)          props.Redis = <any>{};
+    if (props.Redis.host == null)     props.Redis.host = props.host || props.MySQL.host;
+    this.mysql         = new MySQL.MySQL(this.mkprops(props.MySQL));
     this.redis         = redis.createClient(props.Redis);
     this.originContext = props.originContext || props.context;
+  }
+
+  public async start() {
+    await this.mysql.start();
   }
 
   public async save(events: Array<Event>): Promise<void> {
@@ -267,4 +279,10 @@ export class Transport extends Component.Component implements EventBus.Transport
       this.logger.error(e);
     }
   }
+
+  public async stop(): Promise<void> {
+    await this.mysql.stop();
+    await this.redis.end();
+  }
+
 }

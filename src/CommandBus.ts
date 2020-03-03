@@ -41,7 +41,7 @@ export class CommandBus extends Component.Component {
     const Transport = require(props.transport).Transport;
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
     if (props.channel == null) throw new Error('Missing channel reference');
-    this.transport = new Transport(props);
+    this.transport = new Transport({ ...props, type: 'CommandBus.Transport' });
     this.channel   = props.channel;
     this.commands  = props.commands || {};
     const offset   = this.channel.indexOf('.');

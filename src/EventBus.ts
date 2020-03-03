@@ -37,7 +37,7 @@ export class EventBus extends Component.Component {
     const Transport = require(props.transport).Transport;
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
     if (props.category == null) throw new Error('Missing category reference');
-    this.transport  = new Transport(props);
+    this.transport  = new Transport({ ...props, type: 'EventBus.Transport' });
     this.category   = props.category;
     this.events     = props.events || {};
   }

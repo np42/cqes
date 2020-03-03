@@ -23,7 +23,7 @@ export class StateBus extends Component.Component {
     super(props);
     const Transport = require(props.transport).Transport;
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
-    this.transport  = new Transport(props);
+    this.transport  = new Transport({ ...props, type: 'StateBus.Transport' });
     this.state      = props.state;
   }
 

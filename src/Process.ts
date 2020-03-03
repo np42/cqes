@@ -22,8 +22,9 @@ import * as yargs                  from 'yargs';
 
 
 export interface argv {
-  _:       Array<string>;
-  config?: string;
+  _:        Array<string>;
+  config?:  string;
+  env?:     string;
 }
 
 function safeRequire(path: string) {
@@ -56,10 +57,10 @@ type SlotConfig = string
 export class Process extends Component.Component {
   protected root:          string;
   protected configFile:    string;
-  protected vars:          Map<string, string>;
   protected contextsProps: Map<string, Context.ContextProps>;
   protected contexts:      Map<string, Context.Context>;
-  readonly  argv:          Array<string>;
+  readonly vars:           Map<string, string>;
+  readonly argv:           Array<string>;
 
   constructor(props: props) {
     const argv         = <argv>yargs.argv;
@@ -71,18 +72,19 @@ export class Process extends Component.Component {
     this.vars          = new Map();
     this.contextsProps = new Map();
     this.contexts      = new Map();
-    this.loadConstants();
+    this.loadConstants(argv);
   }
 
-  protected loadConstants() {
+  protected loadConstants(argv: argv) {
+    const env         = process.env;
     const environmentsAliases = { dev: 'development', prod: 'production' };
-    const environRaw  = (process.env.NODE_ENV || process.env.ENVIRONMENT || 'unknown').toLowerCase();
+    const environRaw  = (argv.env || env.NODE_ENV || env.ENVIRONMENT || 'unknown').toLowerCase();
     const environ     = environmentsAliases[environRaw] || environRaw;
-    if (environ == 'unknown')
-      this.logger.warn('Unknown environment type (e.g. developement, staging, production)');
     if (environ !== 'production')
       Error.stackTraceLimit = Infinity;
     process.env.NODE_ENV = environ;
+    const profileMatch = /^cqes-(.+)\.ya?ml$/.exec(argv.config);
+    this.vars.set('profile',  profileMatch ? profileMatch[1] : 'default');
     this.vars.set('hostname', hostname());
     this.vars.set('procuser', userInfo().username);
     this.vars.set('launcher', process.stdin.isTTY ? 'console' : 'daemon');

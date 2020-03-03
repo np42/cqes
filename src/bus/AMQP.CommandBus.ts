@@ -47,25 +47,31 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     this.channels  = new Map();
   }
 
-  public start(): Promise<void> {
-    return this.connect();
+  public async start(): Promise<void> {
+    await super.start();
+    await this.connect();
   }
 
   protected async connect(): Promise<void> {
     this.lastConnection = Date.now();
     if (this.connectFlag) clearTimeout(this.connectFlag);
     this.logger.log('Connecting to %s', this.config.url);
-    const connection = await amqp.connect(this.config.url);
-    this.amqp = connection;
-    this.amqp.on('error', (err: Error) => {
-      this.logger.error('Received', err);
-      this.reconnect()
-    });
-    this.amqp.on('close', (err: Error) => {
-      this.logger.warn('Connection lost');
-      this.amqp = null;
-      this.reconnect()
-    });
+    try {
+      const connection = await amqp.connect(this.config.url);
+      this.amqp = connection;
+      this.amqp.on('error', (err: Error) => {
+        this.logger.error('Received %s', err);
+        this.reconnect()
+      });
+      this.amqp.on('close', (err: Error) => {
+        this.logger.warn('Connection lost %s', err);
+        this.amqp = null;
+        this.reconnect()
+      });
+    } catch (err) {
+      this.logger.error('Connection failed %s', err);
+      return this.reconnect();
+    }
     await Promise.all(this.listeners.map(({ queue, handler }) => this.bind(queue, handler)));
   }
 
@@ -81,7 +87,7 @@ export class Transport extends Component.Component implements CommandBus.Transpo
     const ack = async (message: amqp.Message, fn?: () => void) => {
       if (fn) fn();
       try { await channel.ack(message); }
-      catch (e) { this.logger.error(e); this.reconnect(); }
+      catch (e) { this.logger.error('%s', e); this.reconnect(); }
     };
     const nack = async (message: amqp.Message, requeue: boolean, fn?: () => void) => {
       if (fn) fn();
@@ -137,19 +143,24 @@ export class Transport extends Component.Component implements CommandBus.Transpo
   }
 
   protected async reconnect(): Promise<void> {
+    if (this.started !== true) return ;
     if (this.connectFlag != null) return ;
     await this.disconnect();
     const now = Date.now();
     const delay = (this.lastConnection + 5000) - now;
     if (delay > 10) {
-      clearTimeout(this.connectFlag);
-      this.logger.log('Reconnecting in %sms', delay);
-      this.connectFlag = setTimeout(() => {
-        this.connectFlag = null;
-        this.reconnect()
-      }, delay);
+      if (this.connectFlag == null) {
+        return new Promise(resolve => {
+          this.logger.log('Reconnecting in %sms', delay);
+          this.connectFlag = setTimeout(async () => {
+            this.connectFlag = null;
+            await this.reconnect();
+            resolve();
+          }, delay);
+        });
+      }
     } else {
-      this.connect();
+      return this.connect();
     }
   }
 
@@ -166,10 +177,15 @@ export class Transport extends Component.Component implements CommandBus.Transpo
 
   protected async disconnect(): Promise<void> {
     this.channels.clear();
+    if (this.connectFlag) {
+      clearTimeout(this.connectFlag);
+      this.connectFlag = null;
+    }
     if (this.amqp != null) {
       try { await this.amqp.close(); }
-      catch (e) { this.logger.error(e); }
+      catch (e) { this.logger.error('%s', e); }
       this.amqp = null;
+      this.logger.log('Disconnected');
     }
   }
 

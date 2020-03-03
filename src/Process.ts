@@ -92,19 +92,18 @@ export class Process extends Component.Component {
   public async start() {
     const promises = [];
     const timeouts = <any>[];
-    this.logger.log('%bold', 'Load Config file');
     await this.loadConfig();
-    this.logger.log('%bold', 'Load Contexts');
     await this.loadContexts();
-    this.logger.log('%bold', 'Start Components');
     await this.startComponents();
     this.catchErrors();
     this.logger.log('%bold', 'Process Ready');
   }
 
   protected async loadConfig() {
-    const configFileContent = await Process.getContent(this.configFile);
-    //console.log(JSON.stringify(configFileContent[this.name], null, 2));
+    this.logger.log('%bold %s', 'Load Config file', this.configFile);
+    const configFileContent = await Content.getFile(this.configFile);
+    //console.log(JSON.stringify(configFileContent, null, 2));
+    //process.exit();
     const contexts = configFileContent[this.name] || {};
     for (const contextName in contexts) {
       this.logger.log('%magenta %cyan found', 'Context', contextName);
@@ -123,6 +122,7 @@ export class Process extends Component.Component {
   }
 
   protected loadContexts() {
+    this.logger.log('%bold', 'Load Contexts');
     for (const [contextName, contextProps] of this.contextsProps) {
       const context       = new Context.Context({ context: contextProps.name, name: 'This', process: this });
       this.contexts.set(contextName, context);
@@ -418,6 +418,7 @@ export class Process extends Component.Component {
   }
 
   protected startComponents(): Promise<void> {
+    this.logger.log('%bold', 'Start Components');
     const promises = <Array<Promise<void>>>[];
     for (const [contextName, context] of this.contexts) {
       if (!(context instanceof Context.Context)) continue ;

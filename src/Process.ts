@@ -183,8 +183,6 @@ export class Process extends Component.Component {
       const eventBuses2     = this.getEventBuses(context.name, name, serviceProps.streams);
       const eventBuses      = { ...eventBuses1, ...eventBuses2 };
       const subscriptions   = Object.keys(eventBuses1);
-      const eventBusProps   = { ...commonProps, ...context.EventBus, ...serviceProps.EventBus };
-      const eventBus        = this.getEventBus(eventBusProps, context.name, name);
       const repoStateBus    = { ...context.StateBus, ...serviceProps.StateBus };
       const repoEventBus    = { ...context.EventBus, ...serviceProps.EventBus };
       const repoProps       = { ...serviceProps, StateBus: repoStateBus, EventBus: repoEventBus };

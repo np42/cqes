@@ -88,8 +88,10 @@ export class EventBus extends Component.Component {
 
   public typeEvent(event: E) {
     if (event.type in this.events) {
-      try { event.data = this.events[event.type].from(event.data); }
-      catch (e) {
+      try {
+        event.rawData = event.data;
+        event.data    = this.events[event.type].from(event.data);
+      } catch (e) {
         debugger;
         const { number, streamId, category, type } = event;
         this.logger.error('Failed when parsing event %s@%s-%s %s', number, category, streamId, type);

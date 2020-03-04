@@ -6,6 +6,7 @@ export class Event<A = any> {
   public type:     string;
   public data:     A;
   public meta:     any;
+  public rawData:  any;
 
   constructor(category: string, streamId: string, number: number, type: string, data: any, meta?: any) {
     this.position = null;

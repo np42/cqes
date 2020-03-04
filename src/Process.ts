@@ -190,12 +190,12 @@ export class Process extends Component.Component {
       const buses           = { eventBuses, commandBuses, queryBuses };
       const props           = { ...commonProps, ...serviceProps, ...buses, subscriptions, eventHandlers: null };
       if ('EventHandlers' in Package) {
-        const eHandlersProps    = { queryBuses, repositories };
-        const { eventHandlers } = new Package.EventHandlers({ ...commonProps, ...eHandlersProps, ...serviceProps });
-        props.eventHandlers = eventHandlers;
+        const eHandlersProps = { queryBuses, repositories };
+        const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...eHandlersProps, ...serviceProps });
+        props.eventHandlers  = eventHandlers;
       } else {
-        const eHandlersProps    = { queryBuses: {}, repositories: {} };
-        props.eventHandlers     = new Service.Event.Handlers({ ...commonProps, ...eHandlersProps });
+        const eHandlersProps = { queryBuses: {}, repositories: {} };
+        props.eventHandlers  = new Service.Event.Handlers({ ...commonProps, ...eHandlersProps });
       }
       const service               = new Package[name](props);
       props.eventHandlers.service = service;

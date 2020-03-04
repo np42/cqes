@@ -25,6 +25,7 @@ export interface argv {
   _:        Array<string>;
   config?:  string;
   env?:     string;
+  dump?:    boolean;
 }
 
 function safeRequire(path: string) {
@@ -60,7 +61,7 @@ export class Process extends Component.Component {
   protected contextsProps: Map<string, Context.ContextProps>;
   protected contexts:      Map<string, Context.Context>;
   readonly vars:           Map<string, string>;
-  readonly argv:           Array<string>;
+  readonly argv:           argv;
 
   constructor(props: props) {
     const argv         = <argv>yargs.argv;
@@ -68,22 +69,22 @@ export class Process extends Component.Component {
     super({ context: null, name: argv._[0], process: null });
     this.root          = props.root || process.cwd();
     this.configFile    = join(this.root, argv.config || 'cqesconfig.yml');
-    this.argv          = argv._.slice(1) || [];
+    this.argv          = argv;
     this.vars          = new Map();
     this.contextsProps = new Map();
     this.contexts      = new Map();
-    this.loadConstants(argv);
+    this.loadConstants();
   }
 
-  protected loadConstants(argv: argv) {
+  protected loadConstants() {
     const env         = process.env;
     const environmentsAliases = { dev: 'development', prod: 'production' };
-    const environRaw  = (argv.env || env.NODE_ENV || env.ENVIRONMENT || 'unknown').toLowerCase();
+    const environRaw  = (this.argv.env || env.NODE_ENV || env.ENVIRONMENT || 'unknown').toLowerCase();
     const environ     = environmentsAliases[environRaw] || environRaw;
     if (environ !== 'production')
       Error.stackTraceLimit = Infinity;
     process.env.NODE_ENV = environ;
-    const profileMatch = /^cqes-(.+)\.ya?ml$/.exec(argv.config);
+    const profileMatch = /^cqes-(.+)\.ya?ml$/.exec(this.argv.config);
     this.vars.set('profile',  profileMatch ? profileMatch[1] : 'default');
     this.vars.set('hostname', hostname());
     this.vars.set('procuser', userInfo().username);
@@ -104,8 +105,10 @@ export class Process extends Component.Component {
   protected async loadConfig() {
     this.logger.log('%bold %s', 'Load Config file', this.configFile);
     const configFileContent = await Content.getFile(this.configFile);
-    //console.log(JSON.stringify(configFileContent, null, 2));
-    //process.exit();
+    if (this.argv.dump) {
+      console.log(JSON.stringify(configFileContent[this.name], null, 2));
+      process.exit();
+    }
     const contexts = configFileContent[this.name] || {};
     for (const contextName in contexts) {
       this.logger.log('%magenta %cyan found', 'Context', contextName);

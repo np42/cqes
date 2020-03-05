@@ -282,7 +282,7 @@ export class Transport extends Component.Component implements EventBus.Transport
 
   public async stop(): Promise<void> {
     await this.mysql.stop();
-    await this.redis.end();
+    await this.redis.quit();
   }
 
 }

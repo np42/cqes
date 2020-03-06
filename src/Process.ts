@@ -219,11 +219,12 @@ export class Process extends Component.Component {
       if (viewProps.psubscribe == null)   viewProps.psubscribe = [];
       if (viewProps.targets == null)      viewProps.targets = [];
       if (viewProps.repositories == null) viewProps.repositories = [];
+      const hasQS              = viewProps.noquery === true ? false : true;
       const serial             = viewProps.serial;
       const commonProps        = { context: context.name, name, serial, process: this };
       const eventBuses         = this.getEventBuses(context.name, name, viewProps.psubscribe);
       const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus, mode: 'server' };
-      const queryBus           = viewProps.noquery ? null : this.getQueryBus(queryBusProps, context.name, name);
+      const queryBus           = hasQS ? this.getQueryBus(queryBusProps, context.name, name) : null;
       const repoStateBus       = { ...context.StateBus, ...viewProps.StateBus };
       const repoEventBus       = { ...context.EventBus, ...viewProps.EventBus };
       const repoProps          = { ...viewProps, StateBus: repoStateBus, EventBus: repoEventBus };
@@ -232,7 +233,7 @@ export class Process extends Component.Component {
       const queryBuses         = this.getQueryBuses(context.name, name, viewProps.views);
       const handlersDeps       = { queryBuses, commandBuses, repositories };
       const handlersProps      = { ...commonProps, ...viewProps, ...handlersDeps };
-      const { queryHandlers }  = this.getQueryHandlers(context.name, name, handlersProps);
+      const { queryHandlers }  = hasQS ? this.getQueryHandlers(context.name, name, handlersProps) : <any>{};
       const { updateHandlers } = this.getUpdateHandlers(context.name, name, handlersProps);
       const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
       const view  = new View.View(props);

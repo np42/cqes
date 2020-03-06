@@ -143,7 +143,8 @@ export class Process extends Component.Component {
       if (/^_/.test(name)) return this.logger.log('Skip manager %s', name.substr(1)), result;
       const managerProps        = managersProps[name];
       if (managerProps.listen == null) managerProps.listen = [name];
-      const commonProps         = { context: context.name, name, process: this };
+      const serial              = managerProps.serial;
+      const commonProps         = { context: context.name, name, serial, process: this };
       const queryBuses          = this.getQueryBuses(context.name, name, managerProps.views);
       const eventBusProps       = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
       const eventBusIn          = this.getEventBus(eventBusProps, context.name, name);
@@ -179,7 +180,8 @@ export class Process extends Component.Component {
       if (serviceProps.psubscribe == null)   serviceProps.psubscribe   = [];
       if (serviceProps.streams == null)      serviceProps.streams      = [];
       if (serviceProps.repositories == null) serviceProps.repositories = [];
-      const commonProps     = { context: context.name, name, process: this };
+      const serial          = serviceProps.serial;
+      const commonProps     = { context: context.name, name, serial, process: this };
       const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.targets);
       const queryBuses      = this.getQueryBuses(context.name, name, serviceProps.views);
       const eventBuses1     = this.getEventBuses(context.name, name, serviceProps.psubscribe);
@@ -217,7 +219,8 @@ export class Process extends Component.Component {
       if (viewProps.psubscribe == null)   viewProps.psubscribe = [];
       if (viewProps.targets == null)      viewProps.targets = [];
       if (viewProps.repositories == null) viewProps.repositories = [];
-      const commonProps        = { context: context.name, name, process: this };
+      const serial             = viewProps.serial;
+      const commonProps        = { context: context.name, name, serial, process: this };
       const eventBuses         = this.getEventBuses(context.name, name, viewProps.psubscribe);
       const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
       const queryBus           = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);

@@ -220,9 +220,10 @@ export class Process extends Component.Component {
       if (viewProps.targets == null)      viewProps.targets = [];
       if (viewProps.repositories == null) viewProps.repositories = [];
       const hasQS              = viewProps.noquery === true ? false : true;
+      const hasUS              = viewProps.noupdate === true ? false : true;
       const serial             = viewProps.serial;
       const commonProps        = { context: context.name, name, serial, process: this };
-      const eventBuses         = this.getEventBuses(context.name, name, viewProps.psubscribe);
+      const eventBuses         = hasUS ? this.getEventBuses(context.name, name, viewProps.psubscribe) : {};
       const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus, mode: 'server' };
       const queryBus           = hasQS ? this.getQueryBus(queryBusProps, context.name, name) : null;
       const repoStateBus       = { ...context.StateBus, ...viewProps.StateBus };
@@ -234,7 +235,7 @@ export class Process extends Component.Component {
       const handlersDeps       = { queryBuses, commandBuses, repositories };
       const handlersProps      = { ...commonProps, ...viewProps, ...handlersDeps };
       const { queryHandlers }  = hasQS ? this.getQueryHandlers(context.name, name, handlersProps) : <any>{};
-      const { updateHandlers } = this.getUpdateHandlers(context.name, name, handlersProps);
+      const { updateHandlers } = hasUS ? this.getUpdateHandlers(context.name, name, handlersProps) : <any>{};
       const props = { ...commonProps, queryBus, eventBuses, queryHandlers, updateHandlers };
       const view  = new View.View(props);
       this.logger.log('%blue %cyan.%cyan found', 'View', context.name, name);

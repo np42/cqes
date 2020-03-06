@@ -20,17 +20,19 @@ export interface props extends Component.props {
 }
 
 export class View extends Component.Component {
-  protected eventBuses:     EventBuses;
-  protected updateHandlers: Update.Handlers;
-  protected queryBus:       QueryBus;
-  protected queryHandlers:  Query.Handlers;
-  protected subscriptions:  Array<Subscription>;
+  protected eventBuses:      EventBuses;
+  protected updateHandlers?: Update.Handlers;
+  protected queryBus:        QueryBus;
+  protected queryHandlers?:  Query.Handlers;
+  protected subscriptions:   Array<Subscription>;
 
   constructor(props: props) {
     if (props.context == null) throw new Error('Context is required');
     if (props.name    == null) throw new Error('Name is required');
-    if (!(props.updateHandlers instanceof Update.Handlers)) throw new Error('Bad Update Handlers');
-    if (!(props.queryHandlers instanceof Query.Handlers)) throw new Error('Bad Query Handlers');
+    if (props.updateHandlers != null && !(props.updateHandlers instanceof Update.Handlers))
+      throw new Error('Bad Update Handlers');
+    if (props.queryHandlers != null && !(props.queryHandlers instanceof Query.Handlers))
+      throw new Error('Bad Query Handlers');
     super({ type: 'View', ...props });
     this.eventBuses     = props.eventBuses;
     this.updateHandlers = props.updateHandlers;
@@ -42,15 +44,17 @@ export class View extends Component.Component {
   public async start(): Promise<void> {
     if (this.started) return ;
     await super.start();
-    await this.updateHandlers.start();
-    await this.queryHandlers.start();
-    await this.queryBus.start();
+    if (this.updateHandlers != null) await this.updateHandlers.start();
+    if (this.queryHandlers != null)  await this.queryHandlers.start();
+    if (this.queryBus != null) await this.queryBus.start();
     this.subscriptions = await Promise.all(Object.values(this.eventBuses).map(async bus => {
       await bus.start();
       const subscription = [this.fqn, bus.category].join(':');
       return bus.psubscribe(subscription, event => this.handleUpdateEvent(event));
     }));
-    this.subscriptions.push(await this.queryBus.serve(query => this.handleViewQuery(query)));
+    if (this.queryBus != null) {
+      this.subscriptions.push(await this.queryBus.serve(query => this.handleViewQuery(query)));
+    }
   }
 
   protected getUpdateHandler(event: E): Update.handler {
@@ -91,9 +95,9 @@ export class View extends Component.Component {
     if (!this.started) return ;
     await Promise.all(this.subscriptions.map(sub => sub.abort()));
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.stop()));
-    await this.queryBus.stop();
-    await this.queryHandlers.stop();
-    await this.updateHandlers.stop();
+    if (this.queryBus != null) await this.queryBus.stop();
+    if (this.queryHandlers != null)  await this.queryHandlers.stop();
+    if (this.updateHandlers != null) await this.updateHandlers.stop();
     await super.stop();
   }
 

@@ -41,6 +41,7 @@ export interface ViewProps {
   EventBus:     any;
   QueryBus:     any;
   noquery:      boolean;
+  noupdate:     boolean;
   psubscribe:   Array<string>;
   views:        Array<string>;
   repositories: Array<string>;

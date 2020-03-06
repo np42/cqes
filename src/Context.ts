@@ -37,11 +37,14 @@ export interface ServiceProps {
   repositories: Array<string>;
 }
 
-export interface ViewProps extends ServiceProps {
+export interface ViewProps {
+  EventBus:     any;
   QueryBus:     any;
+  noquery:      boolean;
   psubscribe:   Array<string>;
   views:        Array<string>;
   repositories: Array<string>;
+  targets:      Array<string>;
 }
 
 export interface props extends Component.props {}

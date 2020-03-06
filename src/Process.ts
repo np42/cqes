@@ -222,8 +222,8 @@ export class Process extends Component.Component {
       const serial             = viewProps.serial;
       const commonProps        = { context: context.name, name, serial, process: this };
       const eventBuses         = this.getEventBuses(context.name, name, viewProps.psubscribe);
-      const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus };
-      const queryBus           = this.getQueryBus({ ...queryBusProps, mode: 'server' }, context.name, name);
+      const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus, mode: 'server' };
+      const queryBus           = viewProps.noquery ? null : this.getQueryBus(queryBusProps, context.name, name);
       const repoStateBus       = { ...context.StateBus, ...viewProps.StateBus };
       const repoEventBus       = { ...context.EventBus, ...viewProps.EventBus };
       const repoProps          = { ...viewProps, StateBus: repoStateBus, EventBus: repoEventBus };

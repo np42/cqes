@@ -1,9 +1,10 @@
-import * as Component from '../Component';
-import * as EventBus  from '../EventBus';
-import { Event }      from '../Event';
-import { merge }      from 'cqes-util';
-import * as MySQL     from 'cqes-mysql';
-import * as redis     from 'redis';
+import * as Component  from '../Component';
+import * as EventBus   from '../EventBus';
+import { Event }       from '../Event';
+import { EventNumber } from '../Event';
+import { merge }       from 'cqes-util';
+import * as MySQL      from 'cqes-mysql';
+import * as redis      from 'redis';
 
 export type eventHandler = EventBus.eventHandler;
 
@@ -83,8 +84,8 @@ export class Transport extends Component.Component implements EventBus.Transport
     const date    = new Date();
     const isodate = date.toISOString();
     events.forEach((event, offset) => {
-      if (event.meta?.persist === false) return ;
-      const number = event.number === -2 ? null : event.number;
+      if (event.meta?.$persistent === false) return ;
+      const number = event.number === EventNumber.Append ? null : event.number;
       rows.push('(?, ?, ?, ?, ?, ?, ?, ?)');
       params.push( event.category, event.streamId, number, event.type
                  , isodate.substr(0, 10), isodate.substr(11, 12)
@@ -95,7 +96,7 @@ export class Transport extends Component.Component implements EventBus.Transport
     if (rows.length > 0) {
       const result = <any>await this.mysql.request(query + rows.join(', '), params);
       events.forEach((event, offset) => {
-        if (event.meta?.persist !== false) {
+        if (event.meta?.$persistent !== false) {
           event.position = result.insertId + offset
           event.meta = Object.assign(event.meta || {}, { savedAt: date });
         }
@@ -250,7 +251,6 @@ export class Transport extends Component.Component implements EventBus.Transport
             }
             subscriptionHandler = async event => {
               await handler(event);
-              if (event.meta?.persist === false) return ;
               await this.upsertPSubscriptionPosition(id, event.position)
             };
             return resolve(subscription);

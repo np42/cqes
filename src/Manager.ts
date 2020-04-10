@@ -6,6 +6,7 @@ import { ConcurencyError }  from './CommandBus';
 import { EventBus }         from './EventBus';
 import { Command as C }     from './Command';
 import { Event   as E }     from './Event';
+import { EventNumber }      from './Event';
 import { State   as S }     from './State';
 
 export { Command };
@@ -82,8 +83,11 @@ export class Manager extends Component.Component {
       this.logger.log('%red %s %j', command.order, command.streamId, command.data);
       const state = await this.repository.get(stream);
       const events = await this.handleCommand(state, command);
-      for (let i = 0; i < events.length; i += 1)
-        events[i].number = state.revision + i + 1;
+      for (let i = 0, offset = 0; i < events.length; i += 1) {
+        if (events[i].meta?.$persistent === false) continue ;
+        events[i].number = state.revision + offset + 1;
+        offset += 1;
+      }
       try {
         await this.eventBus.emitEvents(events);
       } catch (e) {
@@ -101,23 +105,23 @@ export class Manager extends Component.Component {
     const events  = <Array<E>> [];
     const emitter = (type: string | E, data?: any, meta?: any) => {
       if (type instanceof E) events.push(type);
-      else events.push(new E(category, streamId, -1, type, data, meta));
+      else events.push(new E(category, streamId, EventNumber.Append, type, data, meta));
     };
     try {
       const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
       if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
       else if (returnedEvents instanceof E) events.push(returnedEvents);
     } catch (e) {
-      const meta  = { ...command.meta, persist: false, stack: e.stack };
+      const meta  = { ...command.meta, stack: e.stack };
       const data  = { type: e.name, message: e.toString() };
-      const event = new E(category, streamId, -2, 'Error', data, meta);
+      const event = new E(category, streamId, EventNumber.Error, 'Error', data, meta).volatil();
       this.logger.error('%yellow %s-%s %d', 'Error:' + order, category, streamId, command.data);
       this.logger.error(e);
       return [event];
     }
     if (events.length === 0) {
-      const meta  = { ...command.meta, persist: false, command: { category, order } };
-      const event = new E(category, streamId, -2, 'NoOp', command.data, meta);
+      const meta  = { ...command.meta, command: { category, order } };
+      const event = new E(category, streamId, EventNumber.NoOp, 'NoOp', command.data, meta).volatil();
       this.logger.log('%yellow %s-%s %d', 'NoOp:' + order, category, streamId, command.data);
       return [event];
     } else {

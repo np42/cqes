@@ -3,6 +3,7 @@ import { StateBus }               from './StateBus';
 import { EventBus, Subscription } from './EventBus';
 import * as Domain                from './DomainHandlers';
 import { State as S }             from './State';
+import { StateRevision }          from './State';
 import { Event as E }             from './Event';
 import { Typer }                  from 'cqes-type';
 const CachingMap                  = require('caching-map');
@@ -47,25 +48,29 @@ export class Repository extends Component.Component {
     const cached = this.cache.get(stream);
     if (cached != null) return cached;
     const snapshot = await this.stateBus.get(stream);
-    const offset = stream.indexOf('-');
+    const offset   = stream.indexOf('-');
     const category = stream.substr(0, offset);
     const streamId = stream.substr(offset + 1);
+    const revision = snapshot.revision;
     let state = snapshot;
-    await this.eventBus.readFrom(category, streamId, snapshot.revision, (event: E) => {
+    await this.eventBus.readFrom(category, streamId, revision + 1, (event: E) => {
       state = this.applyEvent(state, event);
       return Promise.resolve();
     });
     this.cache.set(stream, state);
-    this.stateBus.set(state);
+    if (revision < state.revision) this.stateBus.set(state);
     return state;
   }
 
   protected handleEvent(event: E): Promise<void> {
     const cached = this.cache.get(event.stream);
     if (cached == null) return Promise.resolve();
+    const initialRevision = cached.revision;
     const state = this.applyEvent(cached, event);
-    this.cache.set(event.stream, state);
-    this.stateBus.set(state);
+    if (event.meta?.$deleted) state.revision = StateRevision.Delete;
+    if (state.revision < 0) this.cache.delete(event.stream);
+    if (state.revision === initialRevision) return Promise.resolve();
+    return this.stateBus.set(state);
     return Promise.resolve();
   }
 
@@ -79,7 +84,7 @@ export class Repository extends Component.Component {
   }
 
   protected applyEvent(state: S, event: E) {
-    if (event.meta.persist === false) return state;
+    if (event.meta?.$persistent === false) return state;
     const applier = this.domainHandlers[event.type];
     if (applier != null) {
       this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);

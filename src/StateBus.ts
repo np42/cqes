@@ -1,6 +1,7 @@
-import * as Component from './Component';
-import { State }      from './State';
-import { Typer }      from 'cqes-type';
+import * as Component    from './Component';
+import { State }         from './State';
+import { StateRevision } from './State';
+import { Typer }         from 'cqes-type';
 
 export interface Transport {
   start:   () => Promise<void>;
@@ -35,10 +36,16 @@ export class StateBus extends Component.Component {
   }
 
   public async set(state: State): Promise<void> {
-    if (state.revision == -1) {
+    switch (state.revision) {
+    case StateRevision.New: {
+      // Skip
+    } break ;
+    case StateRevision.Delete: {
       await this.transport.destroy(state.stateId);
-    } else {
+    } break ;
+    default: {
       await this.transport.save(this.typeState(state));
+    } break ;
     }
   }
 

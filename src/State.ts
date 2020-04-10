@@ -1,6 +1,11 @@
 import { Event }        from './Event';
 import { merge, clone } from 'cqes-util';
 
+export enum StateRevision
+{ New    = -1
+, Delete = -2
+};
+
 export class State<A = any> {
   public stateId:   string;
   public revision:  number;
@@ -8,12 +13,12 @@ export class State<A = any> {
 
   constructor(stateId: string, revision: number, data: A) {
     this.stateId  = stateId;
-    this.revision = revision >= 0 ? revision : -1;
+    this.revision = revision >= 0 ? revision : StateRevision.New;
     this.data     = data instanceof Object ? data : <A>{};
   }
 
   public isNew() {
-    return this.revision === -1;
+    return this.revision === StateRevision.New;
   }
 
   public clone(): State<A> {
@@ -26,7 +31,7 @@ export class State<A = any> {
   }
 
   public end(): State<A> {
-    return new (<any>this.constructor)(this.stateId);
+    return new (<any>this.constructor)(this.stateId, StateRevision.Delete);
   }
 
 }

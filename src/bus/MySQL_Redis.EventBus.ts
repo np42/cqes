@@ -251,6 +251,7 @@ export class Transport extends Component.Component implements EventBus.Transport
             }
             subscriptionHandler = async event => {
               await handler(event);
+              if (event.meta?.$persistent === false) return ;
               await this.upsertPSubscriptionPosition(id, event.position)
             };
             return resolve(subscription);

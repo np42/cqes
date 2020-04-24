@@ -16,12 +16,10 @@ export class Command<A = any> {
     this.meta      = { ...meta, createdAt: new Date() };
   }
 
-  public toEvent(type: string, data?: Partial<A>, doMerge: boolean = true) {
-    if (data == null)
-      data = this.data;
-    else if (doMerge)
-      data = merge(this.data, data);
-    return new Event(this.category, this.streamId, -1, type, data, this.meta);
+  public toEvent<X>(type: { new (...a: Array<any>): X }, data?: Partial<X>, doMerge: boolean = true) {
+    if (data == null) data = this.data;
+    else if (doMerge) data = merge(this.data, data);
+    return new Event(this.category, this.streamId, -1, type.name, data, this.meta);
   }
 
   public get stream() {

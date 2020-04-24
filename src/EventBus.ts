@@ -73,6 +73,8 @@ export class EventBus extends Component.Component {
   }
 
   public readFrom(category: string, streamId: string, number: number, handler: eventHandler, options?: Options) {
+    if (category == null) throw new Error('Need a category');
+    if (streamId == null) throw new Error('Need a streamId');
     options = this.parseOptions(options);
     return this.transport.readFrom(category, streamId, number, (event: E) => {
       return handler(options.raw ? event : this.typeEvent(event));

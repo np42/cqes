@@ -9,8 +9,8 @@ import { Typer }        from 'cqes-type';
 export type handler = (event: Event) => Promise<void>;
 
 export function getset(target: Object, key: string, descriptor: PropertyDescriptor): PropertyDescriptor {
-  if (typeof target['get'] !== 'function') throw new Error('Missing .get method');
-  if (typeof target['set'] !== 'function') throw new Error('Missing .set method');
+  if (typeof (<any>target)['get'] !== 'function') throw new Error('Missing .get method');
+  if (typeof (<any>target)['set'] !== 'function') throw new Error('Missing .set method');
   const handler = descriptor.value;
   descriptor.value = async function (event: Event) {
     const data   = await this.get(event.streamId, event);
@@ -35,7 +35,7 @@ export class Handlers extends Component.Component {
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   // About State
   protected repositories: StateAble.Repositories;
-  protected get:          (target: string, streamId: string) => Promise<State>;
+  protected get:          <X>(target: { new (...a: Array<any>): X }, streamId: string) => Promise<State<X>>;
 
   constructor(props: props) {
     super(props);

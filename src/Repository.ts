@@ -14,6 +14,7 @@ export interface Events          { [name: string]: Typer };
 export interface DomainHandlers  { [name: string]: Domain.handler };
 
 export interface props extends Component.props {
+  category?:        string;
   stateBus?:        StateBus;
   eventBus?:        EventBus;
   domainHandlers?:  Domain.Handlers;
@@ -21,14 +22,16 @@ export interface props extends Component.props {
 }
 
 export class Repository extends Component.Component {
+  protected category:       string;
   protected stateBus:       StateBus;
-  protected cache:          Map<string, S>
+  protected cache:          Map<string, S>;
   protected eventBus:       EventBus;
   protected subscription:   Subscription;
   protected domainHandlers: Domain.Handlers;
 
   constructor(props: props) {
     super(props);
+    this.category       = props.category;
     this.stateBus       = props.stateBus;
     this.cache          = new CachingMap({ size: props.cacheSize || 1000 });
     this.eventBus       = props.eventBus;
@@ -44,31 +47,28 @@ export class Repository extends Component.Component {
     this.subscription = await this.eventBus.subscribe(event => this.handleEvent(event));
   }
 
-  public async get(stream: string) {
-    const cached = this.cache.get(stream);
+  public async get(streamId: string) {
+    const cached = this.cache.get(streamId);
     if (cached != null) return cached;
-    const snapshot = await this.stateBus.get(stream);
-    const offset   = stream.indexOf('-');
-    const category = stream.substr(0, offset);
-    const streamId = stream.substr(offset + 1);
+    const snapshot = await this.stateBus.get(streamId);
     const revision = snapshot.revision;
     let state = snapshot;
-    await this.eventBus.readFrom(category, streamId, revision + 1, (event: E) => {
+    await this.eventBus.readFrom(this.category, streamId, revision + 1, (event: E) => {
       state = this.applyEvent(state, event);
       return Promise.resolve();
     });
-    this.cache.set(stream, state);
+    this.cache.set(streamId, state);
     if (revision < state.revision) this.stateBus.set(state);
     return state;
   }
 
   protected handleEvent(event: E): Promise<void> {
-    const cached = this.cache.get(event.stream);
+    const cached = this.cache.get(event.streamId);
     if (cached == null) return Promise.resolve();
     const initialRevision = cached.revision;
     const state = this.applyEvent(cached, event);
     if (event.meta?.$deleted) state.revision = StateRevision.Delete;
-    if (state.revision < 0) this.cache.delete(event.stream);
+    if (state.revision < 0) this.cache.delete(event.streamId);
     if (state.revision === initialRevision) return Promise.resolve();
     return this.stateBus.set(state);
     return Promise.resolve();
@@ -85,7 +85,7 @@ export class Repository extends Component.Component {
 
   protected applyEvent(state: S, event: E) {
     if (event.meta?.$persistent === false) return state;
-    const applier = this.domainHandlers[event.type];
+    const applier = <Domain.handler>(<any>this.domainHandlers)[event.type];
     if (applier != null) {
       this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
       const newState = applier.call(this.domainHandlers, state, event) || state;

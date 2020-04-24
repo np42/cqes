@@ -7,9 +7,7 @@
   , "removeComments": true
   , "preserveConstEnums": true
   , "allowUnreachableCode": true
-  , "suppressImplicitAnyIndexErrors": true
   , "declaration": true
-  , "strictFunctionTypes": false
   , "allowSyntheticDefaultImports": true
   , "outDir": "dist"
   , "sourceMap": true

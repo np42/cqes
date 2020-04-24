@@ -11,11 +11,15 @@ import { State   as S }     from './State';
 
 export { Command };
 
-export type emitter        = (type: string, data: any, meta?: any) => void
-export type commandHandler = (state: S, command: C, emit?: emitter) => Array<E> | E | void;
+export type emitter = Command.emitter;
 
 export interface CommandBuses    { [name: string]: CommandBus };
 export interface Subscription    { abort: () => Promise<void> };
+
+const defer = typeof queueMicrotask === 'function' ? queueMicrotask
+  : typeof process.nextTick === 'function' ? process.nextTick
+  : typeof setImmediate === 'function' ? setImmediate
+  : (fn: Function) => setTimeout(fn, 1);
 
 export interface props extends Component.props {
   commandBuses?:    CommandBuses;
@@ -64,24 +68,24 @@ export class Manager extends Component.Component {
     return Promise.resolve();
   }
 
-  protected getCommandHandler(command: C) {
+  protected getCommandHandler(command: C): Command.handler {
     const fullname = command.category + '_' + command.order;
-    if (fullname in this.commandHandlers) return this.commandHandlers[fullname];
+    if (fullname in this.commandHandlers) return (<any>this.commandHandlers)[fullname];
     const shortname = command.order;
-    if (shortname in this.commandHandlers) return this.commandHandlers[shortname];
+    if (shortname in this.commandHandlers) return (<any>this.commandHandlers)[shortname];
     const wildname = 'any';
-    if (wildname in this.commandHandlers) return this.commandHandlers[wildname];
+    if (wildname in this.commandHandlers) return (<any>this.commandHandlers)[wildname];
     return function UnhandledCommand(state: S, command: C) {
       this.logger.warn('Command %s from %s has been lost', command.category, command.order);
     };
   }
 
   protected async handleManagerCommand(command: C): Promise<void> {
-    const stream = command.stream;
-    await this.lock(stream);
+    const streamId = command.streamId;
+    await this.lock(streamId);
     try {
-      this.logger.log('%red %s %j', command.order, command.streamId, command.data);
-      const state = await this.repository.get(stream);
+      this.logger.log('%red %s %j', command.order, streamId, command.data);
+      const state = await this.repository.get(streamId);
       const events = await this.handleCommand(state, command);
       for (let i = 0, offset = 0; i < events.length; i += 1) {
         if (events[i].meta?.$persistent === false) continue ;
@@ -91,11 +95,11 @@ export class Manager extends Component.Component {
       try {
         await this.eventBus.emitEvents(events);
       } catch (e) {
-        this.repository.expire(stream);
+        this.repository.expire(streamId);
         throw new ConcurencyError(e);
       }
     } finally {
-      process.nextTick(() => this.unlock(stream));
+      defer(() => this.unlock(streamId));
     }
   }
 
@@ -115,14 +119,14 @@ export class Manager extends Component.Component {
       const meta  = { ...command.meta, stack: e.stack };
       const data  = { type: e.name, message: e.toString() };
       const event = new E(category, streamId, EventNumber.Error, 'Error', data, meta).volatil();
-      this.logger.error('%yellow %s-%s %d', 'Error:' + order, category, streamId, command.data);
+      this.logger.error('%grey %s-%s %d', 'Error:' + order, category, streamId, command.data);
       this.logger.error(e);
       return [event];
     }
     if (events.length === 0) {
       const meta  = { ...command.meta, command: { category, order } };
       const event = new E(category, streamId, EventNumber.NoOp, 'NoOp', command.data, meta).volatil();
-      this.logger.log('%yellow %s-%s %d', 'NoOp:' + order, category, streamId, command.data);
+      this.logger.log('%grey %s-%s %d', 'NoOp:' + order, category, streamId, command.data);
       return [event];
     } else {
       return events;

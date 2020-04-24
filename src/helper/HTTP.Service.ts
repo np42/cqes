@@ -72,7 +72,7 @@ export class HTTPService extends Service.Service {
     if (handlerName in this) {
       this.logger.log('Handle %yellow %s %j', req.method, req.url, req.body);
       req.remoteAddress = this.extractRemoteAddress(req);
-      return this[handlerName](req, res);
+      return (<any>this)[handlerName](req, res);
     } else {
       this.logger.log('%red %yellow %s %j', 'Reject', req.method, req.url, req.body);
       res.writeHead(404, this.headers)

@@ -12,6 +12,8 @@ import * as View                   from './View';
 import * as Trigger                from './Trigger';
 import * as Service                from './Service';
 
+import * as StateAble              from './StateAble';
+
 import { clone, merge, get, set
        , Content
        , isConstructor }           from 'cqes-util';
@@ -80,7 +82,7 @@ export class Process extends Component.Component {
     const env         = process.env;
     const environmentsAliases = { dev: 'development', prod: 'production' };
     const environRaw  = (this.argv.env || env.NODE_ENV || env.ENVIRONMENT || 'unknown').toLowerCase();
-    const environ     = environmentsAliases[environRaw] || environRaw;
+    const environ     = (<any>environmentsAliases)[environRaw] || environRaw;
     if (environ !== 'production')
       Error.stackTraceLimit = Infinity;
     process.env.NODE_ENV = environ;
@@ -143,18 +145,19 @@ export class Process extends Component.Component {
       if (/^_/.test(name)) return this.logger.log('Skip manager %s', name.substr(1)), result;
       const managerProps        = managersProps[name];
       if (managerProps.listen == null) managerProps.listen = [name];
+      const category            = name;
       const serial              = managerProps.serial;
       const commonProps         = { context: context.name, name, serial, process: this };
       const queryBuses          = this.getQueryBuses(context.name, name, managerProps.views);
       const eventBusProps       = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
-      const eventBusIn          = this.getEventBus(eventBusProps, context.name, name);
-      const eventBusOut         = this.getEventBus(eventBusProps, context.name, name);
+      const eventBusIn          = this.getEventBus(eventBusProps, context.name, category);
+      const eventBusOut         = this.getEventBus(eventBusProps, context.name, category);
       const stateBusProps       = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
       const stateBus            = this.getStateBus(stateBusProps, context.name, name);
       const domainProps         = { ...commonProps, ...managerProps.repository };
       const { domainHandlers }  = this.getDomainHandlers(context.name, name, domainProps);
       const repositoryProps     = { stateBus, eventBus: eventBusIn, domainHandlers };
-      const repository          = new Repository.Repository({ ...commonProps, ...repositoryProps });
+      const repository          = new Repository.Repository({ ...commonProps, category, ...repositoryProps });
       const cHandlersProps      = { ...commonProps, queryBuses, ...managerProps };
       const { commandHandlers } = this.getCommandHandlers(context.name, name, cHandlersProps);
       const commandBuses        = this.getCommandBuses(context.name, name, managerProps.listen);
@@ -196,7 +199,7 @@ export class Process extends Component.Component {
       const props           = { ...commonProps, ...serviceProps, ...buses, subscriptions, eventHandlers: null };
       if ('EventHandlers' in Package) {
         const eHandlersProps = { queryBuses, repositories };
-        const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...eHandlersProps, ...serviceProps });
+        const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...serviceProps, ...eHandlersProps });
         props.eventHandlers  = eventHandlers;
       } else {
         const eHandlersProps = { queryBuses: {}, repositories: {} };
@@ -290,8 +293,8 @@ export class Process extends Component.Component {
       const config = typeof item === 'string' ? { path: item } : item
       Object.assign(config, this.getBusPathContext(config.path, from));
       if (config.context != null) {
-        const props = { ...commonProps, ...extra, ...config.context[busType], ...config.props };
-        result[config.as] = <T>this['get' + busType](props, config.context.name, config.slot);
+        const props = { ...commonProps, ...extra, ...(<any>config.context)[busType], ...config.props };
+        result[config.as] = <T>(<any>this)['get' + busType](props, config.context.name, config.slot);
       } else {
         throw new Error('Please define how to access ' + config.path + ' : ' + busType);
       }
@@ -345,20 +348,21 @@ export class Process extends Component.Component {
   }
 
   protected getRepositories(contextName: string, name: string, repositories: Array<string>, extra: any) {
-    const result = {};
+    const result = <StateAble.Repositories>{};
     repositories.forEach(path => {
       const commonProps        = { context: contextName, name, process: this };
       const config             = this.parseRepository(path);
-      const stateBusProps      = { ...commonProps, ...extra.StateBus };
+      const category           = config.name;
+      const remoteProps        = <any>(this.contextsProps.get(config.context) || {});
+      const stateBusProps      = { ...commonProps, ...remoteProps.StateBus };
       const stateBus           = this.getStateBus(stateBusProps, config.context, config.name);
-      const remoteEventBus     = (this.contextsProps.get(config.context) || {}).EventBus;
       const ebProps            = { originContext: config.context, category: config.name };
-      const eventBusProps      = { ...commonProps, ...remoteEventBus, ...extra.EventBus, ...ebProps };
+      const eventBusProps      = { ...commonProps, ...remoteProps.EventBus, ...ebProps };
       const eventBus           = this.getEventBus(eventBusProps, config.context, config.name);
       const handlersProps      = { ...commonProps, ...extra };
       const { domainHandlers } = this.getDomainHandlers(config.context, config.name, handlersProps);
       const deps               = { stateBus, eventBus, domainHandlers };
-      const props              = { ...commonProps, ...deps, ...config.props };
+      const props              = { ...commonProps, category, ...deps, ...config.props };
       const repository         = new Repository.Repository(props);
       result[config.name]      = repository;
     });

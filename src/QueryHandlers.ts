@@ -24,7 +24,7 @@ export class Handlers extends Component.Component {
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   // About State
   protected repositories: StateAble.Repositories;
-  protected get:          (target: string, streamId: string) => Promise<State>;
+  protected get:           <X>(type: { new (...a: Array<any>): X }, streamId: string) => Promise<State<X>>;
 
   constructor(props: props) {
     super(props);

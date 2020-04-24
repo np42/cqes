@@ -59,27 +59,27 @@ export class View extends Component.Component {
 
   protected getUpdateHandler(event: E): Update.handler {
     const fullname = event.category + '_' + event.type;
-    if (fullname in this.updateHandlers) return this.updateHandlers[fullname];
+    if (fullname in this.updateHandlers) return (<any>this.updateHandlers)[fullname];
     const shortname = event.type;
-    if (shortname in this.updateHandlers) return this.updateHandlers[shortname];
+    if (shortname in this.updateHandlers) return (<any>this.updateHandlers)[shortname];
     const wildname = 'any';
-    if (wildname in this.updateHandlers) return this.updateHandlers[wildname];
+    if (wildname in this.updateHandlers) return (<any>this.updateHandlers)[wildname];
   }
 
   protected handleUpdateEvent(event: E) {
     const handler  = this.getUpdateHandler(event);
     if (handler != null) {
       const { number, category, streamId, data } = event;
-      this.logger.log('%blue %s@%s-%s %j', handler.name, number, category, streamId, data);
+      this.logger.log('%green %s@%s-%s %j', handler.name, number, category, streamId, data);
       return handler.call(this.updateHandlers, event);
     }
   }
 
   protected getQueryHandler(query: Q): Query.handler {
     const shortname = query.method;
-    if (shortname in this.queryHandlers) return this.queryHandlers[shortname];
+    if (shortname in this.queryHandlers) return (<any>this.queryHandlers)[shortname];
     const wildname = 'any';
-    if (wildname in this.queryHandlers) return this.queryHandlers[wildname];
+    if (wildname in this.queryHandlers) return (<any>this.queryHandlers)[wildname];
     return (query: Q) => {
       this.logger.warn('Query %s not handled: %j', query.method, query.data);
       return Promise.resolve(new R('NotHandled', { method: query.method }));

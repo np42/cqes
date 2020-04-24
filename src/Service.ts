@@ -10,24 +10,13 @@ import * as events          from 'events';
 
 export { Event };
 
-export type eventHandler = (event: E) => Promise<void>;
-//export type hook = (err: Error, event?: E) => void;
-
 export interface EventBuses    { [name: string]: EventBus };
 export interface Subscription  { abort: () => Promise<void> };
-//export interface HookInfo      { category: string; streamId: string; ee: CommandEventEmitter };
-/*
-export interface CommandEventEmitter extends events.EventEmitter {
-  clear(): void;
-}
-*/
 export interface props extends Component.props, QueryAble.props, CommandAble.props {
   eventBuses?:    EventBuses;
   eventHandlers?: Event.Handlers;
   subscriptions?: Array<string>;
 }
-
-//const noop = () => {};
 
 export class Service extends Component.Component {
   // About Command
@@ -45,7 +34,6 @@ export class Service extends Component.Component {
   protected eventHandlers: Event.Handlers;
   //
   protected subscriptions: Array<string | Subscription>;
-  //protected callbacks:     ExpireMap<string, { hook: hook, info: HookInfo }>;
 
   constructor(props: props) {
     if (props.context == null) throw new Error('Context is required');
@@ -57,24 +45,6 @@ export class Service extends Component.Component {
     this.eventBuses    = props.eventBuses;
     this.eventHandlers = props.eventHandlers;
     this.subscriptions = props.subscriptions;
-    /*
-    this.callbacks     = new ExpireMap();
-    this.callbacks.on('expired', ({ value: { hook, info: { ee } } }) => {
-      hook(new Error('Timed out'))
-    });
-    let lastTransactionId = <string>null;
-    this.eventHandlers.any = (event: E) => {
-      const transactionId = (event.meta || {}).transactionId;
-      if (transactionId == null) return Promise.resolve();
-      const callback = this.callbacks.get(transactionId);
-      if (callback == null) return Promise.resolve();
-      callback.hook(null, event);
-      if (lastTransactionId && lastTransactionId != transactionId)
-        this.callbacks.delete(lastTransactionId);
-      lastTransactionId = transactionId;
-      return Promise.resolve();
-    };
-    */
   }
 
   public async start(): Promise<void> {
@@ -92,13 +62,13 @@ export class Service extends Component.Component {
     }));
   }
 
-  protected getEventHandler(event: E): eventHandler {
+  protected getEventHandler(event: E): Event.handler {
     const fullname = event.category + '_' + event.type;
-    if (fullname in this.eventHandlers) return this.eventHandlers[fullname];
+    if (fullname in this.eventHandlers) return (<any>this.eventHandlers)[fullname];
     const shortname = event.type;
-    if (shortname in this.eventHandlers) return this.eventHandlers[shortname];
+    if (shortname in this.eventHandlers) return (<any>this.eventHandlers)[shortname];
     const wildname = 'any';
-    if (wildname in this.eventHandlers) return this.eventHandlers[wildname];
+    if (wildname in this.eventHandlers) return (<any>this.eventHandlers)[wildname];
   }
 
   protected async handleServiceEvent(event: E): Promise<void> {
@@ -110,31 +80,6 @@ export class Service extends Component.Component {
     }
   }
 
-/*
-  protected command(target: string, streamId: string, data: any, meta?: any) {
-    const [context, category, order] = target.split(':');
-    if (meta == null) meta = {};
-    if (meta.transactionId == null) meta.transactionId = genId();
-    const transactionId = meta.transactionId;
-    if (!(meta.ttl > 0)) meta.ttl = 10000;
-    const ee = <CommandEventEmitter>super.command(target, streamId, data, meta);
-    const hook = (err: Error, event: E) => {
-      if (err) return ee.emit('error', err);
-      ee.removeAllListeners('error').on('error', () => {});
-      return ee.emit(event.type, event.data, event);
-    };
-    this.callbacks.set(meta.transactionId, meta.ttl, { hook, info: { category, streamId, ee } });
-    ee.clear = () => this.callbacks.delete(transactionId);
-    ee.on('sent', () => {
-      const events = ee.eventNames();
-      events.splice(events.indexOf('error'), 1);
-      events.splice(events.indexOf('sent'), 1);
-      if (events.length === 0) ee.clear();
-    });
-    ee.on('error', () => ee.clear());
-    return ee;
-  }
-*/
   public async stop(): Promise<void> {
     if (!this.started) return ;
     await Promise.all(this.subscriptions.map(sub => (<any>sub).abort()));

@@ -18,7 +18,7 @@ export class Handlers extends Component.Component {
   protected getQueryTyper: (context: string, view: string, method: string) => Typer;
   // About State
   protected repositories:  StateAble.Repositories;
-  protected get:           (target: string, streamId: string) => Promise<State>;
+  protected get:           <X>(type: { new (...a: Array<any>): X }, streamId: string) => Promise<State<X>>;
   // About Service Holder
   protected service:       Service;
 

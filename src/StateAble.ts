@@ -11,9 +11,9 @@ export interface props extends Component.props {
 export function extend(holder: any, props: props) {
   holder.repositories = props.repositories || {};
 
-  holder.get = function (target: string, streamId: string): Promise<S> {
-    const category = target;
-    return this.repositories[target].get(category + '-' + streamId);
+  holder.get = function <X> (type: { new (...a: any): X }, streamId: string): Promise<S<X>> {
+    const category = type.name;
+    return this.repositories[category].get(streamId);
   }
 
 }

@@ -17,7 +17,7 @@ export class State<A = any> {
   }
 
   public isNew() {
-    return this.revision === StateRevision.New;
+    return this.revision < 0;
   }
 
   public clone(): State<A> {

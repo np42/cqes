@@ -53,7 +53,7 @@ export class Repository extends Component.Component {
     const snapshot = await this.stateBus.get(streamId);
     const revision = snapshot.revision;
     let state = snapshot;
-    await this.eventBus.readFrom(this.category, streamId, revision + 1, (event: E) => {
+    await this.eventBus.readStreamFrom(this.category, streamId, revision + 1, (event: E) => {
       state = this.applyEvent(state, event);
       return Promise.resolve();
     });

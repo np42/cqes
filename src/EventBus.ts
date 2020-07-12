@@ -5,20 +5,19 @@ import { Typer }       from 'cqes-type';
 export type eventHandler = (event: E) => Promise<void>;
 
 export interface Transport {
-  start:       () => Promise<void>;
-  save:        (events: Array<E>) => Promise<void>;
-  readFrom:    (category: string, id: string, number: number, handler: eventHandler) => Promise<void>;
-  readLast:    (category: string, id: string, count: number) => Promise<Array<E>>;
-  subscribe:   (category: string, handler: eventHandler) => Promise<Subscription>;
-  psubscribe:  (name: string, category: string, handler: eventHandler) => Promise<Subscription> ;
-  stop:        () => Promise<void>;
+  start:            () => Promise<void>;
+  save:             (events: Array<E>) => Promise<void>;
+  readAllFrom:      (position: number, handler: eventHandler) => Promise<void>;
+  readCategoryFrom: (category: string, position: number, handler: eventHandler) => Promise<void>;
+  readStreamFrom:   (category: string, id: string, number: number, handler: eventHandler) => Promise<void>;
+  readStreamLast:   (category: string, id: string, count: number) => Promise<Array<E>>;
+  subscribe:        (category: string, handler: eventHandler) => Promise<Subscription>;
+  psubscribe:       (name: string, category: string, handler: eventHandler) => Promise<Subscription> ;
+  stop:             () => Promise<void>;
 }
 
 export interface Subscription { abort: () => Promise<void>; }
 export interface EventTypes   { [name: string]: Typer };
-export interface Options {
-  raw: boolean;
-}
 
 export interface props extends Component.props {
   transport:      string;
@@ -49,17 +48,15 @@ export class EventBus extends Component.Component {
     await this.transport.start();
   }
 
-  public subscribe(handler: eventHandler, options?: Options): Promise<Subscription> {
-    options = this.parseOptions(options);
+  public subscribe(handler: eventHandler): Promise<Subscription> {
     return this.transport.subscribe(this.category, (event: E) => {
-      return handler(options.raw ? event : this.typeEvent(event));
+      return handler(this.typeEvent(event));
     });
   }
 
-  public psubscribe(name: string, handler: eventHandler, options?: Options): Promise<Subscription> {
-    options = this.parseOptions(options);
+  public psubscribe(name: string, handler: eventHandler): Promise<Subscription> {
     return this.transport.psubscribe(name, this.category, (event: E) => {
-      return handler(options.raw ? event : this.typeEvent(event));
+      return handler(this.typeEvent(event));
     });
   }
 
@@ -73,20 +70,29 @@ export class EventBus extends Component.Component {
     return this.transport.save(events);
   }
 
-  public readFrom(category: string, streamId: string, number: number, handler: eventHandler, options?: Options) {
-    if (category == null) throw new Error('Need a category');
-    if (streamId == null) throw new Error('Need a streamId');
-    options = this.parseOptions(options);
-    return this.transport.readFrom(category, streamId, number, (event: E) => {
-      return handler(options.raw ? event : this.typeEvent(event));
+  public readAllFrom(position: number, handler: eventHandler) {
+    return this.transport.readAllFrom(position, (event: E) => {
+      return handler(this.typeEvent(event));
     });
   }
 
-  public async readLast(category: string, streamId: string, count: number, options?: Options) {
-    options = this.parseOptions(options);
-    const result = await this.transport.readLast(category, streamId, count);
-    if (options.raw) return result;
-    else return result.map(event => this.typeEvent(event));
+  public readCategoryFrom(category: string, position: number, handler: eventHandler) {
+    return this.transport.readAllFrom(position, (event: E) => {
+      return handler(this.typeEvent(event));
+    });
+  }
+
+  public readStreamFrom(category: string, streamId: string, number: number, handler: eventHandler) {
+    if (category == null) throw new Error('Need a category');
+    if (streamId == null) throw new Error('Need a streamId');
+    return this.transport.readStreamFrom(category, streamId, number, (event: E) => {
+      return handler(this.typeEvent(event));
+    });
+  }
+
+  public async readStreamLast(category: string, streamId: string, count: number) {
+    const result = await this.transport.readStreamLast(category, streamId, count);
+    return result.map(event => this.typeEvent(event));
   }
 
   public typeEvent(event: E) {
@@ -102,12 +108,6 @@ export class EventBus extends Component.Component {
       }
     }
     return event;
-  }
-
-  public parseOptions(options?: Options): Options {
-    if (options == null) options = <any>{};
-    if (options.raw == null) options.raw = false;
-    return options;
   }
 
   public async stop(): Promise<void> {

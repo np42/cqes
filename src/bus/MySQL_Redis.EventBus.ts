@@ -108,17 +108,11 @@ export class Transport extends Component.Component implements EventBus.Transport
     this.redis.publish(channel, JSON.stringify(events));
   }
 
-  public readFrom(category: string, id: string, number: number, handler: eventHandler): Promise<void> {
+  protected readFrom(query: string, params: Array<any>, handler: eventHandler): Promise<void> {
     return new Promise((resolve, reject) => {
       this.mysql.getConnection((err, connection) => {
         if (err) return reject(err);
-        const query =
-          [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
-          , 'FROM `@events`'
-          , 'WHERE `category` = ? AND `streamId` = ? AND `number` >= ?'
-          , 'ORDER BY `number` ASC'
-          ].join(' ');
-        const request = connection.query(query, [category, id, number])
+        const request = connection.query(query, params)
           .on('error', err => {
             if (err && err.fatal) connection.destroy();
             else connection.release();
@@ -127,8 +121,9 @@ export class Transport extends Component.Component implements EventBus.Transport
           .on('result', async row => {
             connection.pause()
             const data = JSON.parse(row.data);
-            const meta = { savedAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
-            const event = new Event(category, id, row.number, row.type, data, meta);
+            const savedAt = new Date(row.date + ' ' + row.time);
+            const meta = { savedAt, ...JSON.parse(row.meta) };
+            const event = new Event(row.category, row.streamId, row.number, row.type, data, meta);
             event.position = row.eventId;
             try { await handler(event); }
             catch (e) { connection.destroy(); return reject(e); }
@@ -143,7 +138,43 @@ export class Transport extends Component.Component implements EventBus.Transport
     });
   }
 
-  public async readLast(category: string, id: string, count: number): Promise<Array<Event>> {
+  public readAllFrom(position: number, handler: eventHandler): Promise<void> {
+    return this.readFrom
+    ( [ 'SELECT `category`, `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
+      , 'FROM `@events`'
+      , 'WHERE `eventId` >= ?'
+      , 'ORDER BY `eventId` ASC'
+      ].join(' ')
+    , [position]
+    , handler
+    );
+  }
+
+  public readCategoryFrom(category: string, position: number, handler: eventHandler): Promise<void> {
+    return this.readFrom
+    ( [ 'SELECT `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
+      , 'FROM `@events`'
+      , 'WHERE `eventId` >= ? AND `category` = ?'
+      , 'ORDER BY `eventId` ASC'
+      ].join(' ')
+    , [position, category]
+    , handler
+    );
+  }
+
+  public readStreamFrom(category: string, id: string, number: number, handler: eventHandler): Promise<void> {
+    return this.readFrom
+    ( [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
+      , 'FROM `@events`'
+      , 'WHERE `category` = ? AND `streamId` = ? AND `number` >= ?'
+      , 'ORDER BY `number` ASC'
+      ].join(' ')
+    , [category, id, number]
+    , handler
+    );
+  }
+
+  public async readStreamLast(category: string, id: string, count: number): Promise<Array<Event>> {
     const sql =
       [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
       , 'FROM `@events`'

@@ -18,6 +18,7 @@ export function extend(holder: any, props: props) {
   holder.queryBuses = props.queryBuses || {};
   holder.queryTypes = {};
 
+  // @target: '<Context>:<Category>:<View>'
   holder.query = function (target: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
     (<any>ee).expect = (typer: IValue) => new Promise(resolve => {

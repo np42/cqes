@@ -18,6 +18,7 @@ export function extend(holder: any, props: props) {
   holder.commandBuses = props.commandBuses || {};
   holder.commandTypes = {};
 
+  // @target: '<Context>:<Category>:<Order>'
   holder.command = function (target: string, streamId: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
     (<any>ee).wait = () => new Promise((resolve, reject) => ee.on('sent', resolve).on('error', reject));

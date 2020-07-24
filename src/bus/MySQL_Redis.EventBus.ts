@@ -152,7 +152,7 @@ export class Transport extends Component.Component implements EventBus.Transport
 
   public readCategoryFrom(category: string, position: number, handler: eventHandler): Promise<void> {
     return this.readFrom
-    ( [ 'SELECT `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
+    ( [ 'SELECT `category`, `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
       , 'FROM `@events`'
       , 'WHERE `eventId` >= ? AND `category` = ?'
       , 'ORDER BY `eventId` ASC'
@@ -164,7 +164,7 @@ export class Transport extends Component.Component implements EventBus.Transport
 
   public readStreamFrom(category: string, id: string, number: number, handler: eventHandler): Promise<void> {
     return this.readFrom
-    ( [ 'SELECT `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
+    ( [ 'SELECT `category`, `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
       , 'FROM `@events`'
       , 'WHERE `category` = ? AND `streamId` = ? AND `number` >= ?'
       , 'ORDER BY `number` ASC'

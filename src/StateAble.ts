@@ -12,8 +12,9 @@ export function extend(holder: any, props: props) {
   holder.repositories = props.repositories || {};
 
   holder.get = function <X> (type: { new (...a: any): X }, streamId: string): Promise<S<X>> {
-    const category = type.name;
-    return this.repositories[category].get(streamId);
+    const repository = this.repositories[type.name];
+    if (repository == null) throw new Error('Repository "' + type.name + '" not loaded');
+    return repository.get(streamId);
   }
 
 }

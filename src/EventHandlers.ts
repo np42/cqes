@@ -11,6 +11,7 @@ export type handler = (event: Event) => Promise<void>;
 export interface props extends Component.props, QueryAble.props, StateAble.props {}
 
 export class Handlers extends Component.Component {
+  public    service:       Service;
   // About Query
   protected queryBuses:    QueryAble.Buses;
   protected queryTypes:    QueryAble.Types;
@@ -19,8 +20,6 @@ export class Handlers extends Component.Component {
   // About State
   protected repositories:  StateAble.Repositories;
   protected get:           <X>(type: { new (...a: Array<any>): X }, streamId: string) => Promise<State<X>>;
-  // About Service Holder
-  protected service:       Service;
 
   constructor(props: props) {
     super(props);

@@ -48,6 +48,9 @@ export class Subscription implements EventBus.Subscription {
   }
 }
 
+type Filter = { [name: string]: string };
+type Begin = { [name: string]: number };
+
 export class Transport extends Component.Component implements EventBus.Transport {
   protected mysql:         MySQL.MySQL;
   protected redis:         redis.RedisClient;
@@ -108,15 +111,36 @@ export class Transport extends Component.Component implements EventBus.Transport
     this.redis.publish(channel, JSON.stringify(events));
   }
 
-  protected readFrom(query: string, params: Array<any>, handler: eventHandler): Promise<void> {
+  public readFrom(filter: Filter, begin: Begin, handler: eventHandler): Promise<void> {
+    const where: Array<string> = [];
+    const params: Array<string | number> = [];
+    for (const [k, v] of Object.entries(filter)) {
+      where.push(MySQL.escapeId(k) + ' = ?');
+      params.push(v);
+    }
+    for (const [k, v] of Object.entries(begin)) {
+      where.push(MySQL.escapeId(k) + ' >= ?');
+      params.push(v);
+    }
+    const query =
+      [ 'SELECT `category`, `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
+      , 'FROM `@events`'
+      , 'WHERE ' + where.join(' AND ')
+      , 'ORDER BY `eventId` ASC'
+      ].join(' ');
     return new Promise((resolve, reject) => {
       this.mysql.getConnection((err, connection) => {
         if (err) return reject(err);
+        let position: number = null;
         const request = connection.query(query, params)
           .on('error', err => {
             if (err && err.fatal) connection.destroy();
             else connection.release();
-            reject(err)
+            if (position != null) this.logger.warn(err.toString());
+            else reject(err);
+          })
+          .on('fields', () => {
+            this.logger.log(request.sql);
           })
           .on('result', async row => {
             connection.pause()
@@ -127,10 +151,10 @@ export class Transport extends Component.Component implements EventBus.Transport
             event.position = row.eventId;
             try { await handler(event); }
             catch (e) { connection.destroy(); return reject(e); }
+            position = row.eventId;
             connection.resume();
           })
           .on('end', () => {
-            this.logger.log(request.sql);
             connection.release();
             resolve()
           });
@@ -139,39 +163,15 @@ export class Transport extends Component.Component implements EventBus.Transport
   }
 
   public readAllFrom(position: number, handler: eventHandler): Promise<void> {
-    return this.readFrom
-    ( [ 'SELECT `category`, `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
-      , 'FROM `@events`'
-      , 'WHERE `eventId` >= ?'
-      , 'ORDER BY `eventId` ASC'
-      ].join(' ')
-    , [position]
-    , handler
-    );
+    return this.readFrom({}, { eventId: position }, handler);
   }
 
   public readCategoryFrom(category: string, position: number, handler: eventHandler): Promise<void> {
-    return this.readFrom
-    ( [ 'SELECT `category`, `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
-      , 'FROM `@events`'
-      , 'WHERE `eventId` >= ? AND `category` = ?'
-      , 'ORDER BY `eventId` ASC'
-      ].join(' ')
-    , [position, category]
-    , handler
-    );
+    return this.readFrom({ category }, { eventId: position }, handler);
   }
 
-  public readStreamFrom(category: string, id: string, number: number, handler: eventHandler): Promise<void> {
-    return this.readFrom
-    ( [ 'SELECT `category`, `streamId`, `eventId`, `number`, `type`, `date`, `time`, `data`, `meta`'
-      , 'FROM `@events`'
-      , 'WHERE `category` = ? AND `streamId` = ? AND `number` >= ?'
-      , 'ORDER BY `number` ASC'
-      ].join(' ')
-    , [category, id, number]
-    , handler
-    );
+  public readStreamFrom(category: string, streamId: string, number: number, handler: eventHandler): Promise<void> {
+    return this.readFrom({ category, streamId }, { number }, handler);
   }
 
   public async readStreamLast(category: string, id: string, count: number): Promise<Array<Event>> {
@@ -222,73 +222,30 @@ export class Transport extends Component.Component implements EventBus.Transport
 
   public async psubscribe(id: string, category: string, handler: eventHandler): Promise<Subscription> {
     this.logger.log('New %green [%s] => %s', 'Persistent Subscription', id, category);
-    return new Promise(async (resolve, reject) => {
-      let position = await this.getPSubscriptionPosition(id);
-      const newEvents = <Array<Event>>[];
-      let subscriptionHandler = (event: Event) => { newEvents.push(event) };
-      const subscription = await this.subscribe(category, async event => subscriptionHandler(event));
-      this.mysql.getConnection((err, connection) => {
-        if (err) return reject(err);
-        const query =
-          [ 'SELECT `eventId`, `streamId`, `number`, `type`, `date`, `time`, `data`, `meta`'
-          , 'FROM `@events`'
-          , 'WHERE `eventId` > ? AND `category` = ?'
-          , 'ORDER BY `eventId` ASC'
-          ].join(' ');
-        const request = connection.query(query, [position, category])
-          .on('error', err => {
-            if (err && err.fatal) connection.destroy();
-            else connection.release();
-            this.logger.error(request.sql);
-            reject(err)
-          })
-          .on('fields', () => {
-            this.logger.log(request.sql);
-          })
-          .on('result', async row => {
-            connection.pause();
-            const data  = JSON.parse(row.data);
-            const meta  = { savedAt: new Date(row.date + ' ' + row.time), ...JSON.parse(row.meta) };
-            const event = new Event(category, row.streamId, row.number, row.type, data, meta);
-            event.position = row.eventId;
-            try {
-              await handler(event);
-              position = event.number;
-              await this.upsertPSubscriptionPosition(id, event.position);
-              connection.resume();
-            } catch (e) {
-              subscription.abort();
-              connection.release();
-              this.logger.error(e);
-              return reject(e);
-            }
-          })
-          .on('end', async () => {
-            connection.release();
-            while (newEvents.length > 0) {
-              const event = newEvents.pop();
-              if (event.number == position + 1) {
-                try {
-                  await handler(event);
-                  position = event.number;
-                  await this.upsertPSubscriptionPosition(id, event.position);
-                } catch (e) {
-                  subscription.abort();
-                  connection.release();
-                  this.logger.error(e);
-                  return reject(e);
-                }
-              }
-            }
-            subscriptionHandler = async event => {
-              await handler(event);
-              if (event.meta?.$persistent === false) return ;
-              await this.upsertPSubscriptionPosition(id, event.position)
-            };
-            return resolve(subscription);
-          });
-      });
-    });
+    let lastKnownPosition: number = null;
+    let subscriptionHandler = (event: Event) => {
+      if (event.meta?.$persistent === false) return ;
+      lastKnownPosition = Math.max(lastKnownPosition, event.position)
+    };
+    let position = await this.getPSubscriptionPosition(id);
+    const subscription = await this.subscribe(category, async event => subscriptionHandler(event));
+    const handleEvent = async (event: Event) => {
+      try {
+        await handler(event);
+        if (event.meta?.$persistent === false) return ;
+        await this.upsertPSubscriptionPosition(id, event.position);
+        position = event.position;
+      } catch (e) {
+        subscription.abort();
+        throw e;
+      }
+    };
+    do {
+      await this.readFrom({ category }, { eventId: position + 1 }, handleEvent);
+      debugger;
+    } while (lastKnownPosition > position);
+    subscriptionHandler = handleEvent;
+    return subscription;
   }
 
   protected async getPSubscriptionPosition(subscriptionId: string): Promise<number> {

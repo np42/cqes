@@ -2,20 +2,21 @@ import * as Component       from './Component';
 import * as Event           from './EventHandlers';
 import * as CommandAble     from './CommandAble';
 import * as QueryAble       from './QueryAble';
+import * as StateAble       from './StateAble';
 import { EventBus }         from './EventBus';
 import { Event as E }       from './Event';
+import { State as S }       from './State';
 import { ExpireMap, genId } from 'cqes-util';
 import { Typer }            from 'cqes-type';
-import * as events          from 'events';
 
 export { Event };
 
 export interface EventBuses    { [name: string]: EventBus };
 export interface Subscription  { abort: () => Promise<void> };
-export interface props extends Component.props, QueryAble.props, CommandAble.props {
-  eventBuses?:    EventBuses;
-  eventHandlers?: Event.Handlers;
-  subscriptions?: Array<string>;
+export interface props extends Component.props, QueryAble.props, CommandAble.props, StateAble.props {
+  eventHandlers:   Event.Handlers;
+  eventBuses:      EventBuses;
+  subscriptions:   Array<string>;
 }
 
 export class Service extends Component.Component {
@@ -32,6 +33,9 @@ export class Service extends Component.Component {
   // About Event
   protected eventBuses:    EventBuses;
   protected eventHandlers: Event.Handlers;
+  // About State
+  protected repositories:  StateAble.Repositories;
+  protected get:           <X>(type: { new (...a: Array<any>): X }, streamId: string) => Promise<S<X>>;
   //
   protected subscriptions: Array<string | Subscription>;
 
@@ -42,9 +46,11 @@ export class Service extends Component.Component {
     super({ type: 'Service', ...props });
     CommandAble.extend(this, props);
     QueryAble.extend(this, props);
+    StateAble.extend(this, props);
     this.eventBuses    = props.eventBuses;
     this.eventHandlers = props.eventHandlers;
     this.subscriptions = props.subscriptions;
+    if (this.eventHandlers.service == null) this.eventHandlers.service = this;
   }
 
   public async start(): Promise<void> {

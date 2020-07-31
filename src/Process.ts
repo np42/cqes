@@ -196,7 +196,9 @@ export class Process extends Component.Component {
       const repoProps       = { ...serviceProps, StateBus: repoStateBus, EventBus: repoEventBus };
       const repositories    = this.getRepositories(context.name, name, serviceProps.repositories, repoProps);
       const buses           = { eventBuses, commandBuses, queryBuses };
-      const props           = { ...commonProps, ...serviceProps, ...buses, subscriptions, eventHandlers: null };
+      const props           = { ...commonProps, ...serviceProps, ...buses, subscriptions, eventHandlers: null
+                              , repositories
+                              };
       if ('EventHandlers' in Package) {
         const eHandlersProps = { queryBuses, repositories };
         const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...serviceProps, ...eHandlersProps });
@@ -205,8 +207,7 @@ export class Process extends Component.Component {
         const eHandlersProps = { queryBuses: {}, repositories: {} };
         props.eventHandlers  = new Service.Event.Handlers({ ...commonProps, ...eHandlersProps });
       }
-      const service               = new Package[name](props);
-      props.eventHandlers.service = service;
+      const service = new Package[name](props);
       if (!(service instanceof Service.Service))
         throw new Error('Service ' + name + ' must be type of Service');
       this.logger.log('%yellow %cyan.%cyan found', 'Service', context.name, name);

@@ -127,7 +127,8 @@ export class Transport extends Component.Component implements CommandBus.Transpo
           this.channels.set(queue, channel);
           waiters.forEach(({ resolve }: any) => resolve(channel));
         } catch (e) {
-          this.channels.get(queue).forEach(({ reject }: any) => reject(e));
+          const items = this.channels.get(queue) || [];
+          items.forEach(({ reject }: any) => reject(e));
         }
       }).call(this);
     });
@@ -136,7 +137,11 @@ export class Transport extends Component.Component implements CommandBus.Transpo
   public async send(command: Command<any>): Promise<void> {
     const queue   = command.meta && command.meta.queue || command.category;
     const channel = await this.getChannel(queue);
-    const content = Buffer.from(JSON.stringify(command));
+    const content = Buffer.from(JSON.stringify(command, (key: string, value: any) => {
+      if (value instanceof Map) return Array.from(value);
+      if (value instanceof Set) return Array.from(value);
+      return value;
+    }));
     const sent    = await channel.publish('', command.category, content, this.config.publish);
     if (sent) return Promise.resolve();
     return new Promise(resolve => { channel.once('drain', () => resolve()); });

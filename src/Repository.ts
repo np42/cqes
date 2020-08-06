@@ -47,18 +47,22 @@ export class Repository extends Component.Component {
     this.subscription = await this.eventBus.subscribe(event => this.handleEvent(event));
   }
 
-  public async get(streamId: string) {
-    const cached = this.cache.get(streamId);
-    if (cached != null) return cached;
-    const snapshot = await this.stateBus.get(streamId);
-    const revision = snapshot.revision;
-    let state = snapshot;
+  public async get(streamId: string, useCache = true) {
+    let state = new S(streamId, -1, {});
+    if (useCache) {
+      const cached = this.cache.get(streamId);
+      if (cached != null) return cached;
+      state = await this.stateBus.get(streamId);
+    }
+    const revision = state.revision;
     await this.eventBus.readStreamFrom(this.category, streamId, revision + 1, (event: E) => {
       state = this.applyEvent(state, event);
       return Promise.resolve();
     });
-    this.cache.set(streamId, state);
-    if (revision < state.revision) this.stateBus.set(state);
+    if (useCache) {
+      this.cache.set(streamId, state);
+      if (revision < state.revision) this.stateBus.set(state);
+    }
     return state;
   }
 

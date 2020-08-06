@@ -11,10 +11,10 @@ export interface props extends Component.props {
 export function extend(holder: any, props: props) {
   holder.repositories = props.repositories || {};
 
-  holder.get = function <X> (type: { new (...a: any): X }, streamId: string): Promise<S<X>> {
+  holder.get = function <X> (type: { new (...a: any): X }, streamId: string, useCache = true): Promise<S<X>> {
     const repository = this.repositories[type.name];
     if (repository == null) throw new Error('Repository "' + type.name + '" not loaded');
-    return repository.get(streamId);
+    return repository.get(streamId, useCache);
   }
 
 }

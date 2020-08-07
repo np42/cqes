@@ -11,8 +11,9 @@ import { Typer }            from 'cqes-type';
 
 export { Event };
 
-export interface EventBuses    { [name: string]: EventBus };
-export interface Subscription  { abort: () => Promise<void> };
+export interface EventBuses     { [name: string]: EventBus };
+export interface Subscription   { abort: () => Promise<void> };
+export interface Constructor<T> { new (...a: Array<any>): T };
 export interface props extends Component.props, QueryAble.props, CommandAble.props, StateAble.props {
   eventHandlers:   Event.Handlers;
   eventBuses:      EventBuses;
@@ -35,7 +36,7 @@ export class Service extends Component.Component {
   protected eventHandlers: Event.Handlers;
   // About State
   protected repositories:  StateAble.Repositories;
-  protected get:           <X>(type: { new (...a: Array<any>): X }, streamId: string) => Promise<S<X>>;
+  protected get:           <X>(type: Constructor<X>, streamId: string, useCache?: boolean) => Promise<S<X>>;
   //
   protected subscriptions: Array<string | Subscription>;
 

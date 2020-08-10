@@ -24,7 +24,7 @@ export class Component {
   constructor(props: props) {
     this.context = props.context;
     this.name    = props.name;
-    this.type    = props.type || (this.constructor.name != props.name ? this.constructor.name : 'Component');
+    this.type    = props.type || (new.target.name != props.name ? new.target.name : 'Component');
     this.serial  = props.serial || null;
     this.process = props.process;
     this.helpers = props.helpers || {};

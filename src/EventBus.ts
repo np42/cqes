@@ -2,7 +2,9 @@ import * as Component  from './Component';
 import { Event as E }  from './Event';
 import { Typer }       from 'cqes-type';
 
-export type eventHandler = (event: E) => Promise<void>;
+export type eventHandler<T = void>  = (event: E) => Promise<T>;
+export enum EventHandling { Ignored, Handled };
+
 
 export interface Transport {
   start:            () => Promise<void>;
@@ -12,7 +14,7 @@ export interface Transport {
   readStreamFrom:   (category: string, id: string, number: number, handler: eventHandler) => Promise<void>;
   readStreamLast:   (category: string, id: string, count: number) => Promise<Array<E>>;
   subscribe:        (category: string, handler: eventHandler) => Promise<Subscription>;
-  psubscribe:       (name: string, category: string, handler: eventHandler) => Promise<Subscription> ;
+  psubscribe:       (name: string, category: string, handler: eventHandler<EventHandling>) => Promise<Subscription> ;
   stop:             () => Promise<void>;
 }
 
@@ -54,7 +56,7 @@ export class EventBus extends Component.Component {
     });
   }
 
-  public psubscribe(name: string, handler: eventHandler): Promise<Subscription> {
+  public psubscribe(name: string, handler: eventHandler<EventHandling>): Promise<Subscription> {
     return this.transport.psubscribe(name, this.category, (event: E) => {
       return handler(this.typeEvent(event));
     });

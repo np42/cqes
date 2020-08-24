@@ -1,5 +1,6 @@
 import * as Component                from './Component';
 import { EventBus, Subscription }    from './EventBus';
+import { EventHandling }             from './EventBus';
 import { StateBus }                  from './StateBus';
 import * as React                    from './ReactHandlers';
 import { State }                     from './State';
@@ -67,7 +68,7 @@ export class Trigger extends Component.Component {
     return await this.stateBus.get(stateId);
   }
 
-  protected async handleTriggerEvent(event: Event): Promise<void> {
+  protected async handleTriggerEvent(event: Event): Promise<EventHandling> {
     const handler  = this.getTriggerHandler(event);
     if (handler != null) {
       const { number, category, streamId, data } = event;
@@ -76,6 +77,9 @@ export class Trigger extends Component.Component {
       const state    = await this.getState(stateId);
       const newState = await handler.call(this.triggerHandlers, state, event);
       //if (newState != null) this.setState(stateId, newState);
+      return EventHandling.Handled;
+    } else {
+      return EventHandling.Ignored;
     }
   }
 

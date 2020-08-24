@@ -1,12 +1,12 @@
-import * as Component  from '../Component';
-import * as EventBus   from '../EventBus';
-import { Event }       from '../Event';
-import { EventNumber } from '../Event';
-import { merge }       from 'cqes-util';
-import * as MySQL      from 'cqes-mysql';
-import * as redis      from 'redis';
-
-export type eventHandler = EventBus.eventHandler;
+import * as Component    from '../Component';
+import * as EventBus     from '../EventBus';
+import { eventHandler }  from '../EventBus';
+import { EventHandling } from '../EventBus';
+import { Event }         from '../Event';
+import { EventNumber }   from '../Event';
+import { merge }         from 'cqes-util';
+import * as MySQL        from 'cqes-mysql';
+import * as redis        from 'redis';
 
 export interface props extends Component.props {
   originContext?: string;
@@ -220,7 +220,7 @@ export class Transport extends Component.Component implements EventBus.Transport
     return Promise.resolve(subscription);
   }
 
-  public async psubscribe(id: string, category: string, handler: eventHandler): Promise<Subscription> {
+  public async psubscribe(id: string, category: string, handler: eventHandler<EventHandling>): Promise<Subscription> {
     this.logger.log('New %green [%s] => %s', 'Persistent Subscription', id, category);
     let lastKnownPosition: number = null;
     let subscriptionHandler = (event: Event) => {
@@ -231,9 +231,11 @@ export class Transport extends Component.Component implements EventBus.Transport
     const subscription = await this.subscribe(category, async event => subscriptionHandler(event));
     const handleEvent = async (event: Event) => {
       try {
-        await handler(event);
+        const handled = await handler(event);
         if (event.meta?.$persistent === false) return ;
-        await this.upsertPSubscriptionPosition(id, event.position);
+        if (handled === EventHandling.Handled) {
+          await this.upsertPSubscriptionPosition(id, event.position);
+        }
         position = event.position;
       } catch (e) {
         subscription.abort();
@@ -242,7 +244,6 @@ export class Transport extends Component.Component implements EventBus.Transport
     };
     do {
       await this.readFrom({ category }, { eventId: position + 1 }, handleEvent);
-      debugger;
     } while (lastKnownPosition > position);
     subscriptionHandler = handleEvent;
     return subscription;

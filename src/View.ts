@@ -1,11 +1,12 @@
-import * as Component  from './Component';
-import * as Query      from './QueryHandlers';
-import * as Update     from './UpdateHandlers';
-import { EventBus }    from './EventBus';
-import { QueryBus }    from './QueryBus';
-import { Event as E }  from './Event';
-import { Query as Q }  from './Query';
-import { Reply as R }  from './Reply';
+import * as Component    from './Component';
+import * as Query        from './QueryHandlers';
+import * as Update       from './UpdateHandlers';
+import { EventBus }      from './EventBus';
+import { EventHandling } from './EventBus';
+import { QueryBus }      from './QueryBus';
+import { Event as E }    from './Event';
+import { Query as Q }    from './Query';
+import { Reply as R }    from './Reply';
 
 export { Query, Update };
 
@@ -66,12 +67,15 @@ export class View extends Component.Component {
     if (wildname in this.updateHandlers) return (<any>this.updateHandlers)[wildname];
   }
 
-  protected handleUpdateEvent(event: E) {
+  protected async handleUpdateEvent(event: E): Promise<EventHandling> {
     const handler  = this.getUpdateHandler(event);
     if (handler != null) {
       const { number, category, streamId, data } = event;
       this.logger.log('%green %s@%s-%s %j', handler.name, number, category, streamId, data);
-      return handler.call(this.updateHandlers, event);
+      await handler.call(this.updateHandlers, event);
+      return EventHandling.Handled;
+    } else {
+      return EventHandling.Ignored;
     }
   }
 

@@ -4,6 +4,7 @@ import * as CommandAble     from './CommandAble';
 import * as QueryAble       from './QueryAble';
 import * as StateAble       from './StateAble';
 import { EventBus }         from './EventBus';
+import { EventHandling }    from './EventBus';
 import { Event as E }       from './Event';
 import { State as S }       from './State';
 import { ExpireMap, genId } from 'cqes-util';
@@ -78,12 +79,15 @@ export class Service extends Component.Component {
     if (wildname in this.eventHandlers) return (<any>this.eventHandlers)[wildname];
   }
 
-  protected async handleServiceEvent(event: E): Promise<void> {
+  protected async handleServiceEvent(event: E): Promise<EventHandling> {
     const handler = this.getEventHandler(event);
     if (handler != null) {
       const { number, category, streamId, data } = event;
       this.logger.log('%green %s@%s-%s %j', handler.name, number, category, streamId, data);
-      return handler.call(this.eventHandlers, event);
+      await handler.call(this.eventHandlers, event);
+      return EventHandling.Handled;
+    } else {
+      return EventHandling.Ignored;
     }
   }
 

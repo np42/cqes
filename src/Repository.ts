@@ -75,7 +75,6 @@ export class Repository extends Component.Component {
     if (state.revision < 0) this.cache.delete(event.streamId);
     if (state.revision === initialRevision) return Promise.resolve();
     return this.stateBus.set(state);
-    return Promise.resolve();
   }
 
   protected applyEvents(state: S, events: Array<E>) {

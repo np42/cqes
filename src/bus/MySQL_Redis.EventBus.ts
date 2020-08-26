@@ -222,7 +222,7 @@ export class Transport extends Component.Component implements EventBus.Transport
 
   public async psubscribe(id: string, category: string, handler: eventHandler<EventHandling>): Promise<Subscription> {
     this.logger.log('New %green [%s] => %s', 'Persistent Subscription', id, category);
-    let lastKnownPosition: number = null;
+    let lastKnownPosition: number = await this.getLastCategoryPosition(category);
     let subscriptionHandler = (event: Event) => {
       if (event.meta?.$persistent === false) return ;
       lastKnownPosition = Math.max(lastKnownPosition, event.position)
@@ -243,7 +243,12 @@ export class Transport extends Component.Component implements EventBus.Transport
       }
     };
     do {
-      await this.readFrom({ category }, { eventId: position + 1 }, handleEvent);
+      try {
+        await this.readFrom({ category }, { eventId: position + 1 }, handleEvent);
+      } catch (e) {
+        this.logger.warn(e);
+        await new Promise(resolve => setTimeout(resolve, 4000 + (Math.random() * 2000 | 0)));
+      }
     } while (lastKnownPosition > position);
     subscriptionHandler = handleEvent;
     return subscription;
@@ -253,8 +258,15 @@ export class Transport extends Component.Component implements EventBus.Transport
     const query = [ 'SELECT `position` FROM `@subscriptions`'
                   , 'WHERE `subscriptionId` = ?' ].join(' ');
     const result = await this.mysql.request(query, [subscriptionId]);
-    if (result.length == 0) return -1;
+    if (result.length === 0) return -1;
     else return result[0].position;
+  }
+
+  protected async getLastCategoryPosition(category: string) {
+    const query = 'SELECT MAX(`eventId`) AS `position` FROM `@events` WHERE `category` = ?';
+    const result = await this.mysql.request(query, [category]);
+    if (result.length === 0) return 0;
+    return result[0].position;
   }
 
   protected async upsertPSubscriptionPosition(subscriptionId: string, position: number) {

@@ -87,11 +87,7 @@ export class Manager extends Component.Component {
       this.logger.log('%red %s %j', command.order, streamId, command.data);
       const state = await this.repository.get(streamId);
       const events = await this.handleCommand(state, command);
-      for (let i = 0, offset = 0; i < events.length; i += 1) {
-        if (events[i].meta?.$persistent === false) continue ;
-        events[i].number = state.revision + offset + 1;
-        offset += 1;
-      }
+      this.alignEvents(events, state.revision);
       try {
         await this.eventBus.emitEvents(events);
       } catch (e) {
@@ -130,6 +126,18 @@ export class Manager extends Component.Component {
       return [event];
     } else {
       return events;
+    }
+  }
+
+  protected alignEvents(events: Array<E>, version: number) {
+    for (let i = 0, offset = 0; i < events.length; i += 1) {
+      const event = events[i];
+      if (event.meta == null) event.meta = {};
+      if (event.meta.createdAt == null) event.meta.createdAt = new Date().toISOString();
+      if (event.meta.$persistent === false) continue ;
+      if (event.number == null) event.number = version + offset + 1;
+      else if (event.number !== version + offset + 1) throw new Error('Event can not be aligned');
+      offset += 1;
     }
   }
 

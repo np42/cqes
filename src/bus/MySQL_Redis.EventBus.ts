@@ -228,13 +228,17 @@ export class Transport extends Component.Component implements EventBus.Transport
       lastKnownPosition = Math.max(lastKnownPosition, event.position)
     };
     let position = await this.getPSubscriptionPosition(id);
+    let skipedPositionUpdate = 0;
     const subscription = await this.subscribe(category, async event => subscriptionHandler(event));
     const handleEvent = async (event: Event) => {
       try {
         const handled = await handler(event);
         if (event.meta?.$persistent === false) return ;
-        if (handled === EventHandling.Handled) {
+        if (handled === EventHandling.Handled || skipedPositionUpdate >= 100) {
           await this.upsertPSubscriptionPosition(id, event.position);
+          skipedPositionUpdate = 0;
+        } else {
+          skipedPositionUpdate += 1;
         }
         position = event.position;
       } catch (e) {

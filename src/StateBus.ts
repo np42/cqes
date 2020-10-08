@@ -60,6 +60,7 @@ export class StateBus extends Component.Component {
       try { state.data = this.state.from(state.data); }
       catch (e) {
         if (state.revision == -1) {
+          this.logger.error(e);
           throw new Error('State must handle empty value (revision = -1)');
         } else {
           throw e;

@@ -8,6 +8,7 @@ import { Command as C }     from './Command';
 import { Event   as E }     from './Event';
 import { EventNumber }      from './Event';
 import { State   as S }     from './State';
+import { isType, Typer }    from 'cqes-type';
 
 export { Command };
 
@@ -103,9 +104,15 @@ export class Manager extends Component.Component {
     const { category, streamId, order } = command;
     const handler = this.getCommandHandler(command);
     const events  = <Array<E>> [];
-    const emitter = (type: string | E, data?: any, meta?: any) => {
-      if (type instanceof E) events.push(type);
-      else events.push(new E(category, streamId, EventNumber.Append, type, data, meta));
+    const emitter = (type: string | Typer | E, data?: any, meta?: any) => {
+      if (type instanceof E) {
+        events.push(type);
+      } else if (isType(type)) {
+        type.from(data);
+        events.push(new E(category, streamId, EventNumber.Append, type.name, data, meta));
+      } else {
+        events.push(new E(category, streamId, EventNumber.Append, type, data, meta));
+      }
     };
     try {
       const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
@@ -136,6 +143,7 @@ export class Manager extends Component.Component {
       if (event.meta.createdAt == null) event.meta.createdAt = new Date().toISOString();
       if (event.meta.$persistent === false) continue ;
       if (event.number == null) event.number = version + offset + 1;
+      if (event.number === EventNumber.Append) event.number = version + offset + 1;
       else if (event.number !== version + offset + 1) throw new Error('Event can not be aligned');
       offset += 1;
     }

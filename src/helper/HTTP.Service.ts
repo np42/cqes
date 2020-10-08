@@ -9,6 +9,7 @@ import * as NodeUrl         from 'url';
 import * as Express         from 'express';
 import * as BodyParser      from 'body-parser';
 import * as cors            from 'cors';
+import * as fs              from 'fs';
 
 export interface Cases { [eventType: string]: [number, string] };
 export interface Request<T = any> extends NodeHttp.ClientRequest {
@@ -20,6 +21,14 @@ export interface Request<T = any> extends NodeHttp.ClientRequest {
   remoteAddress: string;
 };
 export interface Response extends NodeHttp.ServerResponse {};
+
+export class AccessError extends Error {
+  public statusCode: number;
+  constructor(message: string, statusCode = 401) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+};
 
 export interface props extends Service.props {
   HTTP: {
@@ -65,14 +74,24 @@ export class HTTPService extends Service.Service {
     });
   }
 
-  protected handleHttpRequest(req: Request, res: Response) {
+  protected async handleHttpRequest(req: Request, res: Response) {
     const offset = req.url.indexOf('?');
     const path   = req.url.substring(1, offset === -1 ? req.url.length : offset).split('/');
     const handlerName = [req.method, ...path].join('_');
     if (handlerName in this) {
       this.logger.log('Handle %yellow %s %j', req.method, req.url, req.body);
       req.remoteAddress = this.extractRemoteAddress(req);
-      return (<any>this)[handlerName](req, res);
+      try {
+        return await (<any>this)[handlerName](req, res);
+      } catch (e) {
+        if (e instanceof AccessError) {
+          this.logger.warn('AccessError (%s) %s %s', e.statusCode, handlerName, e.message);
+          return this.respond(res, e.statusCode, e.message);
+        } else {
+          this.respond(res, 500);
+          throw e;
+        }
+      }
     } else {
       this.logger.log('%red %yellow %s %j', 'Reject', req.method, req.url, req.body);
       res.writeHead(404, this.headers)
@@ -105,8 +124,13 @@ export class HTTPService extends Service.Service {
         this.logger.todo();
       }
     } break ;
-    default: {
-      this.logger.todo();
+    case 'file': {
+      res.writeHead(code, options.headers);
+      fs.createReadStream(data).pipe(res);
+    } break ;
+    case 'buffer': {
+      res.writeHead(code, options.headers);
+      res.end(data);
     } break ;
     }
   }

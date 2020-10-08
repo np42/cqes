@@ -222,7 +222,7 @@ export class Transport extends Component.Component implements EventBus.Transport
 
   public async psubscribe(id: string, category: string, handler: eventHandler<EventHandling>): Promise<Subscription> {
     this.logger.log('New %green [%s] => %s', 'Persistent Subscription', id, category);
-    let lastKnownPosition: number = await this.getLastCategoryPosition(category);
+    let lastKnownPosition: number = await this.getLastCategoryPosition(category) || -1;
     let subscriptionHandler = (event: Event) => {
       if (event.meta?.$persistent === false) return ;
       lastKnownPosition = Math.max(lastKnownPosition, event.position)

@@ -104,10 +104,18 @@ export class HTTPService extends Service.Service {
     if (options.type == null) options.type = 'json';
     if (options.wrap == null) options.wrap = true;
     if (options.headers == null) options.headers = {};
+    const headers = { ...options.headers };
+    let contentLengthMissing = true;
+    for (const key in headers) {
+      if (key.toLowerCase() === 'content-length') {
+        contentLengthMissing = false;
+        break ;
+      }
+    }
     switch (options.type.toLowerCase()) {
     case 'json': {
-      options.headers['content-type'] = 'application/json';
-      res.writeHead(code, options.headers);
+      headers['content-type'] = 'application/json';
+      res.writeHead(code, headers);
       if (options.wrap) {
         if (data == null || code == 204) {
           res.end();
@@ -125,11 +133,14 @@ export class HTTPService extends Service.Service {
       }
     } break ;
     case 'file': {
-      res.writeHead(code, options.headers);
+      
+      if (contentLengthMissing) headers['Content-Length'] = data.length;
+      res.writeHead(code, headers);
       fs.createReadStream(data).pipe(res);
     } break ;
     case 'buffer': {
-      res.writeHead(code, options.headers);
+      if (contentLengthMissing) headers['Content-Length'] = data.length;
+      res.writeHead(code, headers);
       res.end(data);
     } break ;
     }

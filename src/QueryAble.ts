@@ -1,13 +1,14 @@
 import { QueryBus }      from './QueryBus';
 import { Reply }         from './Reply';
-import { Typer, IValue } from 'cqes-type';
+import { Typer, IValue, Value
+       }                 from 'cqes-type';
 import * as events       from 'events';
 
 export interface Buses { [name: string]: QueryBus; }
 export interface Types { [name: string]: Typer; }
 
 export interface EventEmitter extends events.EventEmitter {
-  expect<T>(type: { new (): T }): Promise<T>;
+  expect<T>(type: { new (): T }, defaultValue?: T): Promise<T>;
 }
 
 export interface props {
@@ -21,19 +22,22 @@ export function extend(holder: any, props: props) {
   // @target: '<Context>:<Category>:<View>'
   holder.query = function (target: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
-    (<any>ee).expect = (typer: IValue) => new Promise(resolve => {
-      let done = false;
-      ee.on(typer.name, result => {
-        done = true;
-        resolve(result);
+    (<any>ee).expect = <T>(typer: { new (v?: any): T }, defaultValue?: T): Promise<T> => {
+      if (defaultValue == null) defaultValue = null;
+      return new Promise(resolve => {
+        let done = false;
+        ee.on(typer.name, result => {
+          done = true;
+          resolve(result);
+        });
+        ee.on('end', (reply: Reply) => {
+          if (done) return ;
+          if (reply.type == null) return resolve(defaultValue);
+          this.logger.warn('Query %s expected %s got %s', target, typer.name, reply.type);
+          return resolve(defaultValue);
+        });
       });
-      ee.on('end', (reply: Reply) => {
-        if (done) return ;
-        if (reply.type == null) return resolve(null);
-        this.logger.warn('Query %s expected %s got %s', target, typer.name, reply.type);
-        return resolve(null);
-      });
-    });
+    };
     ee.on('error', (error: Error) => {
       if (ee.listenerCount('error') == 1) throw error;
     });

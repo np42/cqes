@@ -99,7 +99,7 @@ export class HTTPService extends Service.Service {
     }
   }
 
-  protected respond(res: Response, code: number, data?: any, options?: any) {
+  protected async respond(res: Response, code: number, data?: any, options?: any) {
     if (options == null) options = {};
     if (options.type == null) options.type = 'json';
     if (options.wrap == null) options.wrap = true;
@@ -134,7 +134,7 @@ export class HTTPService extends Service.Service {
     } break ;
     case 'file': {
       
-      if (contentLengthMissing) headers['Content-Length'] = data.length;
+      //if (contentLengthMissing) headers['Content-Length'] = data.length;
       res.writeHead(code, headers);
       fs.createReadStream(data).pipe(res);
     } break ;
@@ -144,6 +144,9 @@ export class HTTPService extends Service.Service {
       res.end(data);
     } break ;
     }
+    return new Promise(resolve => {
+      res.on('close', resolve);
+    });
   }
 
   protected extractRemoteAddress(req: any) {

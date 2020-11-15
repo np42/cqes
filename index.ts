@@ -25,3 +25,6 @@ export { C, Q, R, E, S };
 
 //--
 export { Index }     from './src/Index';
+
+//--
+export * as Types    from './src/Types';

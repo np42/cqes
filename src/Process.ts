@@ -176,7 +176,6 @@ export class Process extends Component.Component {
       const path            = join(this.root, context.name, name + '.Service');
       const Package         = require(path);
       if (Package == null) throw new Error('Missing ' + name + ' in ' + path);
-      if (!('Service' in Package)) Package.Service = Service;
       const serviceProps    = servicesProps[name];
       if (serviceProps.targets == null)      serviceProps.targets      = [];
       if (serviceProps.views == null)        serviceProps.views        = [];
@@ -200,12 +199,10 @@ export class Process extends Component.Component {
                               , repositories
                               };
       if ('EventHandlers' in Package) {
-        const eHandlersProps = { queryBuses, repositories };
-        const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...serviceProps, ...eHandlersProps });
+        const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...serviceProps });
         props.eventHandlers  = eventHandlers;
       } else {
-        const eHandlersProps = { queryBuses: {}, repositories: {} };
-        props.eventHandlers  = new Service.Event.Handlers({ ...commonProps, ...eHandlersProps });
+        props.eventHandlers  = new Service.Event.Handlers({ ...commonProps });
       }
       const service = new Package[name](props);
       if (!(service instanceof Service.Service))

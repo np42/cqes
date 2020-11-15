@@ -25,19 +25,19 @@ export class Service extends Component.Component {
   // About Command
   protected commandBuses:    CommandAble.Buses;
   protected commandTypes:    CommandAble.Types;
-  protected command:         (target: string, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
+  public    command:         (target: string, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   // About Query
   protected queryBuses:    QueryAble.Buses;
   protected queryTypes:    QueryAble.Types;
-  protected query:         (target: string, data: any, meta?: any) => QueryAble.EventEmitter;
+  public    query:         (target: string, data: any, meta?: any) => QueryAble.EventEmitter;
   protected getQueryTyper: (context: string, view: string, method: string) => Typer;
   // About Event
   protected eventBuses:    EventBuses;
   protected eventHandlers: Event.Handlers;
   // About State
   protected repositories:  StateAble.Repositories;
-  protected get:           <X>(type: Constructor<X>, streamId: string, useCache?: boolean) => Promise<S<X>>;
+  public    get:           <X>(type: Constructor<X>, streamId: string, useCache?: boolean) => Promise<S<X>>;
   //
   protected subscriptions: Array<string | Subscription>;
 

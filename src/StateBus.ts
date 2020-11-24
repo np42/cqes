@@ -31,6 +31,13 @@ export class StateBus extends Component.Component {
   public async start(): Promise<void> {
     if (this.started) return ;
     this.logger.log('is Statefull');
+    try { // Test empty state
+      this.state.from({});
+    } catch (e) {
+      this.logger.error('Can not create an empty state of %s', this.name);
+      this.logger.fatal(e);
+      return ;
+    }
     await super.start();
     await this.transport.start();
   }

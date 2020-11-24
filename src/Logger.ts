@@ -99,6 +99,11 @@ export class Logger {
     this._write(2, header, message);
   }
 
+  fatal(...args: Array<any>) {
+    this.error(...args);
+    process.exit(-1);
+  }
+
   // ------
 
   _write(std: number, header: string, message: string) {

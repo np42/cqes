@@ -53,6 +53,7 @@ export class Manager extends Component.Component {
 
   public async start(): Promise<void> {
     if (this.started) return ;
+    await super.start();
     await this.eventBus.start();
     await this.repository.start();
     await this.commandHandlers.start();
@@ -162,6 +163,7 @@ export class Manager extends Component.Component {
     await this.commandHandlers.stop();
     await this.repository.stop();
     await this.eventBus.stop();
+    await super.stop();
   }
 
 }

@@ -16,7 +16,7 @@ export class Component {
   readonly  name:     string;
   readonly  type:     string;
   readonly  serial:   string;
-  protected started:  boolean;
+  readonly  started:  boolean;
   protected process:  Process;
   protected logger:   Logger;
   protected helpers:  { [name: string]: Helper };
@@ -45,13 +45,13 @@ export class Component {
 
   public start(): Promise<void> {
     if (this.started === true) throw new Error(this.fqn + ' is already started');
-    this.started = true;
+    Object.defineProperty(this, 'started', { value: true });
     return Promise.resolve();
   }
 
   public stop(): Promise<void> {
     if (this.started === false) throw new Error(this.fqn + ' is already stopped');
-    this.started = false;
+    Object.defineProperty(this, 'started', { value: false });
     return Promise.resolve();
   }
 

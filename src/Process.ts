@@ -432,12 +432,18 @@ export class Process extends Component.Component {
     const promises = <Array<Promise<void>>>[];
     for (const [contextName, context] of this.contexts) {
       if (!(context instanceof Context.Context)) continue ;
-      for (const [name, manager] of context.managers) promises.push(manager.start());
-      for (const [name, view] of context.views) promises.push(view.start());
-      for (const [name, trigger] of context.triggers) promises.push(trigger.start());
-      for (const [name, service] of context.services) promises.push(service.start());
+      for (const [name, manager] of context.managers) promises.push(this.startComponent(manager));
+      for (const [name, view]    of context.views)    promises.push(this.startComponent(view));
+      for (const [name, trigger] of context.triggers) promises.push(this.startComponent(trigger));
+      for (const [name, service] of context.services) promises.push(this.startComponent(service));
     }
     return <any> Promise.all(promises);
+  }
+
+  protected async startComponent(component: Component.Component): Promise<void> {
+    await component.start();
+    if (component.started !== true)
+      this.logger.error('Unable to start %s:%s:%s', component.context, component.name, component.type);
   }
 
   protected catchErrors() {

@@ -8,7 +8,7 @@ export interface Buses { [name: string]: QueryBus; }
 export interface Types { [name: string]: Typer; }
 
 export interface EventEmitter extends events.EventEmitter {
-  expect<T>(type: { new (): T }, defaultValue?: T): Promise<T>;
+  expect<T>(type: { new (): T } | string, defaultValue?: T): Promise<T>;
 }
 
 export interface props {
@@ -22,18 +22,25 @@ export function extend(holder: any, props: props) {
   // @target: '<Context>:<Category>:<View>'
   holder.query = function (target: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
-    (<any>ee).expect = <T>(typer: { new (v?: any): T }, defaultValue?: T): Promise<T> => {
+    (<any>ee).expect = <T>(typer: { new (v?: any): T } | string, defaultValue?: T): Promise<T> => {
       if (defaultValue == null) defaultValue = null;
-      return new Promise(resolve => {
+      const name = typeof typer === 'string' ? typer : typer.name;
+      return new Promise((resolve, reject) => {
         let done = false;
-        ee.on(typer.name, result => {
+        ee.on(name, result => {
           done = true;
           resolve(result);
+        });
+        ee.on('error', error => {
+          this.logger.error(error);
+          if (done) return ;
+          done = true;
+          reject(error);
         });
         ee.on('end', (reply: Reply) => {
           if (done) return ;
           if (reply.type == null) return resolve(defaultValue);
-          this.logger.warn('Query %s expected %s got %s', target, typer.name, reply.type);
+          this.logger.warn('Query %s expected %s got %s', target, name, reply.type);
           return resolve(defaultValue);
         });
       });
@@ -49,7 +56,7 @@ export function extend(holder: any, props: props) {
       const [context, view, method] = target.split(':');
       if (!(view in this.queryBuses)) {
         const views = Object.keys(this.queryBuses).join(', ');
-        ee.emit('error', new Error('View ' + target + ' not found within ' + views));
+        ee.emit('error', new Error('View ' + target + ' not found within [ ' + views + ' ]'));
       } else {
         const typer = this.getQueryTyper(context, view, method);
         if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }

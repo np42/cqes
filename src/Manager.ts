@@ -105,7 +105,12 @@ export class Manager extends Component.Component {
     const { category, streamId, order } = command;
     const handler = this.getCommandHandler(command);
     const events  = <Array<E>> [];
-    const emitter = (type: string | Typer | E, data?: any, meta?: any) => {
+    const emitter = (type: string | Typer | E, data?: any, customMeta?: any) => {
+      const meta = { ...command.meta, ...customMeta };
+      if (meta.createdAt) {
+        meta.createdAt = null;
+        meta.requestedAt = command.meta.createdAt;
+      }
       if (type instanceof E) {
         events.push(type);
       } else if (isType(type)) {
@@ -116,9 +121,13 @@ export class Manager extends Component.Component {
       }
     };
     try {
-      const returnedEvents = await handler.call(this.commandHandlers, state, command, emitter);
-      if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
-      else if (returnedEvents instanceof E) events.push(returnedEvents);
+      const returned = await handler.call(this.commandHandlers, state, command, emitter);
+      if (returned != null) {
+        this.logger.warn('DEPRECATED: Using old command handlers API, use emit instead of returning events');
+        const returnedEvents = returned;
+        if (returnedEvents instanceof Array) Array.prototype.push.apply(events, returnedEvents);
+        else if (returnedEvents instanceof E) events.push(returnedEvents);
+      }
     } catch (e) {
       const meta  = { ...command.meta, stack: e.stack };
       const data  = { type: e.name, message: e.toString() };

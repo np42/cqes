@@ -83,7 +83,7 @@ export function extend(holder: any, props: props) {
   }
 
   holder.queryMemo = memoize((target: string, data: any, ExpectedType?: any) => {
-    return this.query(target, data).expect(ExpectedType);
+    return holder.query(target, data).expect(ExpectedType);
   }, 50);
 
   holder.getQueryTyper = function (context: string, view: string, method: string) {

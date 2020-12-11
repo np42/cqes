@@ -31,6 +31,7 @@ export class Service extends Component.Component {
   protected queryBuses:    QueryAble.Buses;
   protected queryTypes:    QueryAble.Types;
   public    query:         (target: string, data: any, meta?: any) => QueryAble.EventEmitter;
+  public    queryMemo:     (target: string, data: any, type: Typer) => any;
   protected getQueryTyper: (context: string, view: string, method: string) => Typer;
   // About Event
   protected eventBuses:    EventBuses;

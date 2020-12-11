@@ -2,12 +2,14 @@ import { QueryBus }      from './QueryBus';
 import { Reply }         from './Reply';
 import { Typer, IValue, Value
        }                 from 'cqes-type';
+import { memoize }       from 'cqes-util';
 import * as events       from 'events';
 
 export interface Buses { [name: string]: QueryBus; }
 export interface Types { [name: string]: Typer; }
 
 export interface EventEmitter extends events.EventEmitter {
+  assert<T>(type: { new (): T } | string): Promise<T>;
   expect<T>(type: { new (): T } | string, defaultValue?: T): Promise<T>;
 }
 
@@ -22,7 +24,7 @@ export function extend(holder: any, props: props) {
   // @target: '<Context>:<Category>:<View>'
   holder.query = function (target: string, data: any, meta?: any): EventEmitter {
     const ee = <EventEmitter>new events.EventEmitter();
-    (<any>ee).expect = <T>(typer: { new (v?: any): T } | string, defaultValue?: T): Promise<T> => {
+    (<any>ee).assert = <T>(typer: { new (v?: any): T } | string, defaultValue?: T): Promise<T> => {
       if (defaultValue == null) defaultValue = null;
       const name = typeof typer === 'string' ? typer : typer.name;
       return new Promise((resolve, reject) => {
@@ -39,10 +41,18 @@ export function extend(holder: any, props: props) {
         });
         ee.on('end', (reply: Reply) => {
           if (done) return ;
-          if (reply.type == null) return resolve(defaultValue);
-          this.logger.warn('Query %s expected %s got %s', target, name, reply.type);
-          return resolve(defaultValue);
+          return reject();
         });
+      });
+    };
+    (<any>ee).expect = <T>(typer: { new (v?: any): T } | string, defaultValue?: T): Promise<T> => {
+      return new Promise((resolve, reject) => {
+        ee.assert(typer)
+          .then(resolve)
+          .catch(e => {
+            if (e != null) return reject(e);
+            else return resolve(defaultValue == null ? null : defaultValue);
+          });
       });
     };
     ee.on('error', (error: Error) => {
@@ -71,6 +81,10 @@ export function extend(holder: any, props: props) {
     });
     return ee;
   }
+
+  holder.queryMemo = memoize((target: string, data: any, ExpectedType?: any) => {
+    return this.query(target, data).expect(ExpectedType);
+  }, 50);
 
   holder.getQueryTyper = function (context: string, view: string, method: string) {
     const key = context + ':' + view;

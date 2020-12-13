@@ -5,7 +5,7 @@ import * as Domain                from './DomainHandlers';
 import { State as S }             from './State';
 import { StateRevision }          from './State';
 import { Event as E }             from './Event';
-import { Typer }                  from 'cqes-type';
+import { Typer, isType }          from 'cqes-type';
 const CachingMap                  = require('caching-map');
 
 export { Domain };
@@ -91,10 +91,12 @@ export class Repository extends Component.Component {
 
   protected applyEvent(state: S, event: E) {
     if (event.meta?.$persistent === false) return state;
+    const Type = state.data.constructor;
     const applier = <Domain.handler>(<any>this.domainHandlers)[event.type];
     if (applier != null) {
       this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
       const newState = applier.call(this.domainHandlers, state, event) || state;
+      if (isType(Type)) newState.data = Type.from(newState.data);
       newState.revision = state.revision + 1;
       return newState;
     } else {

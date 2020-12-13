@@ -352,8 +352,8 @@ export class Process extends Component.Component {
       const config             = this.parseRepository(path);
       const category           = config.name;
       const handlersProps      = { ...commonProps, ...extra };
-      const { domainHandlers } = this.getDomainHandlers(config.context, config.name, handlersProps);
-      const version            = this.getDomainHandlersVersion(domainHandlers);
+      const { domainHandlers, version
+            }                  = this.getDomainHandlers(config.context, config.name, handlersProps);
       const remoteProps        = <any>(this.contextsProps.get(config.context) || {});
       const stateBusProps      = { ...commonProps, ...remoteProps.StateBus, version };
       const stateBus           = this.getStateBus(stateBusProps, config.context, config.name);
@@ -394,11 +394,13 @@ export class Process extends Component.Component {
 
   protected getDomainHandlers(contextName: string, name: string, props: any) {
     const path = join(this.root, contextName, name + '.Domain');
-    const { DomainHandlers } = require(path);
+    const { DomainHandlers, version: customVersion } = require(path);
     if (!isConstructor(DomainHandlers))
       throw new Error('Constructor DomainHandlers from ' + path + ' expected');
     const domainHandlers  = new DomainHandlers(props);
-    return { domainHandlers };
+    const version         = customVersion || this.getDomainHandlersVersion(domainHandlers);
+    this.logger.log('%s.%s Domain for %s has version: %s', contextName, name, domainHandlers.name, version);
+    return { domainHandlers, version };
   }
 
   protected getDomainHandlersVersion(domainHandlers: Repository.Domain.Handlers) {

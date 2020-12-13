@@ -16,6 +16,7 @@ export interface DomainHandlers  { [name: string]: Domain.handler };
 export interface props extends Component.props {
   category?:        string;
   stateBus?:        StateBus;
+  version?:         string;
   eventBus?:        EventBus;
   domainHandlers?:  Domain.Handlers;
   cacheSize?:       number;
@@ -28,6 +29,7 @@ export class Repository extends Component.Component {
   protected eventBus:       EventBus;
   protected subscription:   Subscription;
   protected domainHandlers: Domain.Handlers;
+  protected version:        string;
 
   constructor(props: props) {
     super(props);
@@ -36,6 +38,7 @@ export class Repository extends Component.Component {
     this.cache          = new CachingMap({ size: props.cacheSize || 1000 });
     this.eventBus       = props.eventBus;
     this.domainHandlers = props.domainHandlers;
+    this.version        = props.version;
   }
 
   public async start(): Promise<void> {
@@ -48,7 +51,7 @@ export class Repository extends Component.Component {
   }
 
   public async get(streamId: string, useCache = true) {
-    let state = new S(streamId, -1, {});
+    let state = new S(streamId, -1, this.version, {});
     if (useCache) {
       const cached = this.cache.get(streamId);
       if (cached != null) return cached;

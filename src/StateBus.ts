@@ -6,7 +6,7 @@ import { Typer }         from 'cqes-type';
 export interface Transport {
   start:   () => Promise<void>;
   save:    (state: State) => Promise<void>;
-  load:    (stateId: string) => Promise<State>;
+  load:    (stateId: string, version: string) => Promise<State>;
   destroy: (stateId: string) => Promise<void>;
   stop:    () => Promise<void>;
 }
@@ -14,11 +14,13 @@ export interface Transport {
 export interface props extends Component.props {
   transport:  string;
   state:      Typer;
+  version:    string;
 }
 
 export class StateBus extends Component.Component {
   protected transport: Transport;
   protected state:     Typer;
+  protected version:   string;
 
   constructor(props: props) {
     super(props);
@@ -26,6 +28,7 @@ export class StateBus extends Component.Component {
     if (Transport == null) throw new Error('Missing Transport from ' + props.transport);
     this.transport  = new Transport({ ...props, type: 'StateBus.Transport' });
     this.state      = props.state;
+    this.version    = props.version;
   }
 
   public async start(): Promise<void> {
@@ -57,8 +60,8 @@ export class StateBus extends Component.Component {
   }
 
   public async get(stateId: string): Promise<State> {
-    const state = await this.transport.load(stateId);
-    if (state == null) return this.typeState(new State(stateId, -1, null));
+    const state = await this.transport.load(stateId, this.version);
+    if (state == null) return this.typeState(new State(stateId, -1, this.version, null));
     return this.typeState(state);
   }
 

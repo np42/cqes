@@ -34,25 +34,30 @@ export class Transport extends Component.Component implements StateBus.Transport
   }
 
   public async save(state: State) {
-    const query = [ 'INSERT INTO `@states` (`owner`, `stateId`, `revision`, `data`)'
-                  , 'VALUE (?, ?, @revision := ?, @data := ?)'
-                  , 'ON DUPLICATE KEY UPDATE `revision` = @revision, `data` = @data'
+    const query = [ 'INSERT INTO `@states` (`owner`, `stateId`, `version`, `revision`, `data`)'
+                  , 'VALUE (?, ?, @revision := ?, @version := ?, @data := ?)'
+                  , 'ON DUPLICATE KEY UPDATE `version` = @version, `revision` = @revision, `data` = @data'
                   ].join(' ');
     const data = JSON.stringify(state.data, (key, value) => {
       if (typeof value != 'object') return value;
       if (value instanceof Set || value instanceof Map) return Array.from(value);
       return value;
     });
-    await this.mysql.request(query, [this.owner, state.stateId, state.revision, data, data]);
+    await this.mysql.request(query, [this.owner, state.stateId, state.version, state.revision, data, data]);
   }
 
-  public async load(id: string): Promise<State> {
-    const query = 'SELECT `revision`, `data` FROM `@states` WHERE `owner` = ? AND `stateId` = ?';
-    const result = await this.mysql.request(query, [this.owner, id]);
+  public async load(id: string, version: string): Promise<State> {
+    const query = [ 'SELECT `revision`, `data`'
+                  , 'FROM `@states`'
+                  , 'WHERE `owner` = ?'
+                  ,   'AND `stateId` = ?'
+                  ,   'AND `version` = ?'
+                  ].join(' ');
+    const result = await this.mysql.request(query, [this.owner, id, version]);
     if (result.length == 0) return null;
     const row  = result[0];
     const data = row.data ? JSON.parse(row.data) : null;
-    return new State(id, row.revision, data);
+    return new State(id, row.revision, version, data);
   }
 
   public destroy(id: string): Promise<void> {

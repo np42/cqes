@@ -8,16 +8,22 @@ export enum StateRevision
 export class State<A = any> {
   public stateId:   string;
   public revision:  number;
+  public version:   string;
   public data:      A;
 
-  constructor(stateId: string, revision: number, data: A) {
+  constructor(stateId: string, revision: number, version: string, data: A) {
     this.stateId  = stateId;
     this.revision = revision >= 0 ? revision : StateRevision.New;
+    this.version  = version;
     this.data     = data instanceof Object ? data : <A>{};
   }
 
   public isNew() {
     return this.revision < 0;
+  }
+
+  public exists() {
+    return this.revision >= 0;
   }
 
   public clone(): State<A> {

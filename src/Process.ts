@@ -15,7 +15,7 @@ import * as Service                from './Service';
 import * as StateAble              from './StateAble';
 
 import { clone, merge, get, set
-       , Content
+       , Content, Digest
        , isConstructor }           from 'cqes-util';
 
 import { hostname, userInfo }      from 'os';
@@ -351,16 +351,17 @@ export class Process extends Component.Component {
       const commonProps        = { context: contextName, name, process: this };
       const config             = this.parseRepository(path);
       const category           = config.name;
+      const handlersProps      = { ...commonProps, ...extra };
+      const { domainHandlers } = this.getDomainHandlers(config.context, config.name, handlersProps);
+      const version            = this.getDomainHandlersVersion(domainHandlers);
       const remoteProps        = <any>(this.contextsProps.get(config.context) || {});
-      const stateBusProps      = { ...commonProps, ...remoteProps.StateBus };
+      const stateBusProps      = { ...commonProps, ...remoteProps.StateBus, version };
       const stateBus           = this.getStateBus(stateBusProps, config.context, config.name);
       const ebProps            = { originContext: config.context, category: config.name };
       const eventBusProps      = { ...commonProps, ...remoteProps.EventBus, ...ebProps };
       const eventBus           = this.getEventBus(eventBusProps, config.context, config.name);
-      const handlersProps      = { ...commonProps, ...extra };
-      const { domainHandlers } = this.getDomainHandlers(config.context, config.name, handlersProps);
       const deps               = { stateBus, eventBus, domainHandlers };
-      const props              = { ...commonProps, category, ...deps, ...config.props };
+      const props              = { ...commonProps, category, ...deps, ...config.props, version };
       const repository         = new Repository.Repository(props);
       result[config.name]      = repository;
     });
@@ -400,6 +401,16 @@ export class Process extends Component.Component {
     return { domainHandlers };
   }
 
+  protected getDomainHandlersVersion(domainHandlers: Repository.Domain.Handlers) {
+    const domainDescriptors = Object.getOwnPropertyDescriptors(Object.getPrototypeOf(domainHandlers));
+    const digest = new Digest();
+    for (const handlerName in domainDescriptors) {
+      if (/^[^A-Z]/.test(handlerName)) continue ;
+      digest.update(domainDescriptors[handlerName].value);
+    }
+    return digest.toString();
+  }
+
   protected getQueryHandlers(contextName: string, name: string, props: any) {
     const path = join(this.root, contextName, name + '.Query');
     const { QueryHandlers } = require(path);
@@ -426,6 +437,8 @@ export class Process extends Component.Component {
     const triggerHandlers = new TriggerHandlers(props);
     return { triggerHandlers, partition };
   }
+
+  // ------------------
 
   protected startComponents(): Promise<void> {
     this.logger.log('%bold', 'Start Components');

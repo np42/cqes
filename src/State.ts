@@ -27,11 +27,11 @@ export class State<A = any> {
   }
 
   public clone(): State<A> {
-    return new (<any>this.constructor)(this.stateId, this.revision, clone(this.data));
+    return new (<any>this.constructor)(this.stateId, this.revision, this.version, clone(this.data));
   }
 
   public end(): State<A> {
-    return new (<any>this.constructor)(this.stateId, StateRevision.Delete);
+    return new (<any>this.constructor)(this.stateId, StateRevision.Delete, this.version, null);
   }
 
 }

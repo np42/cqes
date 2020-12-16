@@ -18,6 +18,7 @@ export interface Constructor<T> { new (...a: Array<any>): T };
 export interface props extends Component.props, QueryAble.props, CommandAble.props, StateAble.props {
   eventHandlers:   Event.Handlers;
   eventBuses:      EventBuses;
+  psubscriptions:  Array<string>;
   subscriptions:   Array<string>;
 }
 
@@ -38,9 +39,10 @@ export class Service extends Component.Component {
   protected eventHandlers: Event.Handlers;
   // About State
   protected repositories:  StateAble.Repositories;
-  public    get:           <X>(type: Constructor<X>, streamId: string, useCache?: boolean) => Promise<S<X>>;
+  public    get:           <X>(type: Constructor<X>, streamId: string, minRevision?: number) => Promise<S<X>>;
   //
-  protected subscriptions: Array<string | Subscription>;
+  protected psubscriptions: Array<string | Subscription>;
+  protected subscriptions:  Array<string | Subscription>;
 
   constructor(props: props) {
     if (props.context == null) throw new Error('Context is required');
@@ -50,9 +52,10 @@ export class Service extends Component.Component {
     CommandAble.extend(this, props);
     QueryAble.extend(this, props);
     StateAble.extend(this, props);
-    this.eventBuses    = props.eventBuses;
-    this.eventHandlers = props.eventHandlers;
-    this.subscriptions = props.subscriptions;
+    this.eventBuses     = props.eventBuses;
+    this.eventHandlers  = props.eventHandlers;
+    this.psubscriptions = props.psubscriptions;
+    this.subscriptions  = props.subscriptions;
     if (this.eventHandlers.service == null) this.eventHandlers.service = this;
   }
 
@@ -63,11 +66,17 @@ export class Service extends Component.Component {
     await Promise.all(Object.values(this.queryBuses).map(bus => bus.start()));
     await this.eventHandlers.start();
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.start()));
-    this.subscriptions = await Promise.all(this.subscriptions.map((name: string) => {
+    await Promise.all(Object.values(this.repositories).map(repository => repository.start()));
+    this.psubscriptions = await Promise.all(this.psubscriptions.map((name: string) => {
       if (typeof name != 'string') return Promise.resolve(null);
       const bus = this.eventBuses[name];
       const subscription = [this.fqn, bus.category].join(':');
       return bus.psubscribe(subscription, event => this.handleServiceEvent(event));
+    }));
+    this.subscriptions = await Promise.all(this.subscriptions.map((name: string) => {
+      if (typeof name != 'string') return Promise.resolve(null);
+      const bus = this.eventBuses[name];
+      return bus.subscribe(async event => { await this.handleServiceEvent(event); });
     }));
   }
 
@@ -76,7 +85,7 @@ export class Service extends Component.Component {
     if (fullname in this.eventHandlers) return (<any>this.eventHandlers)[fullname];
     const shortname = event.type;
     if (shortname in this.eventHandlers) return (<any>this.eventHandlers)[shortname];
-    const wildname = 'any';
+    const wildname = 'ANY';
     if (wildname in this.eventHandlers) return (<any>this.eventHandlers)[wildname];
   }
 
@@ -94,6 +103,8 @@ export class Service extends Component.Component {
 
   public async stop(): Promise<void> {
     if (!this.started) return ;
+    await Promise.all(Object.values(this.repositories).map(repository => repository.stop()));
+    await Promise.all(this.psubscriptions.map(sub => (<any>sub).abort()));
     await Promise.all(this.subscriptions.map(sub => (<any>sub).abort()));
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.stop()));
     await this.eventHandlers.stop();

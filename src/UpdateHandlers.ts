@@ -6,6 +6,8 @@ import { Event }        from './Event';
 import { State }        from './State';
 import { Typer }        from 'cqes-type';
 
+export interface Constructor<T> { new (...a: Array<any>): T };
+
 export type handler = (event: Event) => Promise<void>;
 
 export function getset(target: Object, key: string, descriptor: PropertyDescriptor): PropertyDescriptor {
@@ -36,7 +38,7 @@ export class Handlers extends Component.Component {
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   // About State
   protected repositories: StateAble.Repositories;
-  protected get:          <X>(target: { new (...a: Array<any>): X }, streamId: string) => Promise<State<X>>;
+  protected get:          <X>(target: Constructor<X>, streamId: string, minRevision?: number) => Promise<State<X>>;
 
   constructor(props: props) {
     super(props);

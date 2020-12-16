@@ -69,8 +69,8 @@ export function extend(holder: any, props: props) {
         ee.emit('error', new Error('View ' + target + ' not found within [ ' + views + ' ]'));
       } else {
         const typer = this.getQueryTyper(context, view, method);
-        if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
         this.logger.log('%blue %s:%s %j', method, context, view, data);
+        if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
         this.queryBuses[view].request(method, data, meta)
           .catch((error: Error) => ee.emit('error', error))
           .then((reply: Reply) => {

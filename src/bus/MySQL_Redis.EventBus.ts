@@ -144,9 +144,9 @@ export class Transport extends Component.Component implements EventBus.Transport
           })
           .on('result', async row => {
             connection.pause()
-            const data = JSON.parse(row.data);
+            const data  = JSON.parse(row.data);
             const savedAt = new Date(row.date + ' ' + row.time);
-            const meta = { savedAt, ...JSON.parse(row.meta) };
+            const meta  = { savedAt, ...JSON.parse(row.meta) };
             const event = new Event(row.category, row.streamId, row.number, row.type, data, meta);
             event.position = row.eventId;
             try { await handler(event); }
@@ -204,6 +204,7 @@ export class Transport extends Component.Component implements EventBus.Transport
     this.logger.log('Subscribing %s', channel);
     this.redis.subscribe(channel);
     this.redis.on('message', (channel, message) => {
+      //this.logger.debug('Receive', message);
       const array = JSON.parse(message);
       if (!(array instanceof Array)) {
         this.logger.warn('Bad data received as event array:', array);

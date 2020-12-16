@@ -57,7 +57,7 @@ export class Trigger extends Component.Component {
     if (fullname in this.triggerHandlers) return (<any>this.triggerHandlers)[fullname];
     const shortname = event.type;
     if (shortname in this.triggerHandlers) return (<any>this.triggerHandlers)[shortname];
-    const wildname = 'any';
+    const wildname = 'ANY';
     if (wildname in this.triggerHandlers) return (<any>this.triggerHandlers)[wildname];
     return (state: State, event: Event) => state;
   }

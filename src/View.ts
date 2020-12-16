@@ -63,7 +63,7 @@ export class View extends Component.Component {
     if (fullname in this.updateHandlers) return (<any>this.updateHandlers)[fullname];
     const shortname = event.type;
     if (shortname in this.updateHandlers) return (<any>this.updateHandlers)[shortname];
-    const wildname = 'any';
+    const wildname = 'ANY';
     if (wildname in this.updateHandlers) return (<any>this.updateHandlers)[wildname];
   }
 
@@ -82,7 +82,7 @@ export class View extends Component.Component {
   protected getQueryHandler(query: Q): Query.handler {
     const shortname = query.method;
     if (shortname in this.queryHandlers) return (<any>this.queryHandlers)[shortname];
-    const wildname = 'any';
+    const wildname = 'ANY';
     if (wildname in this.queryHandlers) return (<any>this.queryHandlers)[wildname];
     return (query: Q) => {
       this.logger.warn('Query %s not handled: %j', query.method, query.data);

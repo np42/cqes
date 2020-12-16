@@ -75,7 +75,7 @@ export class Manager extends Component.Component {
     if (fullname in this.commandHandlers) return (<any>this.commandHandlers)[fullname];
     const shortname = command.order;
     if (shortname in this.commandHandlers) return (<any>this.commandHandlers)[shortname];
-    const wildname = 'any';
+    const wildname = 'ANY';
     if (wildname in this.commandHandlers) return (<any>this.commandHandlers)[wildname];
     return function UnhandledCommand(state: S, command: C) {
       this.logger.warn('Command %s from %s has been lost', command.category, command.order);

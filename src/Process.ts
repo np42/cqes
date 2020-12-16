@@ -180,23 +180,24 @@ export class Process extends Component.Component {
       if (serviceProps.targets == null)      serviceProps.targets      = [];
       if (serviceProps.views == null)        serviceProps.views        = [];
       if (serviceProps.psubscribe == null)   serviceProps.psubscribe   = [];
-      if (serviceProps.streams == null)      serviceProps.streams      = [];
+      if (serviceProps.subscribe == null)    serviceProps.subscribe    = [];
       if (serviceProps.repositories == null) serviceProps.repositories = [];
       const serial          = serviceProps.serial;
       const commonProps     = { context: context.name, name, serial, process: this };
       const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.targets);
       const queryBuses      = this.getQueryBuses(context.name, name, serviceProps.views);
       const eventBuses1     = this.getEventBuses(context.name, name, serviceProps.psubscribe);
-      const eventBuses2     = this.getEventBuses(context.name, name, serviceProps.streams);
+      const eventBuses2     = this.getEventBuses(context.name, name, serviceProps.subscribe);
       const eventBuses      = { ...eventBuses1, ...eventBuses2 };
-      const subscriptions   = Object.keys(eventBuses1);
+      const psubscriptions  = Object.keys(eventBuses1);
+      const subscriptions   = Object.keys(eventBuses2);
       const repoStateBus    = { ...context.StateBus, ...serviceProps.StateBus };
       const repoEventBus    = { ...context.EventBus, ...serviceProps.EventBus };
       const repoProps       = { ...serviceProps, StateBus: repoStateBus, EventBus: repoEventBus };
       const repositories    = this.getRepositories(context.name, name, serviceProps.repositories, repoProps);
       const buses           = { eventBuses, commandBuses, queryBuses };
-      const props           = { ...commonProps, ...serviceProps, ...buses, subscriptions, eventHandlers: null
-                              , repositories
+      const props           = { ...commonProps, ...serviceProps, ...buses, psubscriptions, subscriptions
+                              , eventHandlers: null, repositories
                               };
       if ('EventHandlers' in Package) {
         const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...serviceProps });
@@ -244,7 +245,6 @@ export class Process extends Component.Component {
       return result;
     }, new Map());
   }
-
 
   protected getContextTriggers(context: Context.ContextProps, triggersProps: RecordMap) {
     return Object.keys(triggersProps).reduce((result: Map<string, Trigger.Trigger>, name: string) => {

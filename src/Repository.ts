@@ -50,22 +50,35 @@ export class Repository extends Component.Component {
     this.subscription = await this.eventBus.subscribe(event => this.handleEvent(event));
   }
 
-  public async get(streamId: string, useCache = true) {
-    let state = new S(streamId, -1, this.version, {});
-    if (useCache) {
-      const cached = this.cache.get(streamId);
-      if (cached != null) return cached;
-      state = await this.stateBus.get(streamId);
+  public async get(streamId: string, minRevision?: number) {
+    // get from cache
+    const cachedState = this.cache.get(streamId);
+    if (cachedState != null) {
+      if (minRevision == null || cachedState.revision >= minRevision)
+        return cachedState;
+      // if revision is not the expected one, wait 1ms for sync
+      await new Promise(resolve => { setTimeout(resolve, 1); });
+      const cachedStateBeforeAsync = this.cache.get(streamId);
+      if (cachedStateBeforeAsync.revision >= minRevision) return cachedStateBeforeAsync;
     }
-    const revision = state.revision;
-    await this.eventBus.readStreamFrom(this.category, streamId, revision + 1, (event: E) => {
+    // get state from snapshot
+    const snapshotedState = await this.stateBus.get(streamId);
+    const snapshotedRevision = snapshotedState.revision;
+    // hydrate snapshoted state
+    let state = snapshotedState;
+    await this.eventBus.readStreamFrom(this.category, streamId, snapshotedRevision + 1, (event: E) => {
       state = this.applyEvent(state, event);
       return Promise.resolve();
     });
-    if (useCache) {
-      this.cache.set(streamId, state);
-      if (revision < state.revision) this.stateBus.set(state);
+    if (cachedState != null) {
+      // check if state has not been updated during hydratation
+      const stateAfterAsync = this.cache.get(streamId);
+      if (stateAfterAsync.revision > state.revision) return stateAfterAsync;
     }
+    // cache state
+    this.cache.set(streamId, state);
+    // update snapshot
+    if (snapshotedRevision < state.revision) this.stateBus.set(state);
     return state;
   }
 

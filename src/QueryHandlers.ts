@@ -7,6 +7,8 @@ import { Reply }        from './Reply';
 import { State }        from './State';
 import { Typer }        from 'cqes-type';
 
+export interface Constructor<T> { new (...a: Array<any>): T };
+
 export type handler = (query: Query) => Promise<Reply>;
 
 export interface props extends Component.props, QueryAble.props, CommandAble.props, StateAble.props {}
@@ -25,7 +27,7 @@ export class Handlers extends Component.Component {
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   // About State
   protected repositories: StateAble.Repositories;
-  protected get:           <X>(type: { new (...a: Array<any>): X }, streamId: string) => Promise<State<X>>;
+  protected get:           <X>(type: Constructor<X>, streamId: string, minRevision?: number) => Promise<State<X>>;
 
   constructor(props: props) {
     super(props);

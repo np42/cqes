@@ -122,7 +122,7 @@ export class Process extends Component.Component {
   }
 
   protected setDefaultContextHandlersProps(props: Context.ContextProps) {
-    if (props.managers == null) props.managers = {};
+    if (props.aggregates == null) props.aggregates = {};
     if (props.views == null)    props.views    = {};
     if (props.services == null) props.services = {};
     if (props.triggers == null) props.triggers = {};
@@ -131,41 +131,41 @@ export class Process extends Component.Component {
   protected loadContexts() {
     this.logger.log('%bold', 'Load Contexts');
     for (const [contextName, contextProps] of this.contextsProps) {
-      const context       = new Context.Context({ context: contextProps.name, name: 'This', process: this });
+      const context      = new Context.Context({ context: contextProps.name, name: 'This', process: this });
       this.contexts.set(contextName, context);
-      context.views    = this.getContextViews(contextProps, contextProps.views);
-      context.managers = this.getContextAggregates(contextProps, contextProps.managers);
-      context.triggers = this.getContextTriggers(contextProps, contextProps.triggers);
-      context.services = this.getContextServices(contextProps, contextProps.services);
+      context.views      = this.getContextViews(contextProps, contextProps.views);
+      context.aggregates = this.getContextAggregates(contextProps, contextProps.aggregates);
+      context.triggers   = this.getContextTriggers(contextProps, contextProps.triggers);
+      context.services   = this.getContextServices(contextProps, contextProps.services);
     }
   }
 
-  protected getContextAggregates(context: Context.ContextProps, managersProps: RecordMap) {
-    return Object.keys(managersProps).reduce((result: Map<string, Aggregate.Aggregate>, name: string) => {
-      if (/^_/.test(name)) return this.logger.log('Skip manager %s', name.substr(1)), result;
-      const managerProps        = managersProps[name];
-      if (managerProps.listen == null) managerProps.listen = [name];
+  protected getContextAggregates(context: Context.ContextProps, aggregatesProps: RecordMap) {
+    return Object.keys(aggregatesProps).reduce((result: Map<string, Aggregate.Aggregate>, name: string) => {
+      if (/^_/.test(name)) return this.logger.log('Skip aggregate %s', name.substr(1)), result;
+      const aggregateProps        = aggregatesProps[name];
+      if (aggregateProps.listen == null) aggregateProps.listen = [name];
       const category            = name;
-      const serial              = managerProps.serial;
+      const serial              = aggregateProps.serial;
       const commonProps         = { context: context.name, name, serial, process: this };
-      const queryBuses          = this.getQueryBuses(context.name, name, managerProps.views);
-      const eventBusProps       = { ...commonProps, ...context.EventBus, ...managerProps.EventBus };
+      const queryBuses          = this.getQueryBuses(context.name, name, aggregateProps.views);
+      const eventBusProps       = { ...commonProps, ...context.EventBus, ...aggregateProps.EventBus };
       const eventBusIn          = this.getEventBus(eventBusProps, context.name, category);
       const eventBusOut         = this.getEventBus(eventBusProps, context.name, category);
-      const stateBusProps       = { ...commonProps, ...context.StateBus, ...managerProps.StateBus };
+      const stateBusProps       = { ...commonProps, ...context.StateBus, ...aggregateProps.StateBus };
       const stateBus            = this.getStateBus(stateBusProps, context.name, name);
-      const domainProps         = { ...commonProps, ...managerProps.repository };
+      const domainProps         = { ...commonProps, ...aggregateProps.repository };
       const { domainHandlers }  = this.getDomainHandlers(context.name, name, domainProps);
       const repositoryProps     = { stateBus, eventBus: eventBusIn, domainHandlers };
       const repository          = new Repository.Repository({ ...commonProps, category, ...repositoryProps });
-      const cHandlersProps      = { ...commonProps, queryBuses, ...managerProps };
+      const cHandlersProps      = { ...commonProps, queryBuses, ...aggregateProps };
       const { commandHandlers } = this.getCommandHandlers(context.name, name, cHandlersProps);
-      const commandBuses        = this.getCommandBuses(context.name, name, managerProps.listen);
+      const commandBuses        = this.getCommandBuses(context.name, name, aggregateProps.listen);
       const buses               = { commandBuses, eventBus: eventBusOut }
       const props               = { ...commonProps, commandHandlers, ...buses, repository };
-      const manager             = new Aggregate.Aggregate(props);
+      const aggregate           = new Aggregate.Aggregate(props);
       this.logger.log('%red %cyan.%cyan found', 'Aggregate', context.name, name);
-      result.set(name, manager);
+      result.set(name, aggregate);
       return result;
     }, new Map());
   }
@@ -447,10 +447,10 @@ export class Process extends Component.Component {
     const promises = <Array<Promise<void>>>[];
     for (const [contextName, context] of this.contexts) {
       if (!(context instanceof Context.Context)) continue ;
-      for (const [name, manager] of context.managers) promises.push(this.startComponent(manager));
-      for (const [name, view]    of context.views)    promises.push(this.startComponent(view));
-      for (const [name, trigger] of context.triggers) promises.push(this.startComponent(trigger));
-      for (const [name, service] of context.services) promises.push(this.startComponent(service));
+      for (const [name, aggregate] of context.aggregates) promises.push(this.startComponent(aggregate));
+      for (const [name, view]      of context.views)      promises.push(this.startComponent(view));
+      for (const [name, trigger]   of context.triggers)   promises.push(this.startComponent(trigger));
+      for (const [name, service]   of context.services)   promises.push(this.startComponent(service));
     }
     return <any> Promise.all(promises);
   }
@@ -470,10 +470,10 @@ export class Process extends Component.Component {
     const promises = <Array<Promise<void>>>[];
     for (const [contextName, context] of this.contexts) {
       if (!(context instanceof Context.Context)) continue ;
-      for (const [name, manager] of context.managers) promises.push(manager.stop());
-      for (const [name, view] of context.views) promises.push(view.stop());
-      for (const [name, trigger] of context.triggers) promises.push(trigger.stop());
-      for (const [name, service] of context.services) promises.push(service.stop());
+      for (const [name, aggregate] of context.aggregates) promises.push(aggregate.stop());
+      for (const [name, view]      of context.views)      promises.push(view.stop());
+      for (const [name, trigger]   of context.triggers)   promises.push(trigger.stop());
+      for (const [name, service]   of context.services)   promises.push(service.stop());
     }
     return <any> Promise.all(promises);
   }

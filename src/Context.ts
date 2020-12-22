@@ -13,10 +13,10 @@ export interface ContextProps {
   EventBus:     Object;
   StateBus:     Object;
 
-  managers: { [name: string]: AggregateProps };
-  views:    { [name: string]: ViewProps };
-  services: { [name: string]: ServiceProps };
-  triggers: { [name: string]: ServiceProps };
+  aggregates: { [name: string]: AggregateProps };
+  views:      { [name: string]: ViewProps };
+  services:   { [name: string]: ServiceProps };
+  triggers:   { [name: string]: ServiceProps };
 }
 
 export interface AggregateProps {
@@ -51,17 +51,17 @@ export interface ViewProps {
 export interface props extends Component.props {}
 
 export class Context extends Component.Component {
-  public managers: Map<string, Aggregate.Aggregate>;
-  public views:    Map<string, View.View>;
-  public triggers: Map<string, Trigger.Trigger>;
-  public services: Map<string, Service.Service>;
+  public aggregates: Map<string, Aggregate.Aggregate>;
+  public views:      Map<string, View.View>;
+  public triggers:   Map<string, Trigger.Trigger>;
+  public services:   Map<string, Service.Service>;
 
   constructor(props: props) {
     super(props);
-    this.managers  = new Map();
-    this.views     = new Map();
-    this.triggers  = new Map();
-    this.services  = new Map();
+    this.aggregates  = new Map();
+    this.views       = new Map();
+    this.triggers    = new Map();
+    this.services    = new Map();
   }
 
 }

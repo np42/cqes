@@ -29,7 +29,7 @@ export interface props extends Component.props {
   eventBus?:        EventBus;
 }
 
-export class Manager extends Component.Component {
+export class Aggregate extends Component.Component {
   protected commandBuses:    CommandBuses;
   protected repository:      Repository;
   protected commandHandlers: Command.Handlers;
@@ -42,7 +42,7 @@ export class Manager extends Component.Component {
     if (props.context == null) throw new Error('Context is required');
     if (props.name    == null) throw new Error('Name is required');
     if (!(props.commandHandlers instanceof Command.Handlers)) throw new Error('Bad Command Handlers');
-    super({ type: 'Manager', ...props });
+    super({ type: 'Aggregate', ...props });
     this.commandBuses    = props.commandBuses;
     this.repository      = props.repository;
     this.commandHandlers = props.commandHandlers;
@@ -59,7 +59,7 @@ export class Manager extends Component.Component {
     await this.commandHandlers.start();
     this.subscriptions = await Promise.all(Object.values(this.commandBuses).map(async bus => {
       await bus.start();
-      return bus.listen((command: C) => this.handleManagerCommand(command))
+      return bus.listen((command: C) => this.handleAggregateCommand(command))
     }));
   }
 
@@ -82,7 +82,7 @@ export class Manager extends Component.Component {
     };
   }
 
-  protected async handleManagerCommand(command: C): Promise<void> {
+  protected async handleAggregateCommand(command: C): Promise<void> {
     const streamId = command.streamId;
     await this.lock(streamId);
     try {

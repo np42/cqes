@@ -6,13 +6,13 @@ import { Logger }      from './src/Logger';
 export { Process, Component, Logger };
 
 //--
-import * as Manager       from './src/Manager';
+import * as Aggregate     from './src/Aggregate';
 import * as Repository    from './src/Repository';
 import * as Service       from './src/Service';
 import * as View          from './src/View';
 import * as Trigger       from './src/Trigger';
 
-export { Manager, Repository, Service, View, Trigger };
+export { Aggregate, Repository, Service, View, Trigger };
 
 //--
 import { Command as C } from './src/Command';

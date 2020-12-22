@@ -15,7 +15,7 @@ export interface props extends Component.props {
   eventBuses?:     EventBuses;
   triggerHandlers: React.Handlers;
   stateBus?:       StateBus;
-  partition?:      (event: Event) => string;
+  partition?:      (event: Event) => Promise<string>;
   cacheSize?:      number;
 }
 
@@ -26,7 +26,7 @@ export class Trigger extends Component.Component {
   //
   protected subscriptions: Array<Subscription>;
   protected cache:         Map<string, State>;
-  protected partition:     (event: Event) => string;
+  protected partition:     (event: Event) => Promise<string>;
 
   constructor(props: props) {
     if (props.context == null) throw new Error('Context is required');
@@ -36,7 +36,7 @@ export class Trigger extends Component.Component {
     this.eventBuses      = props.eventBuses;
     this.triggerHandlers = props.triggerHandlers;
     this.stateBus        = props.stateBus;
-    this.partition       = props.partition || ((event: Event) => 'main');
+    this.partition       = props.partition || ((event: Event) => Promise.resolve('main'));
     this.cache           = new CachingMap({ size: props.cacheSize || 1000 });
   }
 
@@ -72,15 +72,15 @@ export class Trigger extends Component.Component {
     const handler  = this.getTriggerHandler(event);
     if (handler != null) {
       const { number, category, streamId, data } = event;
-      this.logger.log('%magenta %s@%s-%s %j', handler.name, number, category, streamId, data);
-      const stateId  = this.partition(event);
-      const state    = await this.getState(stateId);
-      const newState = await handler.call(this.triggerHandlers, state, event);
-      //if (newState != null) this.setState(stateId, newState);
-      return EventHandling.Handled;
-    } else {
-      return EventHandling.Ignored;
+      const stateId  = await this.partition.call(this, event);
+      if (stateId != null) {
+        this.logger.log('%magenta %s@%s-%s %j', handler.name, number, category, streamId, data);
+        const state    = await this.getState(stateId);
+        const newState = await handler.call(this.triggerHandlers, state, event);
+        return EventHandling.Handled;
+      }
     }
+    return EventHandling.Ignored;
   }
 
   protected setState(stateId: string, state: State) {

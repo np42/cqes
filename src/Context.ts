@@ -1,9 +1,9 @@
 import * as Component  from './Component';
 
-import * as Manager from './Manager';
-import * as View    from './View';
-import * as Service from './Service';
-import * as Trigger from './Trigger';
+import * as Aggregate from './Aggregate';
+import * as View      from './View';
+import * as Service   from './Service';
+import * as Trigger   from './Trigger';
 
 export interface ContextProps {
   name: string;
@@ -13,13 +13,13 @@ export interface ContextProps {
   EventBus:     Object;
   StateBus:     Object;
 
-  managers: { [name: string]: ManagerProps };
+  managers: { [name: string]: AggregateProps };
   views:    { [name: string]: ViewProps };
   services: { [name: string]: ServiceProps };
   triggers: { [name: string]: ServiceProps };
 }
 
-export interface ManagerProps {
+export interface AggregateProps {
   CommandBus: any;
   EventBus:   any;
   StateBus:   any;
@@ -51,7 +51,7 @@ export interface ViewProps {
 export interface props extends Component.props {}
 
 export class Context extends Component.Component {
-  public managers: Map<string, Manager.Manager>;
+  public managers: Map<string, Aggregate.Aggregate>;
   public views:    Map<string, View.View>;
   public triggers: Map<string, Trigger.Trigger>;
   public services: Map<string, Service.Service>;

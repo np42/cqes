@@ -26,7 +26,7 @@ export function extend(holder: any, props: props) {
     setImmediate(() => {
       const [context, category, order] = target.split(':');
       if (!(category in this.commandBuses)) {
-        ee.emit('error', new Error('Manager ' + target + ' not found'));
+        ee.emit('error', new Error('Aggregate ' + target + ' not found'));
       } else {
         const typer = this.getCommandTyper(context, category, order);
         if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }

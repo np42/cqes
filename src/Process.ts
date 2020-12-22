@@ -6,7 +6,7 @@ import { QueryBus }                from './QueryBus';
 import { EventBus }                from './EventBus';
 import { StateBus }                from './StateBus';
 
-import * as Manager                from './Manager';
+import * as Aggregate              from './Aggregate';
 import * as Repository             from './Repository';
 import * as View                   from './View';
 import * as Trigger                from './Trigger';
@@ -134,14 +134,14 @@ export class Process extends Component.Component {
       const context       = new Context.Context({ context: contextProps.name, name: 'This', process: this });
       this.contexts.set(contextName, context);
       context.views    = this.getContextViews(contextProps, contextProps.views);
-      context.managers = this.getContextManagers(contextProps, contextProps.managers);
+      context.managers = this.getContextAggregates(contextProps, contextProps.managers);
       context.triggers = this.getContextTriggers(contextProps, contextProps.triggers);
       context.services = this.getContextServices(contextProps, contextProps.services);
     }
   }
 
-  protected getContextManagers(context: Context.ContextProps, managersProps: RecordMap) {
-    return Object.keys(managersProps).reduce((result: Map<string, Manager.Manager>, name: string) => {
+  protected getContextAggregates(context: Context.ContextProps, managersProps: RecordMap) {
+    return Object.keys(managersProps).reduce((result: Map<string, Aggregate.Aggregate>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip manager %s', name.substr(1)), result;
       const managerProps        = managersProps[name];
       if (managerProps.listen == null) managerProps.listen = [name];
@@ -163,8 +163,8 @@ export class Process extends Component.Component {
       const commandBuses        = this.getCommandBuses(context.name, name, managerProps.listen);
       const buses               = { commandBuses, eventBus: eventBusOut }
       const props               = { ...commonProps, commandHandlers, ...buses, repository };
-      const manager             = new Manager.Manager(props);
-      this.logger.log('%red %cyan.%cyan found', 'Manager', context.name, name);
+      const manager             = new Aggregate.Aggregate(props);
+      this.logger.log('%red %cyan.%cyan found', 'Aggregate', context.name, name);
       result.set(name, manager);
       return result;
     }, new Map());

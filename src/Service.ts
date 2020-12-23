@@ -1,16 +1,22 @@
-import * as Component       from './Component';
-import * as Event           from './EventHandlers';
-import * as CommandAble     from './CommandAble';
-import * as QueryAble       from './QueryAble';
-import * as StateAble       from './StateAble';
-import { EventBus }         from './EventBus';
-import { EventHandling }    from './EventBus';
-import { Event as E }       from './Event';
-import { State as S }       from './State';
-import { ExpireMap, genId } from 'cqes-util';
-import { Typer }            from 'cqes-type';
+import * as Component                from './Component';
+import { Handlers as EventHandlers
+       , handler  as eventHandler
+       }                             from './EventHandlers';
+import * as CommandAble              from './CommandAble';
+import * as QueryAble                from './QueryAble';
+import * as StateAble                from './StateAble';
+import { EventBus }                  from './EventBus';
+import { EventHandling }             from './EventBus';
+import { Event as E }                from './Event';
+import { State as S }                from './State';
+import { ExpireMap, genId }          from 'cqes-util';
+import { Typer }                     from 'cqes-type';
 
-export { Event };
+export namespace Event {
+  export class Handlers extends EventHandlers {
+    protected runtime: any;
+  }
+}
 
 export interface EventBuses     { [name: string]: EventBus };
 export interface Subscription   { abort: () => Promise<void> };
@@ -26,7 +32,7 @@ export class Service extends Component.Component {
   // About Command
   protected commandBuses:    CommandAble.Buses;
   protected commandTypes:    CommandAble.Types;
-  public    command:         (target: string, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
+  public    command:         (target: Typer, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   // About Query
   protected queryBuses:    QueryAble.Buses;
@@ -56,7 +62,9 @@ export class Service extends Component.Component {
     this.eventHandlers  = props.eventHandlers;
     this.psubscriptions = props.psubscriptions;
     this.subscriptions  = props.subscriptions;
-    if (this.eventHandlers.service == null) this.eventHandlers.service = this;
+    if (this.eventHandlers['runtime'] == null) {
+      Object.defineProperty(this.eventHandlers, 'runtime', { value: this });
+    }
   }
 
   public async start(): Promise<void> {
@@ -80,7 +88,7 @@ export class Service extends Component.Component {
     }));
   }
 
-  protected getEventHandler(event: E): Event.handler {
+  protected getEventHandler(event: E): eventHandler {
     const fullname = event.category + '_' + event.type;
     if (fullname in this.eventHandlers) return (<any>this.eventHandlers)[fullname];
     const shortname = event.type;

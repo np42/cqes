@@ -123,9 +123,9 @@ export class Process extends Component.Component {
 
   protected setDefaultContextHandlersProps(props: Context.ContextProps) {
     if (props.aggregates == null) props.aggregates = {};
-    if (props.views == null)    props.views    = {};
-    if (props.services == null) props.services = {};
-    if (props.triggers == null) props.triggers = {};
+    if (props.views == null)      props.views    = {};
+    if (props.services == null)   props.services = {};
+    if (props.triggers == null)   props.triggers = {};
   }
 
   protected loadContexts() {
@@ -143,7 +143,7 @@ export class Process extends Component.Component {
   protected getContextAggregates(context: Context.ContextProps, aggregatesProps: RecordMap) {
     return Object.keys(aggregatesProps).reduce((result: Map<string, Aggregate.Aggregate>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip aggregate %s', name.substr(1)), result;
-      const aggregateProps        = aggregatesProps[name];
+      const aggregateProps      = aggregatesProps[name];
       if (aggregateProps.listen == null) aggregateProps.listen = [name];
       const category            = name;
       const serial              = aggregateProps.serial;
@@ -177,14 +177,14 @@ export class Process extends Component.Component {
       const Package         = require(path);
       if (Package == null) throw new Error('Missing ' + name + ' in ' + path);
       const serviceProps    = servicesProps[name];
-      if (serviceProps.targets == null)      serviceProps.targets      = [];
-      if (serviceProps.views == null)        serviceProps.views        = [];
-      if (serviceProps.psubscribe == null)   serviceProps.psubscribe   = [];
-      if (serviceProps.subscribe == null)    serviceProps.subscribe    = [];
+      if (serviceProps.commands     == null) serviceProps.commands     = [];
+      if (serviceProps.views        == null) serviceProps.views        = [];
+      if (serviceProps.psubscribe   == null) serviceProps.psubscribe   = [];
+      if (serviceProps.subscribe    == null) serviceProps.subscribe    = [];
       if (serviceProps.repositories == null) serviceProps.repositories = [];
       const serial          = serviceProps.serial;
       const commonProps     = { context: context.name, name, serial, process: this };
-      const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.targets);
+      const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.commands);
       const queryBuses      = this.getQueryBuses(context.name, name, serviceProps.views);
       const eventBuses1     = this.getEventBuses(context.name, name, serviceProps.psubscribe);
       const eventBuses2     = this.getEventBuses(context.name, name, serviceProps.subscribe);
@@ -218,8 +218,8 @@ export class Process extends Component.Component {
     return Object.keys(viewsProps).reduce((result: Map<string, View.View>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip view %s', name.substr(1)), result;
       const viewProps          = viewsProps[name];
-      if (viewProps.psubscribe == null)   viewProps.psubscribe = [];
-      if (viewProps.targets == null)      viewProps.targets = [];
+      if (viewProps.psubscribe   == null) viewProps.psubscribe = [];
+      if (viewProps.commands     == null) viewProps.commands = [];
       if (viewProps.repositories == null) viewProps.repositories = [];
       const hasQS              = viewProps.noquery === true ? false : true;
       const hasUS              = viewProps.noupdate === true ? false : true;
@@ -232,7 +232,7 @@ export class Process extends Component.Component {
       const repoEventBus       = { ...context.EventBus, ...viewProps.EventBus };
       const repoProps          = { ...viewProps, StateBus: repoStateBus, EventBus: repoEventBus };
       const repositories       = this.getRepositories(context.name, name, viewProps.repositories, repoProps);
-      const commandBuses       = this.getCommandBuses(context.name, name, viewProps.targets);
+      const commandBuses       = this.getCommandBuses(context.name, name, viewProps.commands);
       const queryBuses         = this.getQueryBuses(context.name, name, viewProps.views);
       const handlersDeps       = { queryBuses, commandBuses, repositories };
       const handlersProps      = { ...commonProps, ...viewProps, ...handlersDeps };
@@ -255,7 +255,7 @@ export class Process extends Component.Component {
       const commonProps    = { context: context.name, name, process: this };
       const eventBuses     = this.getEventBuses(context.name, name, triggerProps.psubscribe);
       const queryBuses     = this.getQueryBuses(context.name, name, triggerProps.views);
-      const commandBuses   = this.getCommandBuses(context.name, name, triggerProps.targets);
+      const commandBuses   = this.getCommandBuses(context.name, name, triggerProps.commands);
       const handlersProps  = { ...commonProps, queryBuses, commandBuses, ...triggerProps };
       const triggerOptions = this.getTriggerHandlers(context.name, name, handlersProps);
       const stateBusProps  = { ...commonProps, ...context.StateBus, ...triggerProps.StateBus };
@@ -269,9 +269,9 @@ export class Process extends Component.Component {
   }
 
   // Buses
-  protected getCommandBuses(fromContext: string, name: string, targets: Array<string>, extra?: any) {
-    if (targets == null) return {};
-    return this.getBuses<CommandBus>('CommandBus', fromContext, name, targets, extra);
+  protected getCommandBuses(fromContext: string, name: string, commands: Array<string>, extra?: any) {
+    if (commands == null) return {};
+    return this.getBuses<CommandBus>('CommandBus', fromContext, name, commands, extra);
   }
 
   protected getQueryBuses(fromContext: string, name: string, views: Array<string>, extra?: any) {

@@ -1,7 +1,7 @@
-import { CommandBus } from './CommandBus';
-import { Typer }      from 'cqes-type';
-import * as events    from 'events';
-import { genId }      from 'cqes-util';
+import { CommandBus }    from './CommandBus';
+import { Typer, IValue } from 'cqes-type';
+import * as events       from 'events';
+import { genId }         from 'cqes-util';
 
 export interface Buses { [name: string]: CommandBus; }
 export interface Types { [name: string]: Typer; }
@@ -19,14 +19,15 @@ export function extend(holder: any, props: props) {
   holder.commandTypes = {};
 
   // @target: '<Context>:<Category>:<Order>'
-  holder.command = function (target: string, streamId: string, data: any, meta?: any): EventEmitter {
+  holder.command = function (command: IValue, streamId: string, data: any, meta?: any): EventEmitter {
+    if (command._source == null) throw new Error('Command must be full qualified, add .locate(__filename)');
     const ee = <EventEmitter>new events.EventEmitter();
     (<any>ee).wait = () => new Promise((resolve, reject) => ee.on('sent', resolve).on('error', reject));
     ee.on('error', error => this.logger.warn(error.toString()));
     setImmediate(() => {
-      const [context, category, order] = target.split(':');
+      const [order, category, context] = command.fqn.split(':').reverse();
       if (!(category in this.commandBuses)) {
-        ee.emit('error', new Error('Aggregate ' + target + ' not found'));
+        ee.emit('error', new Error('Aggregate ' + command + ' not found'));
       } else {
         const typer = this.getCommandTyper(context, category, order);
         if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }

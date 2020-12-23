@@ -10,5 +10,4 @@ export type handler = (event: Event) => Promise<void>;
 export interface props extends Component.props {}
 
 export class Handlers extends Component.Component {
-  public service: Service;
 }

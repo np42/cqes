@@ -2,6 +2,7 @@
   "name": "cqes",
   "version": "5.0.0",
   "description": "CQRS / Event Sourcing",
+  "main": "dist/index.js",
   "bin": {
     "cqes": "bin/cqes"
   },

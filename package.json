@@ -31,7 +31,6 @@
     "@types/body-parser": "^1.17.1",
     "@types/cors": "^2.8.6",
     "@types/express": "^4.17.1",
-    "@types/node": "^12.12.7",
     "@types/redis": "^2.8.14",
     "@types/uuid": "^3.4.4",
     "@types/yargs": "^15.0.4",
@@ -44,5 +43,8 @@
     "redis": "^2.8.0",
     "uuid": "^3.3.2",
     "yargs": "^15.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^12.19.11"
   }
 }

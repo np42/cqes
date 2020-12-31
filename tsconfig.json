@@ -9,9 +9,8 @@
   , "allowUnreachableCode": true
   , "declaration": false
   , "allowSyntheticDefaultImports": true
-  , "outDir": "dist"
   , "sourceMap": true
   }
 , "include": [ "index.ts", "sources", "helpers", "tests" ]
-, "exclude": [ "dist" ]
+, "exclude": [ "*.d.ts" ]
 }

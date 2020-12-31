@@ -1,30 +1,30 @@
 //--
-import * as Process    from './src/Process';
-import * as Component  from './src/Component';
-import { Logger }      from './src/Logger';
+import * as Process    from './sources/Process';
+import * as Component  from './sources/Component';
+import { Logger }      from './sources/Logger';
 
 export { Process, Component, Logger };
 
 //--
-import * as Aggregate     from './src/Aggregate';
-import * as Repository    from './src/Repository';
-import * as Service       from './src/Service';
-import * as View          from './src/View';
-import * as Trigger       from './src/Trigger';
+import * as Aggregate     from './sources/Aggregate';
+import * as Repository    from './sources/Repository';
+import * as Service       from './sources/Service';
+import * as View          from './sources/View';
+import * as Trigger       from './sources/Trigger';
 
 export { Aggregate, Repository, Service, View, Trigger };
 
 //--
-import { Command as C } from './src/Command';
-import { Query   as Q } from './src/Query';
-import { Reply   as R } from './src/Reply';
-import { Event   as E } from './src/Event';
-import { State   as S } from './src/State';
+import { Command as C } from './sources/Command';
+import { Query   as Q } from './sources/Query';
+import { Reply   as R } from './sources/Reply';
+import { Event   as E } from './sources/Event';
+import { State   as S } from './sources/State';
 
 export { C, Q, R, E, S };
 
 //--
-export { Index }     from './src/Index';
+export { Index }     from './sources/Index';
 
 //--
-export * as Types    from './src/Types';
+export * as Types    from './sources/Types';

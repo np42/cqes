@@ -1,5 +1,5 @@
-import * as Service         from '../Service';
-import { Event }            from '../Event';
+import * as Service         from '../sources/Service';
+import { Event }            from '../sources/Event';
 import { merge }            from 'cqes-util';
 import { TypeError }        from 'cqes-type';
 

@@ -7,11 +7,11 @@
   , "removeComments": true
   , "preserveConstEnums": true
   , "allowUnreachableCode": true
-  , "declaration": true
+  , "declaration": false
   , "allowSyntheticDefaultImports": true
   , "outDir": "dist"
   , "sourceMap": true
   }
-, "include": [ "index.ts", "helpers", "tests" ]
-, "exclude": [ "node_modules", "**/*.spec.ts" ]
+, "include": [ "index.ts", "sources", "helpers", "tests" ]
+, "exclude": [ "dist" ]
 }

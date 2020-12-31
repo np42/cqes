@@ -24,7 +24,4 @@ import { State   as S } from './sources/State';
 export { C, Q, R, E, S };
 
 //--
-export { Index }     from './sources/Index';
-
-//--
 export * as Types    from './sources/Types';

@@ -1,17 +1,12 @@
 import { QueryBus }      from './QueryBus';
 import { Reply }         from './Reply';
-import { Typer, IValue, Value
+import { Typer, Value
        }                 from 'cqes-type';
 import { memoize }       from 'cqes-util';
 import * as events       from 'events';
 
 export interface Buses { [name: string]: QueryBus; }
 export interface Types { [name: string]: Typer; }
-
-export interface EventEmitter extends events.EventEmitter {
-  assert<T>(type: { new (): T } | string): Promise<T>;
-  expect<T>(type: { new (): T } | string, defaultValue?: T): Promise<T>;
-}
 
 export interface props {
   queryBuses?: Buses;
@@ -22,39 +17,8 @@ export function extend(holder: any, props: props) {
   holder.queryTypes = {};
 
   // @target: '<Context>:<Category>:<View>'
-  holder.query = function (target: string, data: any, meta?: any): EventEmitter {
-    const ee = <EventEmitter>new events.EventEmitter();
-    (<any>ee).assert = <T>(typer: { new (v?: any): T } | string, defaultValue?: T): Promise<T> => {
-      if (defaultValue == null) defaultValue = null;
-      const name = typeof typer === 'string' ? typer : typer.name;
-      return new Promise((resolve, reject) => {
-        let done = false;
-        ee.on(name, result => {
-          done = true;
-          resolve(result);
-        });
-        ee.on('error', error => {
-          this.logger.error(error);
-          if (done) return ;
-          done = true;
-          reject(error);
-        });
-        ee.on('end', (reply: Reply) => {
-          if (done) return ;
-          return reject();
-        });
-      });
-    };
-    (<any>ee).expect = <T>(typer: { new (v?: any): T } | string, defaultValue?: T): Promise<T> => {
-      return new Promise((resolve, reject) => {
-        ee.assert(typer)
-          .then(resolve)
-          .catch(e => {
-            if (e != null) return reject(e);
-            else return resolve(defaultValue == null ? null : defaultValue);
-          });
-      });
-    };
+  holder.query = function (target: Typer, data: any, meta?: any): EventEmitter {
+    const ee = new EventEmitter();
     ee.on('error', (error: Error) => {
       if (ee.listenerCount('error') == 1) throw error;
     });
@@ -63,7 +27,7 @@ export function extend(holder: any, props: props) {
         this.logger.warn('Reply %blue not handled\n%j', reply.type, reply.data);
     });
     setImmediate(() => {
-      const [context, view, method] = target.split(':');
+      const [method, view, context] = target.fqn.split(':').reverse();
       if (!(view in this.queryBuses)) {
         const views = Object.keys(this.queryBuses).join(', ');
         ee.emit('error', new Error('View ' + target + ' not found within [ ' + views + ' ]'));
@@ -82,7 +46,7 @@ export function extend(holder: any, props: props) {
     return ee;
   }
 
-  holder.queryMemo = memoize((target: string, data: any, ExpectedType?: any) => {
+  holder.queryMemo = memoize((target: Typer, data: any, ExpectedType?: any) => {
     return holder.query(target, data).expect(ExpectedType);
   }, 50);
 
@@ -97,4 +61,21 @@ export function extend(holder: any, props: props) {
     }
   }
 
+}
+
+export class EventEmitter extends events.EventEmitter {
+  on<T>(event: string | symbol | { name: string }, hook: (event: T) => void) {
+    switch (typeof event) {
+    case 'string': case 'symbol': {
+      super.on(event, hook);
+    } break ;
+    default : {
+      event.name.split('.').forEach(part => {
+        const eventName = event.name.slice(event.name.indexOf(part));
+        super.on(eventName, hook);
+      });
+    }
+    }
+    return this;
+  }
 }

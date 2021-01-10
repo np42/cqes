@@ -37,8 +37,8 @@ export class Service extends Component.Component {
   // About Query
   protected queryBuses:    QueryAble.Buses;
   protected queryTypes:    QueryAble.Types;
-  public    query:         (target: string, data: any, meta?: any) => QueryAble.EventEmitter;
-  public    queryMemo:     (target: string, data: any, type: Typer) => any;
+  public    query:         (target: Typer, data: any, meta?: any) => QueryAble.EventEmitter;
+  public    queryMemo:     (target: Typer, data: any, type: Typer) => any;
   protected getQueryTyper: (context: string, view: string, method: string) => Typer;
   // About Event
   protected eventBuses:    EventBuses;
@@ -58,10 +58,10 @@ export class Service extends Component.Component {
     CommandAble.extend(this, props);
     QueryAble.extend(this, props);
     StateAble.extend(this, props);
-    this.eventBuses     = props.eventBuses;
     this.eventHandlers  = props.eventHandlers;
-    this.psubscriptions = props.psubscriptions;
-    this.subscriptions  = props.subscriptions;
+    this.eventBuses     = props.eventBuses     || {};
+    this.psubscriptions = props.psubscriptions || [];
+    this.subscriptions  = props.subscriptions  || [];
     if (this.eventHandlers['runtime'] == null) {
       Object.defineProperty(this.eventHandlers, 'runtime', { value: this });
     }

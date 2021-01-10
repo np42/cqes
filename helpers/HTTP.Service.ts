@@ -10,15 +10,19 @@ import * as Express         from 'express';
 import * as BodyParser      from 'body-parser';
 import * as cors            from 'cors';
 import * as fs              from 'fs';
+import * as os              from 'os';
+import * as path            from 'path';
 
 export interface Cases { [eventType: string]: [number, string] };
+export interface Attachments { [name: string]: { filepath: string, size: number, head: Buffer } };
 export interface Request<T = any> extends NodeHttp.ClientRequest {
-  url:           string;
-  method:        string;
-  query:         T;
-  headers:       { [name: string]: string };
-  body:          T;
-  remoteAddress: string;
+  url:              string;
+  method:           string;
+  query:            T;
+  headers:          { [name: string]: string };
+  body:             T;
+  remoteAddress:    string;
+  storeAttachments: (path?: string) => Promise<Attachments>;
 };
 export interface Response extends NodeHttp.ServerResponse {};
 
@@ -41,6 +45,7 @@ export interface props extends Service.props {
       raw?:        BodyParser.OptionsText;
     }
     headers?: { [name: string]: string };
+    uploadDir?: string;
   }
 }
 
@@ -80,7 +85,8 @@ export class HTTPService extends Service.Service {
     const handlerName = [req.method, ...path].join('_');
     if (handlerName in this) {
       this.logger.log('Handle %yellow %s %j', req.method, req.url, req.body);
-      req.remoteAddress = this.extractRemoteAddress(req);
+      req.remoteAddress    = this.extractRemoteAddress(req);
+      req.storeAttachments = this.makeAttachmentsStorable(req);
       try {
         return await (<any>this)[handlerName](req, res);
       } catch (e) {
@@ -97,6 +103,19 @@ export class HTTPService extends Service.Service {
       res.writeHead(404, this.headers)
       res.end('{"message":"Endpoint not found"}');
     }
+  }
+
+  protected makeAttachmentsStorable(req: Request): Request['storeAttachments'] {
+    return (dirpath?: string) => new Promise((resolve, reject) => {
+      const attachments = {};
+      const paths = [];
+      paths.push(this.config.uploadDir || os.tmpdir());
+      if (dirpath != null) paths.push(dirpath);
+      const target = path.join(...paths);
+      // TODO
+      debugger;
+      return resolve(attachments);
+    });
   }
 
   protected async respond(res: Response, code: number, data?: any, options?: any) {
@@ -133,8 +152,6 @@ export class HTTPService extends Service.Service {
       }
     } break ;
     case 'file': {
-      
-      //if (contentLengthMissing) headers['Content-Length'] = data.length;
       res.writeHead(code, headers);
       fs.createReadStream(data).pipe(res);
     } break ;

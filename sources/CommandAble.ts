@@ -27,7 +27,7 @@ export function extend(holder: any, props: props) {
     setImmediate(() => {
       const [order, category, context] = command.fqn.split(':').reverse();
       if (!(category in this.commandBuses)) {
-        ee.emit('error', new Error('Aggregate ' + command + ' not found'));
+        ee.emit('error', new Error('Aggregate: ' + category + ' for command: ' + order + ' not linked'));
       } else {
         const typer = this.getCommandTyper(context, category, order);
         if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }

@@ -12,9 +12,19 @@ import * as cors            from 'cors';
 import * as fs              from 'fs';
 import * as os              from 'os';
 import * as path            from 'path';
+import * as mkdirp          from 'mkdirp';
 
 export interface Cases { [eventType: string]: [number, string] };
-export interface Attachments { [name: string]: { filepath: string, size: number, head: Buffer } };
+export interface Attachments { [name: string]: AttachmentFile };
+export interface AttachmentFile {
+  name:         string;
+  filepath:     string;
+  head:         Buffer;
+  size:         number;
+  headers:      { [name: string]: string | Array<string> };
+  disposition:  { [name: string]: string };
+  stream?:      fs.WriteStream;
+}
 export interface Request<T = any> extends NodeHttp.ClientRequest {
   url:              string;
   method:           string;
@@ -22,6 +32,7 @@ export interface Request<T = any> extends NodeHttp.ClientRequest {
   headers:          { [name: string]: string };
   body:             T;
   remoteAddress:    string;
+  readable:         boolean;
   storeAttachments: (path?: string) => Promise<Attachments>;
 };
 export interface Response extends NodeHttp.ServerResponse {};
@@ -34,6 +45,8 @@ export class AccessError extends Error {
   }
 };
 
+const CRLF = '\r\n';
+
 export interface props extends Service.props {
   HTTP: {
     port:  number;
@@ -44,8 +57,9 @@ export interface props extends Service.props {
       urlencoded?: BodyParser.OptionsUrlencoded;
       raw?:        BodyParser.OptionsText;
     }
-    headers?: { [name: string]: string };
+    headers?:   { [name: string]: string };
     uploadDir?: string;
+    headSize?:  number;
   }
 }
 
@@ -94,7 +108,7 @@ export class HTTPService extends Service.Service {
           this.logger.warn('AccessError (%s) %s %s', e.statusCode, handlerName, e.message);
           return this.respond(res, e.statusCode, e.message);
         } else {
-          this.respond(res, 500);
+          this.respondServerError(res, e);
           throw e;
         }
       }
@@ -106,15 +120,137 @@ export class HTTPService extends Service.Service {
   }
 
   protected makeAttachmentsStorable(req: Request): Request['storeAttachments'] {
-    return (dirpath?: string) => new Promise((resolve, reject) => {
-      const attachments = {};
+    return (dirpath?: string) => new Promise(async (resolve, reject) => {
+      const attachments: Attachments = {};
       const paths = [];
       paths.push(this.config.uploadDir || os.tmpdir());
+      const maxHeadLength = this.config.headSize || 1024;
       if (dirpath != null) paths.push(dirpath);
       const target = path.join(...paths);
-      // TODO
-      debugger;
-      return resolve(attachments);
+      await mkdirp(target);
+      if (req.readable === false) return resolve(attachments);
+      const contentType = req.headers['content-type'] || '';
+      const infos = /^multipart\/form-data;\s*boundary=([^\s]+)$/i.exec(contentType);
+      if (!infos) return resolve(attachments);
+      const boundary = infos[1];
+      let previous = Buffer.from('');
+      let status = 'BEGIN_OF_TRANSACTION';
+      let file: AttachmentFile = null;
+      req.on('data', (chunk: Buffer) => {
+        let rest = Buffer.concat([previous, chunk]);
+        loop: while (true) {
+          switch (status) {
+          case 'BEGIN_OF_TRANSACTION': {
+            const offset = rest.indexOf(boundary);
+            if (offset === 0) {
+              rest = rest.slice(boundary.length + 2);
+              status = 'BEGIN_OF_FILE';
+            } else if (offset === 2 && rest.slice(0, 2).toString() === '--') {
+              status = 'BEGIN_OF_FILE';
+            } else {
+              break loop;
+            }
+          } break ;
+          case 'BEGIN_OF_FILE': {
+            if (rest.indexOf('--' + boundary) === 0) {
+              file = { name: null, head: Buffer.from(''), size: 0, filepath: null
+                     , headers: {}, disposition: {}
+                     };
+              rest = rest.slice(2 + boundary.length + 2);
+              status = 'FILE_HEADER';
+            } else {
+              break loop;
+            }
+          } break ;
+          case 'FILE_HEADER': {
+            const eof = rest.indexOf(CRLF);
+            if (eof > 0 && eof <= 1024) {
+              const header = rest.slice(0, eof).toString();
+              const separator = header.indexOf(':');
+              const headerName = header.slice(0, separator).toLowerCase();
+              const headerValue = header.slice(separator + 1).trim();
+              if (headerName in file.headers) {
+                if (typeof file.headers[headerName] === 'string')
+                  file.headers[headerName] = [<string>file.headers[headerName]];
+                (<Array<string>>file.headers[headerName]).push(headerValue);
+              } else {
+                file.headers[headerName] = headerValue;
+              }
+              if (headerName === 'content-disposition') {
+                headerValue.split(/;\s*/).forEach(part => {
+                  const variable = part.indexOf('=');
+                  if (variable < 1) return ;
+                  const key = part.slice(0, variable);
+                  const value = JSON.parse(part.slice(variable + 1));
+                  switch (key) {
+                  case 'name': { file.name = value; } break ;
+                  default: { file.disposition[key] = value; } break ;
+                  }
+                });
+              }
+              rest = rest.slice(eof + 2);
+              status = 'FILE_HEADER';
+            } else if (eof === 0) {
+              rest = rest.slice(eof + 2);
+              status = 'FILE_CONTENT';
+            } else {
+              break loop;
+            }
+          } break ;
+          case 'FILE_CONTENT': {
+            if (file.stream == null) {
+              attachments[file.name] = file;
+              const output = path.join(target, file.name);
+              this.logger.log('Storing file %s into %s', file.disposition.filename || file.name, output);
+              file.filepath = output;
+              file.stream = fs.createWriteStream(output);
+            }
+            const eot = rest.indexOf('--' + boundary + '--');
+            if (eot > -1) {
+              if (file.size < maxHeadLength) {
+                const part = rest.slice(0, Math.min(eot, maxHeadLength - file.size));
+                file.head = Buffer.concat([file.head, part])
+              }
+              file.size += eot;
+              file.stream.end(rest.slice(0, eot));
+              delete file.stream;
+              rest = rest.slice(eot + 2 + boundary.length + 2 + 2);
+              status = 'END_OF_TRANSACTION';
+            } else {
+              const eof = rest.indexOf('--' + boundary);
+              if (eof > -1) {
+                if (file.size < maxHeadLength) {
+                  const part = rest.slice(0, Math.min(eof, maxHeadLength - file.size));
+                  file.head = Buffer.concat([file.head, part])
+                }
+                file.size += eof;
+                file.stream.end(rest.slice(0, eof));
+                delete file.stream;
+                rest = rest.slice(eof + 2 + boundary.length + 2);
+                status = 'BEGIN_OF_FILE';
+              } else {
+                if (rest.length > boundary.length + 4) {
+                  const eoc = -(boundary.length + 4);
+                  if (file.size < maxHeadLength) {
+                    const part = rest.slice(0, Math.min(eoc, maxHeadLength - file.size));
+                    file.head = Buffer.concat([file.head, part])
+                  }
+                  file.size += eoc;
+                  file.stream.write(rest.slice(0, eoc));
+                  rest = rest.slice(eoc);
+                }
+                status = 'FILE_CONTENT';
+              }
+            }
+          } break ;
+          default: break loop;
+          }
+        }
+        previous = rest;
+      });
+      req.on('end', () => {
+        return resolve(attachments);
+      });
     });
   }
 
@@ -152,8 +288,16 @@ export class HTTPService extends Service.Service {
       }
     } break ;
     case 'file': {
-      res.writeHead(code, headers);
-      fs.createReadStream(data).pipe(res);
+      fs.lstat(data, (err, stat) => {
+        if (err) {
+          res.writeHead(404, headers);
+          res.end();
+        } else {
+          headers['Content-Length'] = stat.size;
+          res.writeHead(code, headers);
+          fs.createReadStream(data).pipe(res);
+        }
+      });
     } break ;
     case 'buffer': {
       if (contentLengthMissing) headers['Content-Length'] = data.length;
@@ -164,6 +308,10 @@ export class HTTPService extends Service.Service {
     return new Promise(resolve => {
       res.on('close', resolve);
     });
+  }
+
+  protected respondServerError(res: Response, error: Error) {
+    return this.respond(res, 500, error.message);
   }
 
   protected extractRemoteAddress(req: any) {

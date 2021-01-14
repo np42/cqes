@@ -139,6 +139,7 @@ export class HTTPService extends Service.Service {
       req.on('data', (chunk: Buffer) => {
         let rest = Buffer.concat([previous, chunk]);
         loop: while (true) {
+          /* this.logger.debug(status); */
           switch (status) {
           case 'BEGIN_OF_TRANSACTION': {
             const offset = rest.indexOf(boundary);
@@ -204,6 +205,7 @@ export class HTTPService extends Service.Service {
               this.logger.log('Storing file %s into %s', file.disposition.filename || file.name, output);
               file.filepath = output;
               file.stream = fs.createWriteStream(output);
+              file.stream.on('error', (error: Error) => this.logger.error(error));
             }
             const eot = rest.indexOf('--' + boundary + '--');
             if (eot > -1) {
@@ -212,7 +214,7 @@ export class HTTPService extends Service.Service {
                 file.head = Buffer.concat([file.head, part])
               }
               file.size += eot;
-              file.stream.end(rest.slice(0, eot));
+              file.stream.end(rest.slice(0, -2 + eot));
               delete file.stream;
               rest = rest.slice(eot + 2 + boundary.length + 2 + 2);
               status = 'END_OF_TRANSACTION';
@@ -226,11 +228,11 @@ export class HTTPService extends Service.Service {
                 file.size += eof;
                 file.stream.end(rest.slice(0, eof));
                 delete file.stream;
-                rest = rest.slice(eof + 2 + boundary.length + 2);
+                rest = rest.slice(-2 + eof + 2 + boundary.length + 2);
                 status = 'BEGIN_OF_FILE';
               } else {
-                if (rest.length > boundary.length + 4) {
-                  const eoc = -(boundary.length + 4);
+                if (rest.length > boundary.length + 6) {
+                  const eoc = rest.length - (boundary.length + 6);
                   if (file.size < maxHeadLength) {
                     const part = rest.slice(0, Math.min(eoc, maxHeadLength - file.size));
                     file.head = Buffer.concat([file.head, part])
@@ -240,6 +242,7 @@ export class HTTPService extends Service.Service {
                   rest = rest.slice(eoc);
                 }
                 status = 'FILE_CONTENT';
+                break loop;
               }
             }
           } break ;

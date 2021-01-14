@@ -120,6 +120,10 @@ export class HTTPService extends Service.Service {
   }
 
   protected makeAttachmentsStorable(req: Request): Request['storeAttachments'] {
+    // FIXME: restrict max file size
+    // FIXME: restrict max request content size
+    // TODO: Test multi file upload
+    // TODO: filter by field matching glob syntax
     return (dirpath?: string) => new Promise(async (resolve, reject) => {
       const attachments: Attachments = {};
       const paths = [];
@@ -257,7 +261,7 @@ export class HTTPService extends Service.Service {
     });
   }
 
-  protected async respond(res: Response, code: number, data?: any, options?: any) {
+  protected respond(res: Response, code: number, data?: any, options?: any): Promise<void> {
     if (options == null) options = {};
     if (options.type == null) options.type = 'json';
     if (options.wrap == null) options.wrap = true;
@@ -271,6 +275,7 @@ export class HTTPService extends Service.Service {
       }
     }
     switch (options.type.toLowerCase()) {
+
     case 'json': {
       headers['content-type'] = 'application/json';
       res.writeHead(code, headers);
@@ -289,28 +294,36 @@ export class HTTPService extends Service.Service {
       } else {
         this.logger.todo();
       }
+      return new Promise(resolve => { res.on('close', resolve); });
     } break ;
+
     case 'file': {
-      fs.lstat(data, (err, stat) => {
-        if (err) {
-          res.writeHead(404, headers);
-          res.end();
-        } else {
-          headers['Content-Length'] = stat.size;
-          res.writeHead(code, headers);
-          fs.createReadStream(data).pipe(res);
-        }
+      return new Promise(resolve => {
+        res.on('close', resolve);
+        fs.lstat(data, (err, stat) => {
+          if (err) {
+            res.writeHead(404, headers);
+            res.end();
+          } else {
+            headers['Content-Length'] = stat.size;
+            res.writeHead(code, headers);
+            fs.createReadStream(data).pipe(res);
+          }
+        });
       });
     } break ;
+
     case 'buffer': {
       if (contentLengthMissing) headers['Content-Length'] = data.length;
       res.writeHead(code, headers);
       res.end(data);
+      return new Promise(resolve => { res.on('close', resolve); });
+    } break ;
+
+    default: {
+      return Promise.reject(new Error('Unknown content type'));
     } break ;
     }
-    return new Promise(resolve => {
-      res.on('close', resolve);
-    });
   }
 
   protected respondServerError(res: Response, error: Error) {

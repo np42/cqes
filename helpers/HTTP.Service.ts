@@ -35,7 +35,9 @@ export interface Request<T = any> extends NodeHttp.ClientRequest {
   readable:         boolean;
   storeAttachments: (path?: string) => Promise<Attachments>;
 };
-export interface Response extends NodeHttp.ServerResponse {};
+export interface Response extends NodeHttp.ServerResponse {
+  req: Request;
+};
 
 export class AccessError extends Error {
   public statusCode: number;
@@ -305,9 +307,32 @@ export class HTTPService extends Service.Service {
             res.writeHead(404, headers);
             res.end();
           } else {
-            headers['Content-Length'] = stat.size;
-            res.writeHead(code, headers);
-            fs.createReadStream(data).pipe(res);
+            const cachedTs = res.req.headers['if-modified-since'] != null
+              ? new Date(res.req.headers['if-modified-since']).getTime()
+              : null;
+            if (cachedTs != null && stat.mtime.getTime() - cachedTs < 1000) {
+              res.writeHead(304, headers);
+              res.end();
+            } else {
+              headers['Content-Length'] = stat.size;
+              headers['Last-Modified'] = [ dayNumberToString[stat.mtime.getDay()]
+                                         , ', ', String(stat.mtime.getDate()).padStart(2, '0')
+                                         , ' ',  monthNumberToString[stat.mtime.getMonth()]
+                                         , ' ',  String(stat.mtime.getFullYear())
+                                         , ' ',  String(stat.mtime.getHours()).padStart(2, '0')
+                                         , ':',  String(stat.mtime.getMinutes()).padStart(2, '0')
+                                         , ':',  String(stat.mtime.getSeconds()).padStart(2, '0')
+                                         , ' GMT'
+                                         ].join('');
+              res.writeHead(code, headers);
+              const stream = fs.createReadStream(data)
+              const startingTransfertAt = Date.now();
+              stream.on('close', () => {
+                const duration = Date.now() - startingTransfertAt;
+                this.logger.log('Serving file (%s bytes) %s in %sms', stat.size, data, duration);
+              });
+              stream.pipe(res);
+            }
           }
         });
       });
@@ -344,3 +369,6 @@ export class HTTPService extends Service.Service {
   }
 
 }
+
+const dayNumberToString = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const monthNumberToString = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Dec'];

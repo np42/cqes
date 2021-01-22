@@ -13,8 +13,8 @@ export class Handlers extends Component.Component {
   // About Query
   protected queryBuses:    QueryAble.Buses;
   protected queryTypes:    QueryAble.Types;
-  protected query:         (target: string, data: any, meta?: any) => QueryAble.EventEmitter;
-  protected queryMemo:     (target: string, data: any, type: Typer) => any;
+  protected query:         (target: Typer, data: any, meta?: any) => QueryAble.EventEmitter;
+  protected queryMemo:     (target: Typer, data: any, type: Typer) => any;
   protected getQueryTyper: (context: string, view: string, method: string) => Typer;
   // About Command
   protected commandBuses:    CommandAble.Buses;

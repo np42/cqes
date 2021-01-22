@@ -49,6 +49,20 @@ export class AccessError extends Error {
 
 const CRLF = '\r\n';
 
+interface headers { [key: string]: string | number };
+
+interface respondOptions {
+  type:      'json' | 'buffer' | 'file';
+  code?:     number;
+  headers?:  headers;
+  data?:     any;
+  wrap?:     boolean;
+  filepath?: string;
+  buffer?:   Buffer;
+}
+
+interface sseOptions {}
+
 export interface props extends Service.props {
   HTTP: {
     port:  number;
@@ -263,12 +277,89 @@ export class HTTPService extends Service.Service {
     });
   }
 
-  protected respond(res: Response, code: number, data?: any, options?: any): Promise<void> {
+  protected respond(res: Response, code: any, data?: any, options?: any): Promise<void> {
+    if (code && typeof code !== 'number' && typeof code.code === 'number') {
+      options = code;
+      code = options.code;
+      data = options.data;
+    }
     if (options == null) options = {};
     if (options.type == null) options.type = 'json';
-    if (options.wrap == null) options.wrap = true;
     if (options.headers == null) options.headers = {};
-    const headers = { ...options.headers };
+    if (options.code == null) options.code = code;
+    switch (options.type.toLowerCase()) {
+    case 'json':   return this.respondJSON(res, { data, ...options });
+    case 'file':   return this.respondFile(res, { filepath: data, ...options });
+    case 'buffer': return this.respondBuffer(res, { buffer: data, ...options });
+    default:       return this.respondServerError(res, new Error('unknown type'));
+    }
+  }
+
+  protected respondJSON(res: Response, options: respondOptions): Promise<void> {
+    if (options.wrap == null) options.wrap = true;
+    const { code, headers, data } = options;
+    headers['content-type'] = 'application/json';
+    res.writeHead(code, headers);
+    if (options.wrap) {
+      if (data == null || code == 204) {
+        res.end();
+      } else if (code < 400) {
+        if (typeof data === 'string') {
+          res.end(JSON.stringify({ type: 'success', message: data }));
+        } else {
+          res.end(JSON.stringify({ type: 'success', value: data }));
+        }
+      } else {
+        res.end(JSON.stringify({ type: 'error', message: String(data) }));
+      }
+    } else {
+      this.logger.todo();
+    }
+    return new Promise(resolve => { res.on('close', resolve); });
+  }
+
+  protected respondFile(res: Response, options: respondOptions): Promise<void> {
+    const { code, headers, filepath } = options;
+    return new Promise(resolve => {
+      res.on('close', resolve);
+      fs.lstat(filepath, (err, stat) => {
+        if (err) {
+          res.writeHead(404, headers);
+          res.end();
+        } else {
+          const cachedTs = res.req.headers['if-modified-since'] != null
+            ? new Date(res.req.headers['if-modified-since']).getTime()
+            : null;
+          if (cachedTs != null && stat.mtime.getTime() - cachedTs < 1000) {
+            res.writeHead(304, headers);
+            res.end();
+          } else {
+            headers['Content-Length'] = stat.size;
+            headers['Last-Modified'] = [ dayNumberToString[stat.mtime.getDay()]
+                                       , ', ', String(stat.mtime.getDate()).padStart(2, '0')
+                                       , ' ',  monthNumberToString[stat.mtime.getMonth()]
+                                       , ' ',  String(stat.mtime.getFullYear())
+                                       , ' ',  String(stat.mtime.getHours()).padStart(2, '0')
+                                       , ':',  String(stat.mtime.getMinutes()).padStart(2, '0')
+                                       , ':',  String(stat.mtime.getSeconds()).padStart(2, '0')
+                                       , ' GMT'
+                                       ].join('');
+            res.writeHead(code, headers);
+            const stream = fs.createReadStream(filepath)
+            const startingTransfertAt = Date.now();
+            stream.on('close', () => {
+              const duration = Date.now() - startingTransfertAt;
+              this.logger.log('Serving file (%s bytes) %s in %sms', stat.size, filepath, duration);
+            });
+            stream.pipe(res);
+          }
+        }
+      });
+    });
+  }
+
+  protected respondBuffer(res: Response, options: respondOptions): Promise<void> {
+    const { code, headers, buffer } = options;
     let contentLengthMissing = true;
     for (const key in headers) {
       if (key.toLowerCase() === 'content-length') {
@@ -276,83 +367,18 @@ export class HTTPService extends Service.Service {
         break ;
       }
     }
-    switch (options.type.toLowerCase()) {
-
-    case 'json': {
-      headers['content-type'] = 'application/json';
-      res.writeHead(code, headers);
-      if (options.wrap) {
-        if (data == null || code == 204) {
-          res.end();
-        } else if (code < 400) {
-          if (typeof data === 'string') {
-            res.end(JSON.stringify({ type: 'success', message: data }));
-          } else {
-            res.end(JSON.stringify({ type: 'success', value: data }));
-          }
-        } else {
-          res.end(JSON.stringify({ type: 'error', message: String(data) }));
-        }
-      } else {
-        this.logger.todo();
-      }
-      return new Promise(resolve => { res.on('close', resolve); });
-    } break ;
-
-    case 'file': {
-      return new Promise(resolve => {
-        res.on('close', resolve);
-        fs.lstat(data, (err, stat) => {
-          if (err) {
-            res.writeHead(404, headers);
-            res.end();
-          } else {
-            const cachedTs = res.req.headers['if-modified-since'] != null
-              ? new Date(res.req.headers['if-modified-since']).getTime()
-              : null;
-            if (cachedTs != null && stat.mtime.getTime() - cachedTs < 1000) {
-              res.writeHead(304, headers);
-              res.end();
-            } else {
-              headers['Content-Length'] = stat.size;
-              headers['Last-Modified'] = [ dayNumberToString[stat.mtime.getDay()]
-                                         , ', ', String(stat.mtime.getDate()).padStart(2, '0')
-                                         , ' ',  monthNumberToString[stat.mtime.getMonth()]
-                                         , ' ',  String(stat.mtime.getFullYear())
-                                         , ' ',  String(stat.mtime.getHours()).padStart(2, '0')
-                                         , ':',  String(stat.mtime.getMinutes()).padStart(2, '0')
-                                         , ':',  String(stat.mtime.getSeconds()).padStart(2, '0')
-                                         , ' GMT'
-                                         ].join('');
-              res.writeHead(code, headers);
-              const stream = fs.createReadStream(data)
-              const startingTransfertAt = Date.now();
-              stream.on('close', () => {
-                const duration = Date.now() - startingTransfertAt;
-                this.logger.log('Serving file (%s bytes) %s in %sms', stat.size, data, duration);
-              });
-              stream.pipe(res);
-            }
-          }
-        });
-      });
-    } break ;
-
-    case 'buffer': {
-      if (contentLengthMissing) headers['Content-Length'] = data.length;
-      res.writeHead(code, headers);
-      res.end(data);
-      return new Promise(resolve => { res.on('close', resolve); });
-    } break ;
-
-    default: {
-      return Promise.reject(new Error('Unknown content type'));
-    } break ;
-    }
+    if (contentLengthMissing) headers['Content-Length'] = buffer.length;
+    res.writeHead(code, headers);
+    res.end(buffer);
+    return new Promise(resolve => { res.on('close', resolve); });
   }
 
   protected respondServerError(res: Response, error: Error) {
     return this.respond(res, 500, error.message);
+  }
+
+  protected createSSEChannelFromResponse(res: Response, options?: sseOptions) {
+    
   }
 
   protected extractRemoteAddress(req: any) {

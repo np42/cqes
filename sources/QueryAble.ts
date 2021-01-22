@@ -65,6 +65,10 @@ export function extend(holder: any, props: props) {
 
 export class EventEmitter extends events.EventEmitter {
   on<T>(event: string | symbol | { name: string }, hook: (event: T) => void) {
+    const protectedHook = (event: T) => {
+      try { hook(event); }
+      catch (e) { this.emit('error', e); }
+    };
     switch (typeof event) {
     case 'string': case 'symbol': {
       super.on(event, hook);
@@ -78,4 +82,16 @@ export class EventEmitter extends events.EventEmitter {
     }
     return this;
   }
+
+  otherwise<T = any>(hook: (reply: Reply) => void) {
+    return this.on('end', hook);
+  }
+
+  wait(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.on('error', reject);
+      this.on('end',   resolve);
+    });
+  }
+
 }

@@ -1,5 +1,6 @@
 import * as Service         from '../sources/Service';
 import { Event }            from '../sources/Event';
+import { Logger }           from '../sources/Logger';
 import { merge }            from 'cqes-util';
 import { TypeError }        from 'cqes-type';
 
@@ -25,6 +26,7 @@ export interface AttachmentFile {
   disposition:  { [name: string]: string };
   stream?:      fs.WriteStream;
 }
+
 export interface Request<T = any> extends NodeHttp.ClientRequest {
   url:              string;
   method:           string;
@@ -33,8 +35,8 @@ export interface Request<T = any> extends NodeHttp.ClientRequest {
   body:             T;
   remoteAddress:    string;
   readable:         boolean;
-  storeAttachments: (path?: string) => Promise<Attachments>;
 };
+
 export interface Response extends NodeHttp.ServerResponse {
   req: Request;
 };
@@ -109,14 +111,17 @@ export class HTTPService extends Service.Service {
     });
   }
 
-  protected async handleHttpRequest(req: Request, res: Response) {
+  protected getHandler(req: Request) {
     const offset = req.url.indexOf('?');
     const path   = req.url.substring(1, offset === -1 ? req.url.length : offset).split('/');
-    const handlerName = [req.method, ...path].join('_');
+    return [req.method, ...path].join('_');
+  }
+
+  protected async handleHttpRequest(req: Request, res: Response) {
+    req.remoteAddress = this.extractRemoteAddress(req);
+    const handlerName = this.getHandler(req);
     if (handlerName in this) {
-      this.logger.log('Handle %yellow %s %j', req.method, req.url, req.body);
-      req.remoteAddress    = this.extractRemoteAddress(req);
-      req.storeAttachments = this.makeAttachmentsStorable(req);
+      this.logger.log('Handle %yellow %s %s', req.method, req.url, req.body);
       try {
         return await (<any>this)[handlerName](req, res);
       } catch (e) {
@@ -129,18 +134,27 @@ export class HTTPService extends Service.Service {
         }
       }
     } else {
-      this.logger.log('%red %yellow %s %j', 'Reject', req.method, req.url, req.body);
+      this.logger.log('%red %yellow %s %s', 'Reject', req.method, req.url, req.body);
       res.writeHead(404, this.headers)
       res.end('{"message":"Endpoint not found"}');
     }
   }
 
-  protected makeAttachmentsStorable(req: Request): Request['storeAttachments'] {
+  protected getSSEController(req: Request, res: Response): SSEController {
+    if (~(req.headers['accept'] || '').indexOf('text/event-stream')) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      return new SSEController(req, res);
+    } else {
+      throw new Error('Request Accept header requires ...');
+    }
+  }
+
+  protected storeAttachments(req: Request, dirpath?: string): Promise<Attachments> {
     // FIXME: restrict max file size
     // FIXME: restrict max request content size
     // TODO: Test multi file upload
     // TODO: filter by field matching glob syntax
-    return (dirpath?: string) => new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const attachments: Attachments = {};
       const paths = [];
       paths.push(this.config.uploadDir || os.tmpdir());
@@ -377,10 +391,6 @@ export class HTTPService extends Service.Service {
     return this.respond(res, 500, error.message);
   }
 
-  protected createSSEChannelFromResponse(res: Response, options?: sseOptions) {
-    
-  }
-
   protected extractRemoteAddress(req: any) {
     if (!req) return null;
     if (req.headers && req.headers['x-forwarded-for']) {
@@ -392,6 +402,38 @@ export class HTTPService extends Service.Service {
     } else {
       return null;
     }
+  }
+
+}
+
+export class SSEController extends events.EventEmitter {
+  protected request:  Request;
+  protected response: Response;
+  protected logger:   Logger;
+
+  constructor(req: Request, res: Response) {
+    super()
+    this.request  = req;
+    this.response = res;
+    this.response.on('close', () => this.emit('close'));
+    this.logger   = new Logger('SSE');
+  }
+
+  public sendEvent(data: Buffer | Object | string | number | boolean): void;
+  public sendEvent(type: string, data?: Buffer | Object | string | number | boolean): void;
+  public sendEvent(type: string, data?: Buffer | Object | string | number | boolean): void {
+    if (data === undefined) { data = type; type = null; }
+    if (type != null) this.response.write('event: ' + type + '\n');
+    this.logger.log("%yellow: %s", type, data);
+    if (data instanceof Buffer) {
+      this.response.write('data:' + data.toString() + '\n\n');
+    } else {
+      this.response.write('data:' + JSON.stringify(data) + '\n\n');
+    }
+  }
+
+  public close() {
+    this.response.end();
   }
 
 }

@@ -86,7 +86,7 @@ export class Aggregate extends Component.Component {
     const streamId = command.streamId;
     await this.lock(streamId);
     try {
-      this.logger.log('%red %s %j', command.order, streamId, command.data);
+      this.logger.log('%red %s %s', command.order, streamId, command.data);
       const state = await this.repository.get(streamId);
       const events = await this.handleCommand(state, command);
       this.alignEvents(events, state.revision);
@@ -132,14 +132,14 @@ export class Aggregate extends Component.Component {
       const meta  = { ...command.meta, stack: e.stack };
       const data  = { type: e.name, message: e.toString() };
       const event = new E(category, streamId, EventNumber.Error, 'Error', data, meta).volatil();
-      this.logger.error('%grey %s-%s %d', 'Error:' + order, category, streamId, command.data);
+      this.logger.error('%grey %s-%s %s', 'Error:' + order, category, streamId, command.data);
       this.logger.error(e);
       return [event];
     }
     if (events.length === 0) {
       const meta  = { ...command.meta, command: { category, order } };
       const event = new E(category, streamId, EventNumber.NoOp, 'NoOp', command.data, meta).volatil();
-      this.logger.log('%grey %s-%s %d', 'NoOp:' + order, category, streamId, command.data);
+      this.logger.log('%grey %s-%s %s', 'NoOp:' + order, category, streamId, command.data);
       return [event];
     } else {
       return events;

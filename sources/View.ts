@@ -71,7 +71,7 @@ export class View extends Component.Component {
     const handler  = this.getUpdateHandler(event);
     if (handler != null) {
       const { number, category, streamId, data } = event;
-      this.logger.log('%green %s@%s-%s %j', handler.name, number, category, streamId, data);
+      this.logger.log('%green %s@%s-%s %s', handler.name, number, category, streamId, data);
       await handler.call(this.updateHandlers, event);
       return EventHandling.Handled;
     } else {
@@ -85,7 +85,7 @@ export class View extends Component.Component {
     const wildname = 'ANY';
     if (wildname in this.queryHandlers) return (<any>this.queryHandlers)[wildname];
     return (query: Q) => {
-      this.logger.warn('Query %s not handled: %j', query.method, query.data);
+      this.logger.warn('Query %s not handled: %s', query.method, query.data);
       return Promise.resolve(new R('NotHandled', { method: query.method }));
     };
   }

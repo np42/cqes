@@ -74,7 +74,7 @@ export class Trigger extends Component.Component {
       const { number, category, streamId, data } = event;
       const stateId  = await this.partition.call(this, event);
       if (stateId != null) {
-        this.logger.log('%magenta %s@%s-%s %j', handler.name, number, category, streamId, data);
+        this.logger.log('%magenta %s@%s-%s %s', handler.name, number, category, streamId, data);
         const state    = await this.getState(stateId);
         const newState = await handler.call(this.triggerHandlers, state, event);
         return EventHandling.Handled;

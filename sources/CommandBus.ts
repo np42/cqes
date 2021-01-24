@@ -62,7 +62,7 @@ export class CommandBus extends Component.Component {
           command.data = this.commands[command.order].from(command.data);
         } catch (e) {
           debugger;
-          this.logger.error('Command discarded %j\n%e', command, e);
+          this.logger.error('Command discarded %s\n%e', command, e);
           return Promise.resolve();
         }
       }

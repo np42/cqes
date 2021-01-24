@@ -24,7 +24,7 @@ export function extend(holder: any, props: props) {
     });
     ee.on('end', (reply: Reply) => {
       if (ee.listenerCount(reply.type) == 0 && ee.listenerCount('end') == 1)
-        this.logger.warn('Reply %blue not handled\n%j', reply.type, reply.data);
+        this.logger.warn('Reply %blue not handled\n%s', reply.type, reply.data);
     });
     setImmediate(() => {
       const [method, view, context] = target.fqn.split(':').reverse();
@@ -33,7 +33,7 @@ export function extend(holder: any, props: props) {
         ee.emit('error', new Error('View ' + target + ' not found within [ ' + views + ' ]'));
       } else {
         const typer = this.getQueryTyper(context, view, method);
-        this.logger.log('%blue %s:%s %j', method, context, view, data);
+        this.logger.log('%blue %s:%s %s', method, context, view, data);
         if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
         this.queryBuses[view].request(method, data, meta)
           .catch((error: Error) => ee.emit('error', error))

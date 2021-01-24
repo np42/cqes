@@ -107,7 +107,7 @@ export class Repository extends Component.Component {
     const Type = state.data.constructor;
     const applier = <Domain.handler>(<any>this.domainHandlers)[event.type];
     if (applier != null) {
-      this.logger.log('%green %s-%s %j', applier.name, event.category, event.streamId, event.data);
+      this.logger.log('%green %s-%s %s', applier.name, event.category, event.streamId, event.data);
       const newState = applier.call(this.domainHandlers, state, event) || state;
       if (isType(Type)) newState.data = Type.from(newState.data);
       newState.revision = state.revision + 1;

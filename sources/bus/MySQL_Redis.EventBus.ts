@@ -140,7 +140,7 @@ export class Transport extends Component.Component implements EventBus.Transport
             else reject(err);
           })
           .on('fields', () => {
-            this.logger.log(request.sql);
+            this.logger.log('%1w.yellow', request.sql);
           })
           .on('result', async row => {
             connection.pause()

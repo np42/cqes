@@ -172,43 +172,25 @@ export class Logger {
 
   _sprintf(pattern: string, args: Array<any>) {
     return pattern
-      .replace(/%(blue|red|green|yellow|cyan|magenta|grey|bold|e|s|j|J|d)/g, (_, fmt) => {
+      .replace(/%(\d*[cwl][\.!])?(s|e|blue|red|green|yellow|cyan|magenta|grey|bold)/g, (_, strip, fmt) => {
         switch (fmt) {
         case 's': {
           const arg = args.shift();
-          if (typeof arg === 'string') return arg;
+          if (typeof arg === 'string')
+            return this._strip(strip, arg, s => s);
           if (arg instanceof Error) {
             const message = String(arg);
-            return message.substring(message.indexOf(' ') + 1);
+            return this._strip(strip, message.substring(message.indexOf(' ') + 1), s => s);
           }
-          return inspect(arg, { compact: true });
+          return this._strip(strip, inspect(arg, { compact: true }), s => s);
         } break ;
         case 'e': {
           const arg = args.shift();
-          if (arg instanceof Error) return arg.stack;
-          return inspect(arg);
-        } break ;
-        case 'd': {
-          let arg = args.shift();
-          if (typeof arg !== 'string') arg = JSON.stringify(arg);
-          if (arg.length < 160) return arg;
-          return arg.substr(0, 156) + '[…]' + arg[arg.length - 1];
-        } break ;
-        case 'j': case 'J': {
-          const arg = args.shift();
-          const str = JSON.stringify(arg, function (key: string, value: any) {
-            if (this[key] instanceof Buffer) return '<Buffer>';
-            if (typeof value == 'string' && value.length > 256)
-              return [ value.substr(0, 200)
-                     , '<... ' + (value.length - 220) + ' chars ...>'
-                     , value.substr(value.length - 20)
-                     ].join('');
-            return value;
-          });
-          return fmt == 'j' ? colors.grey(str) : str;
+          if (arg instanceof Error) return this._strip(strip, arg.stack, s => s);
+          return this._strip(strip, inspect(arg), s => s);
         } break ;
         default: {
-          return colors[fmt](args.shift());
+          return this._strip(strip, args.shift(), colors[fmt]);
         } break ;
         }
       })
@@ -216,6 +198,30 @@ export class Logger {
         if (args.length == 0) return '';
         return ' ' + args.map(item => inspect(item)).join(', ');
       });
+  }
+
+  _strip(format: string, data: string, modifier: (data: string) => string) {
+    if (format == null) return modifier(data);
+    const keepEnd = format[format.length - 1] === '.';
+    let count = parseInt(format, 10) || 1;
+    for (const char of format) {
+      switch (char) {
+      case 'c': {
+        return modifier(data.slice(0, count)) + (keepEnd ? data.slice(count) : '');
+      } break ;
+      case 'w': case 'l': {
+        const rxp = char === 'w' ? /\s*[^\s]+/g : /(\r?\n)*[^\n]+/g;
+        let offset = 0;
+        let match = null;
+        do {
+          match = rxp.exec(data);
+          if (match) offset = match.index + match[0].length;
+          count -= 1;
+        } while (match && count > 0);
+        return modifier(data.slice(0, offset)) + (keepEnd ? data.slice(offset) : '');
+      } break ;
+      }
+    }
   }
 
 }

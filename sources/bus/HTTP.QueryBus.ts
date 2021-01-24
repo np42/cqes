@@ -57,7 +57,7 @@ export class Transport extends Component.Component implements QueryBus.Transport
           catch (e) { accu[field] = value; }
           return accu;
         }, {});
-        this.logger.log('Query %s %s %j', view, method, data);
+        this.logger.log('Query %s %s %s', view, method, data);
         const query = new Query(view, method, data, meta);
         this.queryHandler(query).then((reply: Reply | any) => {
           if (reply == null) reply = new Reply('null');

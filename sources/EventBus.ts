@@ -68,7 +68,7 @@ export class EventBus extends Component.Component {
   }
 
   public emitEvents(events: Array<E>) {
-    events.forEach(e => this.logger.log('%green %s %j', e.type, e.stream, e.data));
+    events.forEach(e => this.logger.log('%green %s %s', e.type, e.stream, e.data));
     return this.transport.save(events);
   }
 

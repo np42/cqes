@@ -1,7 +1,7 @@
 import * as Service         from '../sources/Service';
 import { Event }            from '../sources/Event';
 import { Logger }           from '../sources/Logger';
-import { merge }            from 'cqes-util';
+import { merge, digest }    from 'cqes-util';
 import { TypeError }        from 'cqes-type';
 
 import * as events          from 'events';
@@ -341,23 +341,15 @@ export class HTTPService extends Service.Service {
           res.writeHead(404, headers);
           res.end();
         } else {
-          const cachedTs = res.req.headers['if-modified-since'] != null
-            ? new Date(res.req.headers['if-modified-since']).getTime()
-            : null;
-          if (cachedTs != null && stat.mtime.getTime() - cachedTs < 1000) {
+          const ifNoneMatch = res.req.headers['if-none-match'];
+          const etag = digest(stat.mtime.getTime() + '/' + stat.size);
+          if (etag === ifNoneMatch) {
             res.writeHead(304, headers);
             res.end();
+            this.logger.log('[304] %s', filepath);
           } else {
             headers['Content-Length'] = stat.size;
-            headers['Last-Modified'] = [ dayNumberToString[stat.mtime.getDay()]
-                                       , ', ', String(stat.mtime.getDate()).padStart(2, '0')
-                                       , ' ',  monthNumberToString[stat.mtime.getMonth()]
-                                       , ' ',  String(stat.mtime.getFullYear())
-                                       , ' ',  String(stat.mtime.getHours()).padStart(2, '0')
-                                       , ':',  String(stat.mtime.getMinutes()).padStart(2, '0')
-                                       , ':',  String(stat.mtime.getSeconds()).padStart(2, '0')
-                                       , ' GMT'
-                                       ].join('');
+            headers['ETag'] = etag;
             res.writeHead(code, headers);
             const stream = fs.createReadStream(filepath)
             const startingTransfertAt = Date.now();

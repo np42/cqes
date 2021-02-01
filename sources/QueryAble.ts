@@ -1,6 +1,6 @@
 import { QueryBus }      from './QueryBus';
 import { Reply }         from './Reply';
-import { Typer, Value
+import { Typer, Value, IValue
        }                 from 'cqes-type';
 import { memoize }       from 'cqes-util';
 import * as events       from 'events';
@@ -19,10 +19,10 @@ export function extend(holder: any, props: props) {
   // @target: '<Context>:<Category>:<View>'
   holder.query = function (target: Typer, data: any, meta?: any): EventEmitter {
     const ee = new EventEmitter();
-    ee.on('error', (error: Error) => {
+    ee.onError(error => {
       if (ee.listenerCount('error') == 1) throw error;
     });
-    ee.on('end', (reply: Reply) => {
+    ee.onEnd(reply => {
       if (ee.listenerCount(reply.type) == 0 && ee.listenerCount('end') == 1)
         this.logger.warn('Reply %blue not handled\n%s', reply.type, reply.data);
     });
@@ -46,10 +46,6 @@ export function extend(holder: any, props: props) {
     return ee;
   }
 
-  holder.queryMemo = memoize((target: Typer, data: any, ExpectedType?: any) => {
-    return holder.query(target, data).expect(ExpectedType);
-  }, 50);
-
   holder.getQueryTyper = function (context: string, view: string, method: string) {
     const key = context + ':' + view;
     if (key in this.queryTypes) {
@@ -64,33 +60,47 @@ export function extend(holder: any, props: props) {
 }
 
 export class EventEmitter extends events.EventEmitter {
-  on<T>(event: string | symbol | { name: string }, hook: (event: T) => void) {
-    const protectedHook = (event: T) => {
+
+  onError(hook: (error: Error) => void) {
+    return super.on('error', hook);
+  }
+
+  on(event: string | symbol, hook: (event: any) => void): this;
+  on<T extends any>(event: { new (): T }, hook: (event: T) => void): this;
+  on(event: any, hook: (event: any) => void) {
+    if (!(event instanceof Value)) throw new Error('Only Typed event allowed');
+    const protectedHook = (event: any) => {
       try { hook(event); }
       catch (e) { this.emit('error', e); }
     };
-    switch (typeof event) {
-    case 'string': case 'symbol': {
-      super.on(event, hook);
-    } break ;
-    default : {
-      event.name.split('.').forEach(part => {
-        const eventName = event.name.slice(event.name.indexOf(part));
-        super.on(eventName, hook);
-      });
-    }
-    }
+    (<Typer>event).name.split('.').forEach(part => {
+      const eventName = event.name.slice(event.name.indexOf(part));
+      super.on(eventName, hook);
+    });
     return this;
   }
 
-  otherwise<T = any>(hook: (reply: Reply) => void) {
-    return this.on('end', hook);
+  expect<T extends any>(event: { new (): T }): Promise<T> {
+    return new Promise((resolve, reject) => {
+      let resolved = false;
+      this.on(event, (value: any) => { resolved = true; resolve(value) });
+      this.onError(error => { if (!resolved) reject(error); });
+      this.onEnd(reply => { if (!resolved) reject(new Error('Expected ' + event.name + ', got ' + reply.type)); });
+    });
   }
 
-  wait(): Promise<void> {
+  otherwise(hook: (reply: Reply) => void) {
+    return this.onEnd(hook);
+  }
+
+  onEnd(hook: (reply: Reply) => void) {
+    return super.on('end', hook);
+  }
+
+  wait(): Promise<Reply> {
     return new Promise((resolve, reject) => {
-      this.on('error', reject);
-      this.on('end',   resolve);
+      this.onError(reject);
+      this.onEnd(resolve);
     });
   }
 

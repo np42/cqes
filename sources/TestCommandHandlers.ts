@@ -1,6 +1,7 @@
 //import { Envelop }       from './Test';
 import * as Component    from './Component';
 import { handler }       from './CommandHandlers';
+import { Command }       from './Command';
 import { State }         from './State';
 import { Event }         from './Event';
 import { Typer }         from 'cqes-type';
@@ -21,7 +22,7 @@ export class Testers extends Component.Component {
     this.states    = new Map();
     this.commands  = new Map();
     this.events    = new Map();
-    this.states.set('empty', {});
+    this.states.set('empty', new State(null, -1, 'Test', {}));
   }
 
   public mockQuery() {
@@ -34,34 +35,37 @@ export class TestChain extends Component.Component {
   protected handler:       handler;
   protected emittedEvents: Array<Event>;
 
-  constructor(context: Testers, handler: handler) {
-    super(<any>context);
-    this.parent = context;
+  constructor(parent: Testers, handler: handler) {
+    super(<any>parent);
+    this.parent = parent;
     this.handler = handler;
   }
 
   public with(predefinedStateName: string, predefinedCommandName: string) {
-    debugger;
     if (this.emittedEvents != null) throw new Error('Create a new test to do that');
     this.emittedEvents = [];
-    const state = this.parent.states.get(predefinedStateName);
-    this.handler
-    ( state
-    , this.parent.commands.get(predefinedCommandName)
-    , (type, data, meta) => {
-        if (type instanceof Event) {
-          this.emittedEvents.push(type);
-        } else {
-          const version = state.revision + this.emittedEvents.length + 1;
-          this.emittedEvents.push(new Event(this.parent.name, state.stateId, version, type.name, data, meta));
-        }
+    const id = uuid();
+
+    const rawCommand = this.parent.commands.get(predefinedCommandName);
+    const command = rawCommand instanceof Command ? rawCommand
+      : new Command(this.name, id, this.handler.name, rawCommand);
+
+    const rawState = this.parent.states.get(predefinedStateName);
+    const state = (rawState instanceof State ? rawState : new State(id, 0, 'Test', rawState)).clone();
+    state.stateId = id;
+
+    this.handler(state, command, (type, data, meta) => {
+      if (type instanceof Event) {
+        this.emittedEvents.push(type);
+      } else {
+        const version = state.revision + this.emittedEvents.length + 1;
+        this.emittedEvents.push(new Event(this.parent.name, state.stateId, version, type.name, data, meta));
       }
-    );
+    });
     return this;
   }
 
   public yields(eventType: Typer, predefinedEventName: string | Event) {
-    debugger;
     const expectedEvent = typeof predefinedEventName === 'string' ? this.parent.events.get(predefinedEventName)
       : predefinedEventName;
     const initialLength = this.emittedEvents.length;
@@ -74,15 +78,18 @@ export class TestChain extends Component.Component {
       }
     });
     if (initialLength === this.emittedEvents.length) {
-      this.logger.error('exected emit not happend %s', JSON.stringify(expectedEvent || predefinedEventName));
+      this.logger.error('Exected emit not happend %s', JSON.stringify(expectedEvent || predefinedEventName));
+    } else {
+      this.logger.log('Expected emit happend: %s', eventType.name);
     }
     return this;
   }
 
   public verify() {
-    debugger;
     if (this.emittedEvents.length > 0) {
-      this.logger.error('emit not expected: \n%s', this.emittedEvents.map(ev => JSON.stringify(ev)).join('\n'));
+      this.logger.error('Emit unexpected: \n%s', this.emittedEvents.map(ev => JSON.stringify(ev)).join('\n'));
+    } else {
+      this.logger.log('%green', '√');
     }
   }
 }

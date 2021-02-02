@@ -12,6 +12,8 @@ import * as View                   from './View';
 import * as Trigger                from './Trigger';
 import * as Service                from './Service';
 
+import * as TestAggregate          from './TestAggregate';
+
 import * as StateAble              from './StateAble';
 
 import { clone, merge, get, set
@@ -28,6 +30,7 @@ export interface argv {
   config?:  string;
   env?:     string;
   dump?:    boolean;
+  test?:    boolean;
 }
 
 function safeRequire(path: string) {
@@ -64,15 +67,21 @@ export class Process extends Component.Component {
   protected contexts:      Map<string, Context.Context>;
   readonly vars:           Map<string, string>;
   readonly argv:           argv;
+  readonly isTestMode:     boolean;
 
   constructor(props: props) {
     const argv         = <argv>yargs.argv;
-    if (argv._.length == 0) throw new Error('Need a <name> to start');
-    super({ context: null, name: argv._[0], process: null });
+    const isTestMode   = argv.test || argv._[0] === 'Test';
+
+    if (isTestMode) super({ context: null, name: argv._[0] || 'Test', process: null });
+    else if (argv._.length > 0) super({ context: null, name: argv._[0], process: null });
+    else throw new Error('Need a <name> to start');
+
     this.root          = props.root || process.cwd();
     this.configFile    = join(this.root, argv.config || 'cqesconfig.yml');
     this.argv          = argv;
     this.vars          = new Map();
+    this.isTestMode    = isTestMode;
     this.contextsProps = new Map();
     this.contexts      = new Map();
     this.loadConstants();
@@ -98,10 +107,17 @@ export class Process extends Component.Component {
     const promises = [];
     const timeouts = <any>[];
     await this.loadConfig();
-    await this.loadContexts();
-    await this.startComponents();
-    this.catchErrors();
-    this.logger.log('%bold', 'Process Ready');
+    if (this.isTestMode) {
+      await this.loadTestContexts();
+      await this.startComponents();
+      await this.runTests();
+      await this.stop();
+    } else {
+      await this.loadContexts();
+      await this.startComponents();
+      this.catchErrors();
+      this.logger.log('%bold', 'Process Ready');
+    }
   }
 
   protected async loadConfig() {
@@ -140,14 +156,25 @@ export class Process extends Component.Component {
     }
   }
 
+  protected loadTestContexts() {
+    this.logger.log('%bold', 'Load Testing Contexts');
+    for (const [contextName, contextProps] of this.contextsProps) {
+      const context      = new Context.Context({ context: contextProps.name, name: 'This', process: this });
+      this.contexts.set(contextName, context);
+      //context.views      = this.getContextViews(contextProps, contextProps.views);
+      context.aggregates = this.getTestContextAggregates(contextProps, contextProps.aggregates);
+      //context.triggers   = this.getContextTriggers(contextProps, contextProps.triggers);
+      //context.services   = this.getContextServices(contextProps, contextProps.services);
+    }
+  }
+
   protected getContextAggregates(context: Context.ContextProps, aggregatesProps: RecordMap) {
     return Object.keys(aggregatesProps).reduce((result: Map<string, Aggregate.Aggregate>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip aggregate %s', name.substr(1)), result;
       const aggregateProps      = aggregatesProps[name];
       if (aggregateProps.listen == null) aggregateProps.listen = [name];
       const category            = name;
-      const serial              = aggregateProps.serial;
-      const commonProps         = { context: context.name, name, serial, process: this };
+      const commonProps         = { context: context.name, name, process: this };
       const queryBuses          = this.getQueryBuses(context.name, name, aggregateProps.views);
       const eventBusProps       = { ...commonProps, ...context.EventBus, ...aggregateProps.EventBus };
       const eventBusIn          = this.getEventBus(eventBusProps, context.name, category);
@@ -170,6 +197,24 @@ export class Process extends Component.Component {
     }, new Map());
   }
 
+  protected getTestContextAggregates(context: Context.ContextProps, aggregatesProps: RecordMap) {
+    return Object.keys(aggregatesProps).reduce((result: Map<string, TestAggregate.TestAggregate>, name: string) => {
+      if (/^_/.test(name)) return this.logger.log('Skip aggregate %s', name.substr(1)), result;
+      const aggregateProps      = aggregatesProps[name];
+      if (aggregateProps.listen == null) aggregateProps.listen = [name];
+      const commonProps         = { context: context.name, name, process: this };
+      const cHandlersProps      = { ...commonProps, ...aggregateProps };
+      const commandTesters      = this.getCommandTesters(context.name, name, cHandlersProps);
+      if (commandTesters == null) return result;
+      const { commandHandlers } = this.getCommandHandlers(context.name, name, cHandlersProps);
+      const props               = { ...commonProps, commandHandlers, commandTesters };
+      const testAggregate       = new TestAggregate.TestAggregate(props);
+      this.logger.log('%red %cyan.%cyan found', 'Test Aggregate', context.name, name);
+      result.set(name, testAggregate);
+      return result;
+    }, new Map());
+  }
+
   protected getContextServices(context: Context.ContextProps, servicesProps: RecordMap) {
     return Object.keys(servicesProps).reduce((result: Map<string, Service.Service>, name: string) => {
       if (/^_/.test(name)) return this.logger.log('Skip service %s', name.substr(1)), result;
@@ -182,8 +227,7 @@ export class Process extends Component.Component {
       if (serviceProps.psubscribe   == null) serviceProps.psubscribe   = [];
       if (serviceProps.subscribe    == null) serviceProps.subscribe    = [];
       if (serviceProps.repositories == null) serviceProps.repositories = [];
-      const serial          = serviceProps.serial;
-      const commonProps     = { context: context.name, name, serial, process: this };
+      const commonProps     = { context: context.name, name, process: this };
       const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.commands);
       const queryBuses      = this.getQueryBuses(context.name, name, serviceProps.views);
       const eventBuses1     = this.getEventBuses(context.name, name, serviceProps.psubscribe);
@@ -223,8 +267,7 @@ export class Process extends Component.Component {
       if (viewProps.repositories == null) viewProps.repositories = [];
       const hasQS              = viewProps.noquery === true ? false : true;
       const hasUS              = viewProps.noupdate === true ? false : true;
-      const serial             = viewProps.serial;
-      const commonProps        = { context: context.name, name, serial, process: this };
+      const commonProps        = { context: context.name, name, process: this };
       const eventBuses         = hasUS ? this.getEventBuses(context.name, name, viewProps.psubscribe) : {};
       const queryBusProps      = { ...commonProps, ...context.QueryBus, ...viewProps.QueryBus, mode: 'server' };
       const queryBus           = hasQS ? this.getQueryBus(queryBusProps, context.name, name) : null;
@@ -440,6 +483,15 @@ export class Process extends Component.Component {
     return { triggerHandlers, partition };
   }
 
+  // Testers
+  protected getCommandTesters(contextName: string, name: string, props: any) {
+    const path = join(this.root, contextName, name + '.TestCommand');
+    const module = safeRequire(path);
+    if (!isConstructor(module.CommandTesters)) return null;
+    const commandTesters = new module.CommandTesters(props);
+    return commandTesters;
+  }
+
   // ------------------
 
   protected startComponents(): Promise<void> {
@@ -464,6 +516,16 @@ export class Process extends Component.Component {
   protected catchErrors() {
     process.on('uncaughtException', (e: any) => this.logger.error('exception: %s', e.stack || e));
     process.on('unhandledRejection', (e: any) => this.logger.error('reject: %s', e.stack || e));
+  }
+
+  public async runTests() {
+    for (const [contextName, context] of this.contexts) {
+      if (!(context instanceof Context.Context)) continue ;
+      for (const [name, aggregate] of context.aggregates) await aggregate.runTests();
+      //for (const [name, view]      of context.views)      promises.push(view.stop());
+      //for (const [name, trigger]   of context.triggers)   promises.push(trigger.stop());
+      //for (const [name, service]   of context.services)   promises.push(service.stop());
+    }
   }
 
   public async stop() {

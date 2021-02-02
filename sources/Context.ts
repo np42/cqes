@@ -4,6 +4,8 @@ import * as Aggregate from './Aggregate';
 import * as View      from './View';
 import * as Service   from './Service';
 import * as Trigger   from './Trigger';
+import { Testable }   from './Test';
+ 
 
 export interface ContextProps {
   name: string;
@@ -51,10 +53,10 @@ export interface ViewProps {
 export interface props extends Component.props {}
 
 export class Context extends Component.Component {
-  public aggregates: Map<string, Aggregate.Aggregate>;
-  public views:      Map<string, View.View>;
-  public triggers:   Map<string, Trigger.Trigger>;
-  public services:   Map<string, Service.Service>;
+  public aggregates: Map<string, Aggregate.Aggregate & Testable>;
+  public views:      Map<string, View.View> & Testable;
+  public triggers:   Map<string, Trigger.Trigger & Testable>;
+  public services:   Map<string, Service.Service & Testable>;
 
   constructor(props: props) {
     super(props);

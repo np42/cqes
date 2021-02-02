@@ -5,7 +5,7 @@ import { Command }       from './Command';
 import { Event }         from './Event';
 import { Typer }         from 'cqes-type';
 
-export type emitter = (type: string | Typer, data: any, meta?: any) => void
+export type emitter = (type: Typer | Event, data: any, meta?: any) => void
 export type handler = (state: State, command: Command, emit?: emitter) => Array<Event> | Event | void;
 
 export interface props extends Component.props, QueryAble.props {}

@@ -117,7 +117,7 @@ export class Aggregate extends Component.Component {
         type.from(data);
         events.push(new E(category, streamId, EventNumber.Append, type.name, data, meta));
       } else {
-        events.push(new E(category, streamId, EventNumber.Append, type, data, meta));
+        throw new Error('Deprecated');
       }
     };
     try {

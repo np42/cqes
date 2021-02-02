@@ -19,6 +19,12 @@ export { Aggregate, Repository, Service, View, Trigger
        };
 
 //--
+
+import * as TestAggregate from './sources/TestAggregate';
+
+export { TestAggregate };
+
+//--
 import { Command as C } from './sources/Command';
 import { Query   as Q } from './sources/Query';
 import { Reply   as R } from './sources/Reply';

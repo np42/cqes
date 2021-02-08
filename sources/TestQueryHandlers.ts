@@ -1,11 +1,8 @@
 //import { Envelop }       from './Test';
 import * as Component    from './Component';
-import { handler }       from './CommandHandlers';
-import { Command }       from './Command';
-import { State }         from './State';
-import { Event }         from './Event';
+import { handler }       from './QueryHandlers';
+import { Query }         from './Query';
 import { Typer }         from 'cqes-type';
-import { v4 as uuid }    from 'uuid';
 import * as assert       from 'assert';
 
 export interface props extends Component.props {
@@ -13,16 +10,11 @@ export interface props extends Component.props {
 }
 
 export class Testers extends Component.Component {
-  public states:   Map<string, any>;
-  public commands: Map<string, any>;
-  public events:   Map<string, any>;
+  public queries: Map<string, any>;
 
   constructor(props: props) {
     super(props)
-    this.states    = new Map();
-    this.commands  = new Map();
-    this.events    = new Map();
-    this.states.set('empty', new State(null, -1, 'Test', {}));
+    this.queries   = new Map();
   }
 
 }
@@ -38,7 +30,8 @@ export class TestChain extends Component.Component {
     this.handler = handler;
   }
 
-  public execWith(predefinedStateName: string, predefinedCommandName: string) {
+  public execWith(predefinedQueryName: string) {
+    /*
     if (this.emittedEvents != null) throw new Error('Create a new test to do that');
     this.emittedEvents = [];
     const id = uuid();
@@ -59,10 +52,12 @@ export class TestChain extends Component.Component {
         this.emittedEvents.push(new Event(this.parent.name, state.stateId, version, type.name, data, meta));
       }
     });
+    */
     return this;
   }
 
-  public yields(eventType: Typer, predefinedEventName: string | Event) {
+  public returns(eventType: Typer, predefinedPatternName: string | Query) {
+    /*
     const expectedEvent = typeof predefinedEventName === 'string' ? this.parent.events.get(predefinedEventName)
       : predefinedEventName;
     const initialLength = this.emittedEvents.length;
@@ -79,15 +74,18 @@ export class TestChain extends Component.Component {
     } else {
       this.logger.log('Expected emit happend: %s', eventType.name);
     }
+    */
     return this;
   }
 
   public verify() {
+    /*
     if (this.emittedEvents.length > 0) {
       this.logger.error('Emit unexpected: \n%s', this.emittedEvents.map(ev => JSON.stringify(ev)).join('\n'));
     } else {
       this.logger.log('%green', '√');
     }
+    */
   }
 }
 

@@ -20,6 +20,8 @@ import { clone, merge, get, set
        , Content, Digest
        , isConstructor }           from 'cqes-util';
 
+import { isType }                  from 'cqes-type';
+
 import { hostname, userInfo }      from 'os';
 import { join, dirname, basename } from 'path';
 import * as yargs                  from 'yargs';
@@ -249,6 +251,8 @@ export class Process extends Component.Component {
       } else {
         props.eventHandlers  = new Service.Event.Handlers({ ...commonProps });
       }
+      if (!isConstructor(Package[name]))
+        throw new Error('Service ' + name + ' requires a constructor named "' + name + '"');
       const service = new Package[name](props);
       if (!(service instanceof Service.Service))
         throw new Error('Service ' + name + ' must be type of Service');
@@ -355,14 +359,19 @@ export class Process extends Component.Component {
   protected getCommandBus(props: any, contextName: string, channel: string) {
     const transport = props.transport || './bus/AMQP.CommandBus';
     const category  = channel.split('-').shift();
-    const commands  = this.getTypes(contextName, category, 'commands');
+    const commands  = this.getTypes(contextName, category, 'commands', true);
     return new CommandBus({ ...props, transport, channel, commands });
   }
 
   protected getQueryBus(props: any, contextName: string, view: string) {
     const transport = props.transport || './bus/HTTP.QueryBus';
-    const queries   = this.getTypes(contextName, view, 'queries');
+    const queries   = this.getTypes(contextName, view, 'queries', true);
     const replies   = this.getTypes(contextName, view, 'replies');
+    for (const replyName in replies) {
+      const reply = replies[replyName];
+      if (!isType(reply)) continue ;
+      (<any>reply)._collapse = false;
+    }
     const parts     = { transport, view, queries, replies };
     if (props.mode == 'client') {
       const clientContext = this.contextsProps.get(contextName);
@@ -420,9 +429,16 @@ export class Process extends Component.Component {
     }
   }
 
-  public getTypes(contextName: string, category: string, kind?: string) {
-    const path = join(this.root, contextName, category + (kind ? '.' + kind : ''));
-    return safeRequire(path);
+  public getTypes(contextName: string, category: string, kind?: string, mustBeLocated = false) {
+    const path  = join(this.root, contextName, category + (kind ? '.' + kind : ''));
+    const types = safeRequire(path);
+    if (mustBeLocated) {
+      for (const typeName in types) {
+        if (types[typeName].fqn.split(':').length >= 3) continue ;
+        throw new Error(contextName + ':' + category + ':' + typeName + ' is not located');
+      }
+    }
+    return types;
   }
 
   // Handlers

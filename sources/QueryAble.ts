@@ -1,9 +1,10 @@
 import { QueryBus }      from './QueryBus';
 import { Reply }         from './Reply';
-import { Typer, Value, IValue
+import { Typer,IValue, isType
        }                 from 'cqes-type';
 import { memoize }       from 'cqes-util';
 import * as events       from 'events';
+import { inspect }       from 'util';
 
 export interface Buses { [name: string]: QueryBus; }
 export interface Types { [name: string]: Typer; }
@@ -68,7 +69,7 @@ export class EventEmitter extends events.EventEmitter {
   on(event: string | symbol, hook: (event: any) => void): this;
   on<T extends any>(event: { new (): T }, hook: (event: T) => void): this;
   on(event: any, hook: (event: any) => void) {
-    if (!(event instanceof Value)) throw new Error('Only Typed event allowed');
+    if (!isType(event)) throw new Error('Only Typed event allowed, got: ' + inspect(event));
     const protectedHook = (event: any) => {
       try { hook(event); }
       catch (e) { this.emit('error', e); }

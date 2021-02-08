@@ -21,8 +21,10 @@ export { Aggregate, Repository, Service, View, Trigger
 //--
 
 import * as TestAggregate from './sources/TestAggregate';
+import * as TestView      from './sources/TestView';
 
 export { TestAggregate };
+export { TestView };
 
 //--
 import { Command as C } from './sources/Command';

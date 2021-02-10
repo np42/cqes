@@ -2,6 +2,9 @@ import * as Component                from './Component';
 import { Handlers as EventHandlers
        , handler  as eventHandler
        }                             from './EventHandlers';
+import { Handlers as CommandHandlers
+       , handler  as commandHandler
+       }                             from './CommandHandlers';
 import * as CommandAble              from './CommandAble';
 import * as QueryAble                from './QueryAble';
 import * as StateAble                from './StateAble';
@@ -14,6 +17,12 @@ import { Typer }                     from 'cqes-type';
 
 export namespace Event {
   export class Handlers extends EventHandlers {
+    protected runtime: any;
+  }
+}
+
+export namespace Command {
+  export class Handlers extends CommandHandlers {
     protected runtime: any;
   }
 }
@@ -34,6 +43,7 @@ export class Service extends Component.Component {
   protected commandTypes:    CommandAble.Types;
   public    command:         (target: Typer, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
+  protected channels:        Array<Subscription>;
   // About Query
   protected queryBuses:    QueryAble.Buses;
   protected queryTypes:    QueryAble.Types;
@@ -53,16 +63,15 @@ export class Service extends Component.Component {
   constructor(props: props) {
     if (props.context == null) throw new Error('Context is required');
     if (props.name    == null) throw new Error('Name is required');
-    if (!(props.eventHandlers instanceof Event.Handlers)) throw new Error('Bad Event Handlers');
     super({ type: 'Service', ...props });
     CommandAble.extend(this, props);
     QueryAble.extend(this, props);
     StateAble.extend(this, props);
-    this.eventHandlers  = props.eventHandlers;
+    this.eventHandlers  = props.eventHandlers  || null;
     this.eventBuses     = props.eventBuses     || {};
     this.psubscriptions = props.psubscriptions || [];
     this.subscriptions  = props.subscriptions  || [];
-    if (this.eventHandlers['runtime'] == null) {
+    if (this.eventHandlers != null && this.eventHandlers['runtime'] == null) {
       Object.defineProperty(this.eventHandlers, 'runtime', { value: this });
     }
   }
@@ -72,7 +81,7 @@ export class Service extends Component.Component {
     await super.start();
     await Promise.all(Object.values(this.commandBuses).map(bus => bus.start()));
     await Promise.all(Object.values(this.queryBuses).map(bus => bus.start()));
-    await this.eventHandlers.start();
+    if (this.eventHandlers != null) await this.eventHandlers.start();
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.start()));
     await Promise.all(Object.values(this.repositories).map(repository => repository.start()));
     this.psubscriptions = await Promise.all(this.psubscriptions.map((name: string) => {
@@ -89,6 +98,7 @@ export class Service extends Component.Component {
   }
 
   protected getEventHandler(event: E): eventHandler {
+    if (this.eventHandlers == null) return ev => new Promise(resolve => resolve());
     const fullname = event.category + '_' + event.type;
     if (fullname in this.eventHandlers) return (<any>this.eventHandlers)[fullname];
     const shortname = event.type;
@@ -115,7 +125,7 @@ export class Service extends Component.Component {
     await Promise.all(this.psubscriptions.map(sub => (<any>sub).abort()));
     await Promise.all(this.subscriptions.map(sub => (<any>sub).abort()));
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.stop()));
-    await this.eventHandlers.stop();
+    if (this.eventHandlers != null) await this.eventHandlers.stop();
     await super.stop();
   }
 

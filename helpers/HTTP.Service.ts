@@ -298,7 +298,10 @@ export class HTTPService extends Service.Service {
       data = options.data;
     }
     if (options == null) options = {};
-    if (options.type == null) options.type = 'json';
+    if (options.type == null) {
+      if (data instanceof Buffer) options.type = 'buffer';
+      else options.type = 'json';
+    }
     if (options.headers == null) options.headers = {};
     if (options.code == null) options.code = code;
     switch (options.type.toLowerCase()) {

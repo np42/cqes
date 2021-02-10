@@ -224,13 +224,13 @@ export class Process extends Component.Component {
       const Package         = require(path);
       if (Package == null) throw new Error('Missing ' + name + ' in ' + path);
       const serviceProps    = servicesProps[name];
-      if (serviceProps.commands     == null) serviceProps.commands     = [];
       if (serviceProps.views        == null) serviceProps.views        = [];
       if (serviceProps.psubscribe   == null) serviceProps.psubscribe   = [];
       if (serviceProps.subscribe    == null) serviceProps.subscribe    = [];
       if (serviceProps.repositories == null) serviceProps.repositories = [];
+      if (serviceProps.listen       == null) serviceProps.listen       = [];
       const commonProps     = { context: context.name, name, process: this };
-      const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.commands);
+      const commandBuses    = this.getCommandBuses(context.name, name, serviceProps.listen);
       const queryBuses      = this.getQueryBuses(context.name, name, serviceProps.views);
       const eventBuses1     = this.getEventBuses(context.name, name, serviceProps.psubscribe);
       const eventBuses2     = this.getEventBuses(context.name, name, serviceProps.subscribe);
@@ -248,8 +248,14 @@ export class Process extends Component.Component {
       if ('EventHandlers' in Package) {
         const eventHandlers  = new Package.EventHandlers({ ...commonProps, ...serviceProps });
         props.eventHandlers  = eventHandlers;
-      } else {
+      } else if (serviceProps.psubscribe.length > 0 || serviceProps.subscribe.length > 0) {
         props.eventHandlers  = new Service.Event.Handlers({ ...commonProps });
+      }
+      if ('CommandHandlers' in Package) {
+        const commandHandlers  = new Package.CommandHandlers({ ...commonProps, ...serviceProps });
+        props.commandHandlers  = commandHandlers;
+      } else if (serviceProps.listen.length > 0) {
+        props.commandHandlers  = new Service.Command.Handlers({ ...commonProps });
       }
       if (!isConstructor(Package[name]))
         throw new Error('Service ' + name + ' requires a constructor named "' + name + '"');
@@ -267,7 +273,7 @@ export class Process extends Component.Component {
       if (/^_/.test(name)) return this.logger.log('Skip view %s', name.substr(1)), result;
       const viewProps          = viewsProps[name];
       if (viewProps.psubscribe   == null) viewProps.psubscribe = [];
-      if (viewProps.commands     == null) viewProps.commands = [];
+      if (viewProps.listen       == null) viewProps.listen = [];
       if (viewProps.repositories == null) viewProps.repositories = [];
       const hasQS              = viewProps.noquery === true ? false : true;
       const hasUS              = viewProps.noupdate === true ? false : true;
@@ -279,7 +285,7 @@ export class Process extends Component.Component {
       const repoEventBus       = { ...context.EventBus, ...viewProps.EventBus };
       const repoProps          = { ...viewProps, StateBus: repoStateBus, EventBus: repoEventBus };
       const repositories       = this.getRepositories(context.name, name, viewProps.repositories, repoProps);
-      const commandBuses       = this.getCommandBuses(context.name, name, viewProps.commands);
+      const commandBuses       = this.getCommandBuses(context.name, name, viewProps.listen);
       const queryBuses         = this.getQueryBuses(context.name, name, viewProps.views);
       const handlersDeps       = { queryBuses, commandBuses, repositories };
       const handlersProps      = { ...commonProps, ...viewProps, ...handlersDeps };
@@ -299,10 +305,13 @@ export class Process extends Component.Component {
       const triggerProps = triggersProps[name];
       if (triggerProps.psubscribe == null || triggerProps.psubscribe.length === 0)
         return this.logger.warn('Skip trigger %s, missing persistent subscription', name), result;
+      if (triggerProps.listen       == null) triggerProps.listen = [];
+      if (triggerProps.psubscribe   == null) triggerProps.psubscribe = [];
+      if (triggerProps.repositories == null) triggerProps.repositories = [];
       const commonProps    = { context: context.name, name, process: this };
       const eventBuses     = this.getEventBuses(context.name, name, triggerProps.psubscribe);
       const queryBuses     = this.getQueryBuses(context.name, name, triggerProps.views);
-      const commandBuses   = this.getCommandBuses(context.name, name, triggerProps.commands);
+      const commandBuses   = this.getCommandBuses(context.name, name, triggerProps.listen);
       const handlersProps  = { ...commonProps, queryBuses, commandBuses, ...triggerProps };
       const triggerOptions = this.getTriggerHandlers(context.name, name, handlersProps);
       const stateBusProps  = { ...commonProps, ...context.StateBus, ...triggerProps.StateBus };

@@ -35,7 +35,7 @@ export class Aggregate extends Component.Component {
   protected commandHandlers: Command.Handlers;
   protected eventBus:        EventBus;
   //
-  protected subscriptions:   Array<Subscription>;
+  protected channels:        Array<Subscription>;
   protected queues:          Map<string, Array<() => void>>;
 
   constructor(props: props) {
@@ -47,7 +47,7 @@ export class Aggregate extends Component.Component {
     this.repository      = props.repository;
     this.commandHandlers = props.commandHandlers;
     this.eventBus        = props.eventBus;
-    this.subscriptions   = [];
+    this.channels        = [];
     this.queues          = new Map();
   }
 
@@ -57,7 +57,7 @@ export class Aggregate extends Component.Component {
     await this.eventBus.start();
     await this.repository.start();
     await this.commandHandlers.start();
-    this.subscriptions = await Promise.all(Object.values(this.commandBuses).map(async bus => {
+    this.channels = await Promise.all(Object.values(this.commandBuses).map(async bus => {
       await bus.start();
       return bus.listen((command: C) => this.handleAggregateCommand(command))
     }));
@@ -167,7 +167,7 @@ export class Aggregate extends Component.Component {
 
   public async stop(): Promise<void> {
     if (!this.started) return ;
-    await Promise.all(this.subscriptions.map(subscription => subscription.abort()));
+    await Promise.all(this.channels.map(subscription => subscription.abort()));
     await Promise.all(Object.values(this.commandBuses).map(bus => bus.stop()));
     await this.commandHandlers.stop();
     await this.repository.stop();

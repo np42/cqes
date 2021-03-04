@@ -34,6 +34,3 @@ import { Event   as E } from './sources/Event';
 import { State   as S } from './sources/State';
 
 export { C, Q, R, E, S };
-
-//--
-export * as Types    from './sources/Types';

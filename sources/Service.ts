@@ -6,7 +6,7 @@ import { Handlers as CommandHandlers
        , handler  as commandHandler
        }                             from './CommandHandlers';
 import * as CommandAble              from './CommandAble';
-import * as QueryAble                from './QueryAble';
+import * as RpcAble                  from './RpcAble';
 import * as StateAble                from './StateAble';
 import { EventBus }                  from './EventBus';
 import { EventHandling }             from './EventBus';
@@ -30,7 +30,7 @@ export namespace Command {
 export interface EventBuses     { [name: string]: EventBus };
 export interface Subscription   { abort: () => Promise<void> };
 export interface Constructor<T> { new (...a: Array<any>): T };
-export interface props extends Component.props, QueryAble.props, CommandAble.props, StateAble.props {
+export interface props extends Component.props, RpcAble.props, CommandAble.props, StateAble.props {
   eventHandlers:   Event.Handlers;
   eventBuses:      EventBuses;
   psubscriptions:  Array<string>;
@@ -45,11 +45,11 @@ export class Service extends Component.Component {
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   protected channels:        Array<Subscription>;
   // About Query
-  protected queryBuses:    QueryAble.Buses;
-  protected queryTypes:    QueryAble.Types;
-  public    query:         (target: Typer, data: any, meta?: any) => QueryAble.EventEmitter;
-  public    queryMemo:     (target: Typer, data: any, type: Typer) => any;
-  protected getQueryTyper: (context: string, view: string, method: string) => Typer;
+  protected rpcBuses:      RpcAble.Buses;
+  protected queryTypes:    RpcAble.Types;
+  protected requestTypes:  RpcAble.Types;
+  public    query:         (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
+  public    request:       (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
   // About Event
   protected eventBuses:    EventBuses;
   protected eventHandlers: Event.Handlers;
@@ -65,7 +65,7 @@ export class Service extends Component.Component {
     if (props.name    == null) throw new Error('Name is required');
     super({ type: 'Service', ...props });
     CommandAble.extend(this, props);
-    QueryAble.extend(this, props);
+    RpcAble.extend(this, props);
     StateAble.extend(this, props);
     this.eventHandlers  = props.eventHandlers  || null;
     this.eventBuses     = props.eventBuses     || {};
@@ -80,7 +80,7 @@ export class Service extends Component.Component {
     if (this.started) return ;
     await super.start();
     await Promise.all(Object.values(this.commandBuses).map(bus => bus.start()));
-    await Promise.all(Object.values(this.queryBuses).map(bus => bus.start()));
+    await Promise.all(Object.values(this.rpcBuses).map(bus => bus.start()));
     if (this.eventHandlers != null) await this.eventHandlers.start();
     await Promise.all(Object.values(this.eventBuses).map(bus => bus.start()));
     await Promise.all(Object.values(this.repositories).map(repository => repository.start()));

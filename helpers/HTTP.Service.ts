@@ -27,17 +27,18 @@ export interface AttachmentFile {
   stream?:      fs.WriteStream;
 }
 
-export interface Request<T = any> extends NodeHttp.ClientRequest {
+export interface Request<T = any> extends Express.Request {
   url:              string;
   method:           string;
   query:            T;
   headers:          { [name: string]: string };
+  params:           { [name: string]: string };
   body:             T;
   remoteAddress:    string;
   readable:         boolean;
 };
 
-export interface Response extends NodeHttp.ServerResponse {
+export interface Response extends Express.Response {
   req: Request;
 };
 
@@ -86,6 +87,7 @@ export class HTTPService extends Service.Service {
   protected express:   Express.Express;
   protected server:    NodeHttp.Server;
   protected headers:   { [name: string]: string };
+  protected useCustomHandler: Boolean;
 
   constructor(props: props) {
     super(props);
@@ -99,9 +101,10 @@ export class HTTPService extends Service.Service {
     this.express.use(BodyParser.json(bpOpt.json || {}));
     this.express.use(BodyParser.urlencoded({ ...(bpOpt.urlencoded || {}), extended: true }));
     this.express.use(BodyParser.raw(bpOpt.raw || {}));
-    this.express.use((req: any, res: any, next: () => void) => this.handleHttpRequest(req, res));
+    this.express.use(this.handleHttpRequest.bind(this));
     this.server    = NodeHttp.createServer(this.express);
     this.headers   = merge({ 'Content-Type': 'application/json' }, props.HTTP.headers);
+    this.useCustomHandler = false;
   }
 
   public async start(): Promise<void> {
@@ -117,7 +120,7 @@ export class HTTPService extends Service.Service {
     return [req.method, ...path].join('_');
   }
 
-  protected async handleHttpRequest(req: Request, res: Response) {
+  protected async handleHttpRequest(req: Request, res: Response, next: () => void) {
     req.remoteAddress = this.extractRemoteAddress(req);
     const handlerName = this.getHandler(req);
     if (handlerName in this) {
@@ -133,10 +136,12 @@ export class HTTPService extends Service.Service {
           throw e;
         }
       }
-    } else {
+    } else if (!this.useCustomHandler) {
       this.logger.log('%red %yellow %s %s', 'Reject', req.method, req.url, req.body);
       res.writeHead(404, this.headers)
       res.end('{"message":"Endpoint not found"}');
+    } else {
+      next();
     }
   }
 
@@ -312,9 +317,9 @@ export class HTTPService extends Service.Service {
     }
   }
 
-  protected respondJSON(res: Response, options: respondOptions): Promise<void> {
+  protected respondJSON(res: Response, options: Omit<respondOptions, 'type'>): Promise<void> {
     if (options.wrap == null) options.wrap = true;
-    const { code, headers, data } = options;
+    const { code, headers = {}, data } = options;
     headers['content-type'] = 'application/json';
     res.writeHead(code, headers);
     if (options.wrap) {
@@ -335,7 +340,7 @@ export class HTTPService extends Service.Service {
     return new Promise(resolve => { res.on('close', resolve); });
   }
 
-  protected respondFile(res: Response, options: respondOptions): Promise<void> {
+  protected respondFile(res: Response, options: Omit<respondOptions, 'type'>): Promise<void> {
     const { code, headers, filepath } = options;
     return new Promise(resolve => {
       res.on('close', resolve);
@@ -367,7 +372,7 @@ export class HTTPService extends Service.Service {
     });
   }
 
-  protected respondBuffer(res: Response, options: respondOptions): Promise<void> {
+  protected respondBuffer(res: Response, options: Omit<respondOptions, 'type'>): Promise<void> {
     const { code, headers, buffer } = options;
     let contentLengthMissing = true;
     for (const key in headers) {

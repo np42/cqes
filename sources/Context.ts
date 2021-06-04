@@ -5,13 +5,12 @@ import * as View      from './View';
 import * as Service   from './Service';
 import * as Trigger   from './Trigger';
 import { Testable }   from './Test';
- 
 
 export interface ContextProps {
   name: string;
 
   CommandBus:   Object;
-  QueryBus:     Object;
+  RpcBus:       Object;
   EventBus:     Object;
   StateBus:     Object;
 
@@ -41,7 +40,7 @@ export interface ServiceProps {
 
 export interface ViewProps {
   EventBus:     any;
-  QueryBus:     any;
+  RpcBus:       any;
   noquery:      boolean;
   noupdate:     boolean;
   psubscribe:   Array<string>;

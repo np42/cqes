@@ -27,10 +27,11 @@ export { TestAggregate };
 export { TestView };
 
 //--
-import { Command as C } from './sources/Command';
-import { Query   as Q } from './sources/Query';
-import { Reply   as R } from './sources/Reply';
-import { Event   as E } from './sources/Event';
-import { State   as S } from './sources/State';
+import { Command as C  } from './sources/Command';
+import { Query   as Q  } from './sources/Query';
+import { Request as Rq } from './sources/Request';
+import { Reply   as R  } from './sources/Reply';
+import { Event   as E  } from './sources/Event';
+import { State   as S  } from './sources/State';
 
-export { C, Q, R, E, S };
+export { C, Q, Rq, R, E, S };

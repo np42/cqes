@@ -27,14 +27,12 @@ export interface props extends Component.props {
   view?:     string;
   queries?:  QueryTypes;
   requests?: RequestTypes;
-  replies?:  ReplyTypes;
 }
 
 export class RpcBus extends Component.Component {
   protected transport:    Transport;
   protected queries:      QueryTypes;
   protected requests:     RequestTypes;
-  protected replies:      ReplyTypes;
   protected view:         string;
 
   constructor(props: props) {
@@ -44,7 +42,6 @@ export class RpcBus extends Component.Component {
     this.transport    = new Transport({ ...props, type: 'RpcBus.Transport' });
     this.queries      = props.queries  || {};
     this.requests     = props.requests || {};
-    this.replies      = props.replies  || {};
     this.view         = props.view     || props.name;
   }
 
@@ -64,52 +61,30 @@ export class RpcBus extends Component.Component {
   // Query
   public async serveQuery(queryHandler: queryHandler): Promise<Subscription> {
     return this.transport.serveQuery(async (query: Query) => {
-      if (query.method in this.queries) {
-        try { query.data = this.queries[query.method].from(query.data); }
-        catch (e) { debugger; throw e; }
-      }
+      if (!(query.method in this.queries)) throw new Error('Missing Query Method: ' + query.method);
+      query.data = this.queries[query.method].from(query.data);
       return queryHandler(query);
     });
   }
 
   public async query(method: string, data: any, meta?: any): Promise<Reply> {
     const query = new Query(this.view, method, data, meta);
-    const reply = await this.callQuery(query);
-    if (reply.type in this.replies) {
-      try { reply.data = this.replies[reply.type].from(reply.data); }
-      catch (e) { debugger; throw e; }
-    }
-    return reply;
-  }
-
-  public callQuery(query: Query): Promise<Reply> {
-    if (query.method in this.queries) query.data = this.queries[query.method].from(query.data);
+    query.data = this.queries[query.method].from(query.data);
     return this.transport.query(query);
   }
 
   // Request
   public async serveRequest(requestHandler: requestHandler): Promise<Subscription> {
     return this.transport.serveRequest(async (request: Request) => {
-      if (request.method in this.requests) {
-        try { request.data = this.requests[request.method].from(request.data); }
-        catch (e) { debugger; throw e; }
-      }
+      if (!(request.method in this.requests)) throw new Error('Missing Request Method: ' + request.method)
+      request.data = this.requests[request.method].from(request.data);
       return requestHandler(request);
     });
   }
 
   public async request(method: string, data: any, meta?: any): Promise<Reply> {
-    const query = new Request(this.view, method, data, meta);
-    const reply = await this.callRequest(query);
-    if (reply.type in this.replies) {
-      try { reply.data = this.replies[reply.type].from(reply.data); }
-      catch (e) { debugger; throw e; }
-    }
-    return reply;
-  }
-
-  public callRequest(request: Request): Promise<Reply> {
-    if (request.method in this.requests) request.data = this.requests[request.method].from(request.data);
+    const request = new Request(this.view, method, data, meta);
+    request.data = this.requests[request.method].from(request.data);
     return this.transport.request(request);
   }
 

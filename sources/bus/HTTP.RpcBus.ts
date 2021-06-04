@@ -71,15 +71,7 @@ export class Transport extends Component.Component implements RpcBus.Transport {
           const data = qsOffset < 0 ? {} : qsdecode(req.url.substring(qsOffset + 1));
           this.logger.log('Query %s %s %s', view, method, data);
           const query = new Query(view, method, data, meta);
-          this.queryHandler(query).then((reply: Reply | any) => {
-            if (reply == null) reply = new Reply('null');
-            else if (!(reply instanceof Reply)) reply = new Reply(reply.constructor.name, reply);
-            res.writeHead(200, { 'content-type': 'application/json' });
-            res.end(JSON.stringify(reply));
-          }).catch((error: Error) => {
-            res.writeHead(500, { 'content-type': 'application/json' });
-            res.end(error.toString());
-          });
+          this.respondReply(res, this.queryHandler(query));
         } break ;
         case 'POST': { // Request
           if (this.requestHandler == null) return res.destroy(null);
@@ -91,15 +83,7 @@ export class Transport extends Component.Component implements RpcBus.Transport {
           req.on('end', () => {
             const data = JSON.parse(Buffer.concat(chunks).toString());
             const request = new Request(view, method, data, meta);
-            this.requestHandler(request).then((reply: Reply | any) => {
-              if (reply == null) reply = new Reply('null');
-              else if (!(reply instanceof Reply)) reply = new Reply(reply.constructor.name, reply);
-              res.writeHead(200, { 'content-type': 'application/json' });
-              res.end(JSON.stringify(reply));
-            }).catch((error: Error) => {
-              res.writeHead(500, { 'content-type': 'application/json' });
-              res.end(error.toString());
-            });
+            this.respondReply(res, this.requestHandler(request));
           });
         } break ;
         default : {
@@ -192,7 +176,8 @@ export class Transport extends Component.Component implements RpcBus.Transport {
     return new Promise((resolve, reject) => {
       const chunks = <Array<Buffer>>[];
       this.logger.log('%red.View %s:%s%s', view, hostname, port, path);
-      const httpRequest = http.request(<any>{ hostname, port, path, headers }, (response: http.IncomingMessage) => {
+      const options = { method: 'POST', hostname, port, path, headers };
+      const httpRequest = http.request(<any>options, (response: http.IncomingMessage) => {
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
         response.on('end', () => {
           const payload = Buffer.concat(chunks).toString();
@@ -218,6 +203,21 @@ export class Transport extends Component.Component implements RpcBus.Transport {
         setTimeout(() => this.request(request).then(resolve).catch(reject), 1000);
       });
       httpRequest.end();
+    });
+  }
+
+  // Reply
+
+  respondReply(res: http.ServerResponse, promise: Promise<any>) {
+    promise.then((reply: Reply | any) => {
+      if (reply == null) reply = new Reply('nil');
+      else if (reply instanceof Error) reply = new Reply(reply.constructor.name, reply.message);
+      else if (!(reply instanceof Reply)) reply = new Reply(reply.constructor.name, reply);
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(reply));
+    }).catch((error: Error) => {
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end(error.toString());
     });
   }
 

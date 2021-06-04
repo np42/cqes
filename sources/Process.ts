@@ -376,13 +376,8 @@ export class Process extends Component.Component {
   protected getRpcBus(props: any, contextName: string, view: string) {
     const transport = props.transport || './bus/HTTP.RpcBus';
     const queries   = this.getTypes(contextName, view, 'queries', true);
-    const replies   = this.getTypes(contextName, view, 'replies');
-    for (const replyName in replies) {
-      const reply = replies[replyName];
-      if (!isType(reply)) continue ;
-      (<any>reply)._collapse = false;
-    }
-    const parts     = { transport, view, queries, replies };
+    const requests  = this.getTypes(contextName, view, 'requests', true);
+    const parts     = { transport, view, queries, requests };
     if (props.mode == 'client') {
       const clientContext = this.contextsProps.get(contextName);
       if (clientContext?.views != null && view in clientContext.views) {

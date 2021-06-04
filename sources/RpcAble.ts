@@ -13,15 +13,11 @@ export interface props {
   rpcBuses?: Buses;
 }
 
-type typerGetter = (context: string, view: string, method: string) => Typer;
-
 export function extend(holder: any, props: props) {
   holder.rpcBuses     = props.rpcBuses || {};
-  holder.queryTypes   = {};
-  holder.requestTypes = {};
 
   // @target: '<Context>:<Category>:<View>'
-  const makeCallable = function (channel: 'query' | 'request', getTyper: typerGetter) {
+  const makeCallable = function (channel: 'query' | 'request') {
     return function (target: Typer, data: any, meta?: any): EventEmitter {
       const ee = new EventEmitter();
       setImmediate(() => {
@@ -43,13 +39,15 @@ export function extend(holder: any, props: props) {
           const views = Object.keys(this.rpcBuses).join(', ');
           ee.emit('error', new Error('View ' + target + ' not found within [ ' + views + ' ]'));
         } else {
-          const typer = getTyper.call(this, context, view, method);
           this.logger.log('%blue %s:%s %s', method, context, view, data);
-          if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
           this.rpcBuses[view][channel](method, data, meta)
             .then((reply: Reply) => {
-              ee.emit(reply.type, reply.data);
-              ee.emit('end', reply);
+              if (reply.type.slice(-5) === 'Error' && ee.listenerCount(reply.type) === 0) {
+                ee.emit('error', reply.data);
+              } else {
+                ee.emit(reply.type, reply.data);
+                ee.emit('end', reply);
+              }
             })
             .catch((error: Error) => {
               ee.emit('error', error)
@@ -60,28 +58,8 @@ export function extend(holder: any, props: props) {
     }
   };
 
-  holder.query = makeCallable('query', function (context: string, view: string, method: string) {
-    const key = context + ':' + view;
-    if (key in this.queryTypes) {
-      return this.queryTypes[key][method];
-    } else {
-      const types = this.process.getTypes(context, view, 'queries');
-      this.queryTypes[key] = types;
-      return types[method];
-    }
-  });
-
-  holder.request = makeCallable('request', function (context: string, view: string, method: string) {
-    const key = context + ':' + view;
-    if (key in this.requestTypes) {
-      return this.requestTypes[key][method];
-    } else {
-      const types = this.process.getTypes(context, view, 'requests');
-      this.requestTypes[key] = types;
-      return types[method];
-    }
-  });
-
+  holder.query   = makeCallable('query');
+  holder.request = makeCallable('request');
 }
 
 export class EventEmitter extends events.EventEmitter {
@@ -92,15 +70,15 @@ export class EventEmitter extends events.EventEmitter {
 
   on(event: string | symbol, hook: (event: any) => void): this;
   on<T extends any>(event: { new (): T }, hook: (event: T) => void): this;
-  on(event: any, hook: (event: any) => void) {
-    if (!isType(event)) throw new Error('Only Typed event allowed, got: ' + inspect(event));
-    const protectedHook = (event: any) => {
-      try { hook(event); }
+  on(eventType: any, hook: (event: any) => void) {
+    if (!isType(eventType)) throw new Error('Only Typed event allowed, got: ' + inspect(eventType));
+    const protectedHook = (data: any) => {
+      try { return hook(eventType.from(data)); }
       catch (e) { this.emit('error', e); }
     };
-    (<Typer>event).name.split('.').forEach(part => {
-      const eventName = event.name.slice(event.name.indexOf(part));
-      super.on(eventName, hook);
+    (<Typer>eventType).name.split('.').forEach(part => {
+      const eventName = eventType.name.slice(eventType.name.indexOf(part));
+      super.on(eventName, protectedHook);
     });
     return this;
   }

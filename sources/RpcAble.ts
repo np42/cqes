@@ -1,9 +1,7 @@
 import { RpcBus }        from './RpcBus';
 import { Reply }         from './Reply';
-import { Typer,IValue, isType
-       }                 from 'cqes-type';
+import { Typer, isType } from 'cqes-type';
 import { memoize }       from 'cqes-util';
-import * as events       from 'events';
 import { inspect }       from 'util';
 
 export interface Buses { [name: string]: RpcBus; }
@@ -14,9 +12,8 @@ export interface props {
 }
 
 export function extend(holder: any, props: props) {
-  holder.rpcBuses     = props.rpcBuses || {};
+  holder.rpcBuses = props.rpcBuses || {};
 
-  // @target: '<Context>:<Category>:<View>'
   const makeCallable = function (channel: 'query' | 'request') {
     return function (target: Typer, data: any, meta?: any): EventEmitter {
       const ee = new EventEmitter();
@@ -62,25 +59,50 @@ export function extend(holder: any, props: props) {
   holder.request = makeCallable('request');
 }
 
-export class EventEmitter extends events.EventEmitter {
+export class EventEmitter {
+  private listeners: { [name: string]: Array<(data: any) => void> };
 
-  onError(hook: (error: Error) => void) {
-    return super.on('error', hook);
+  constructor() {
+    this.listeners = {};
   }
 
-  on(event: string | symbol, hook: (event: any) => void): this;
-  on<T extends any>(event: { new (): T }, hook: (event: T) => void): this;
-  on(eventType: any, hook: (event: any) => void) {
-    if (!isType(eventType)) throw new Error('Only Typed event allowed, got: ' + inspect(eventType));
+  bind(name: string, hook: (data: any) => void) {
+    if (this.listeners[name] == null)
+      this.listeners[name] = [hook];
+    else
+      this.listeners[name].push(hook);
+  }
+
+  emit(name: string, data: any) {
+    const listeners = this.listeners[name];
+    if (listeners == null) return ;
+    for (let i = 0, l = listeners.length; i < l; i += 1)
+      listeners[i](data);
+  }
+
+  listenerCount(name: string) {
+    return this.listeners[name]?.length || 0;
+  }
+
+  on<T>(type: { new(): T }, hook: (data: T) => any) {
+    if (!isType(type)) throw new Error('Only Typed event allowed, got: ' + inspect(type));
     const protectedHook = (data: any) => {
-      try { return hook(eventType.from(data)); }
+      try { hook(type.from(data)); }
       catch (e) { this.emit('error', e); }
     };
-    (<Typer>eventType).name.split('.').forEach(part => {
-      const eventName = eventType.name.slice(eventType.name.indexOf(part));
-      super.on(eventName, protectedHook);
+    (<Typer>type).name.split('.').forEach(part => {
+      const eventName = type.name.slice(type.name.indexOf(part));
+      this.bind(eventName, protectedHook);
     });
     return this;
+  }
+
+  onError(hook: (error: Error) => void) {
+    return this.bind('error', hook);
+  }
+
+  onEnd(hook: (reply: Reply) => void) {
+    return this.bind('end', hook);
   }
 
   expect<T extends any>(event: { new (): T }): Promise<T> {
@@ -90,14 +112,6 @@ export class EventEmitter extends events.EventEmitter {
       this.onError(error => { if (!resolved) reject(error); });
       this.onEnd(reply => { if (!resolved) reject(new Error('Expected ' + event.name + ', got ' + reply.type)); });
     });
-  }
-
-  otherwise(hook: (reply: Reply) => void) {
-    return this.onEnd(hook);
-  }
-
-  onEnd(hook: (reply: Reply) => void) {
-    return super.on('end', hook);
   }
 
   wait(): Promise<Reply> {

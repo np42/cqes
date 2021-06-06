@@ -1,5 +1,5 @@
 import { CommandBus }    from './CommandBus';
-import { Typer, IValue } from 'cqes-type';
+import { Typer, IAny }   from 'cqes-type';
 import * as events       from 'events';
 import { genId }         from 'cqes-util';
 
@@ -19,7 +19,7 @@ export function extend(holder: any, props: props) {
   holder.commandTypes = {};
 
   // @target: '<Context>:<Category>:<Order>'
-  holder.command = function (command: IValue, streamId: string, data: any, meta?: any): EventEmitter {
+  holder.command = function (command: IAny, streamId: string, data: any, meta?: any): EventEmitter {
     if (command._source == null) throw new Error('Command must be full qualified, add .locate(__filename)');
     const ee = <EventEmitter>new events.EventEmitter();
     (<any>ee).wait = () => new Promise((resolve, reject) => ee.on('sent', resolve).on('error', reject));

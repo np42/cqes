@@ -440,7 +440,7 @@ export class Process extends Component.Component {
     if (mustBeLocated) {
       for (const typeName in types) {
         if (types[typeName].fqn.split(':').length >= 3) continue ;
-        throw new Error(contextName + ':' + category + ':' + typeName + ' is not located');
+        throw new Error(contextName + ':' + category + ':' + typeName + ' is not located (use `.locate(__filename)`)');
       }
     }
     return types;

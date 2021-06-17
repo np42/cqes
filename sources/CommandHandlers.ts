@@ -1,5 +1,6 @@
 import * as Component    from './Component';
 import * as RpcAble      from './RpcAble';
+import { AsyncCall }     from './AsyncCall';
 import { State }         from './State';
 import { Command }       from './Command';
 import { Event }         from './Event';
@@ -13,10 +14,8 @@ export interface props extends Component.props, RpcAble.props {}
 export class Handlers extends Component.Component {
   // About Query
   protected rpcBuses:       RpcAble.Buses;
-  protected queryTypes:     RpcAble.Types;
-  protected requestTypes:   RpcAble.Types;
-  protected query:          (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
-  protected request:        (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
+  protected query:          (target: Typer, data: any, meta?: any) => AsyncCall;
+  protected request:        (target: Typer, data: any, meta?: any) => AsyncCall;
 
   constructor(props: props) {
     super(props);

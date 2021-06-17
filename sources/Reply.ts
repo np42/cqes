@@ -7,7 +7,9 @@ export class Reply<A = any> {
     this.data = data;
   }
 
+  /*
   public is(type: string): boolean {
     return this.type === type;
   }
+  */
 }

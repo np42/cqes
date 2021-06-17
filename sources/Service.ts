@@ -8,8 +8,8 @@ import { Handlers as CommandHandlers
 import * as CommandAble              from './CommandAble';
 import * as RpcAble                  from './RpcAble';
 import * as StateAble                from './StateAble';
-import { EventBus }                  from './EventBus';
-import { EventHandling }             from './EventBus';
+import { AsyncCall }                 from './AsyncCall';
+import { EventBus, EventHandling }   from './EventBus';
 import { Event as E }                from './Event';
 import { State as S }                from './State';
 import { ExpireMap, genId }          from 'cqes-util';
@@ -40,22 +40,17 @@ export interface props extends Component.props, RpcAble.props, CommandAble.props
 export class Service extends Component.Component {
   // About Command
   protected commandBuses:    CommandAble.Buses;
-  protected commandTypes:    CommandAble.Types;
-  public    command:         (target: Typer, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
-  protected getCommandTyper: (context: string, category: string, order: string) => Typer;
-  protected channels:        Array<Subscription>;
+  protected command:         (target: Typer, streamId: string, data: any, meta?: any) => AsyncCall;
   // About Query
   protected rpcBuses:      RpcAble.Buses;
-  protected queryTypes:    RpcAble.Types;
-  protected requestTypes:  RpcAble.Types;
-  public    query:         (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
-  public    request:       (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
+  protected query:         (target: Typer, data: any, meta?: any) => AsyncCall;
+  protected request:       (target: Typer, data: any, meta?: any) => AsyncCall;
   // About Event
   protected eventBuses:    EventBuses;
   protected eventHandlers: Event.Handlers;
   // About State
   protected repositories:  StateAble.Repositories;
-  public    get:           <X>(type: Constructor<X>, streamId: string, minRevision?: number) => Promise<S<X>>;
+  protected get:           <X>(type: Constructor<X>, streamId: string, minRevision?: number) => Promise<S<X>>;
   //
   protected psubscriptions: Array<string | Subscription>;
   protected subscriptions:  Array<string | Subscription>;

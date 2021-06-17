@@ -1,14 +1,10 @@
 import { CommandBus }    from './CommandBus';
 import { Typer, IAny }   from 'cqes-type';
-import * as events       from 'events';
+import { AsyncCall }     from './AsyncCall';
 import { genId }         from 'cqes-util';
 
 export interface Buses { [name: string]: CommandBus; }
 export interface Types { [name: string]: Typer; }
-
-export interface EventEmitter extends events.EventEmitter {
-  wait(): Promise<void>;
-}
 
 export interface props {
   commandBuses?: Buses;
@@ -19,23 +15,24 @@ export function extend(holder: any, props: props) {
   holder.commandTypes = {};
 
   // @target: '<Context>:<Category>:<Order>'
-  holder.command = function (command: IAny, streamId: string, data: any, meta?: any): EventEmitter {
+  holder.command = function (command: IAny, streamId: string, data: any, meta?: any): AsyncCall {
     if (command._source == null) throw new Error('Command must be full qualified, add .locate(__filename)');
-    const ee = <EventEmitter>new events.EventEmitter();
-    (<any>ee).wait = () => new Promise((resolve, reject) => ee.on('sent', resolve).on('error', reject));
-    ee.on('error', error => this.logger.warn(error.toString()));
+    const ee = new AsyncCall();
     setImmediate(() => {
+      if (ee.listenerCount('error') === 0) {
+        ee.onError(error => this.logger.warn(error.toString()));
+      }
       const [order, category, context] = command.fqn.split(':').reverse();
       if (!(category in this.commandBuses)) {
-        ee.emit('error', new Error('Aggregate: ' + category + ' for command: ' + order + ' not linked'));
+        ee.reply('error', new Error('Aggregate: ' + category + ' for command: ' + order + ' not linked'));
       } else {
         const typer = this.getCommandTyper(context, category, order);
-        if (typer) try { typer.from(data); } catch (e) { return ee.emit('error', e); }
+        if (typer) try { typer.from(data); } catch (e) { return ee.reply('error', e); }
         if (meta == null) meta = {};
         if (meta.transactionId == null) meta.transactionId = genId();
         (<Buses>this.commandBuses)[category].send(streamId, order, data, meta)
-          .then(() => ee.emit('sent', ee))
-          .catch(error => ee.emit('error', error));
+          .then(() => ee.reply('sent', ee))
+          .catch(error => ee.reply('error', error));
       }
     });
     return ee;

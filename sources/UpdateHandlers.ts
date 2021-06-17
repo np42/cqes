@@ -2,6 +2,7 @@ import * as Component     from './Component';
 import * as RpcAble       from './RpcAble';
 import * as CommandAble   from './CommandAble';
 import * as StateAble     from './StateAble';
+import { AsyncCall }      from './AsyncCall';
 import { Event }          from './Event';
 import { State }          from './State';
 import { Typer }          from 'cqes-type';
@@ -27,15 +28,11 @@ export interface props extends Component.props, RpcAble.props, CommandAble.props
 export class Handlers extends Component.Component {
   // About Query
   protected rpcBuses:      RpcAble.Buses;
-  protected queryTypes:    RpcAble.Types;
-  protected requestTypes:  RpcAble.Types;
-  protected query:         (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
-  protected request:       (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
+  protected query:         (target: Typer, data: any, meta?: any) => AsyncCall;
+  protected request:       (target: Typer, data: any, meta?: any) => AsyncCall;
   // About Command
   protected commandBuses:    CommandAble.Buses;
-  protected commandTypes:    CommandAble.Types;
-  protected command:         (target: Typer, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
-  protected getCommandTyper: (context: string, category: string, order: string) => Typer;
+  protected command:         (target: Typer, streamId: string, data: any, meta?: any) => AsyncCall;
   // About State
   protected repositories: StateAble.Repositories;
   protected get:          <X>(target: Constructor<X>, streamId: string, minRevision?: number) => Promise<State<X>>;

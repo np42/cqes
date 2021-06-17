@@ -9,5 +9,6 @@ dist
 
 *.js
 *.js.map
+*.d.ts
 
 GoldenRules.md

@@ -1,6 +1,6 @@
 {
   "name": "cqes",
-  "version": "5.0.0",
+  "version": "5.0.3",
   "description": "CQRS / Event Sourcing",
   "bin": {
     "cqes": "bin/cqes"
@@ -46,6 +46,8 @@
   },
   "devDependencies": {
     "@types/mkdirp": "^1.0.1",
-    "@types/node": "^12.19.11"
+    "@types/mocha": "^8.2.2",
+    "@types/node": "^12.19.11",
+    "mocha": "^9.0.0"
   }
 }

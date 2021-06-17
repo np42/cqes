@@ -2,6 +2,7 @@ import * as Component    from './Component';
 import * as RpcAble      from './RpcAble';
 import * as CommandAble  from './CommandAble';
 import * as StateAble    from './StateAble';
+import { AsyncCall }     from './AsyncCall';
 import { Query }         from './Query';
 import { Reply }         from './Reply';
 import { State }         from './State';
@@ -18,12 +19,12 @@ export class Handlers extends Component.Component {
   protected rpcBuses:      RpcAble.Buses;
   protected queryTypes:    RpcAble.Types;
   protected requestTypes:  RpcAble.Types;
-  protected query:         (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
-  protected request:       (target: Typer, data: any, meta?: any) => RpcAble.EventEmitter;
+  protected query:         (target: Typer, data: any, meta?: any) => AsyncCall;
+  protected request:       (target: Typer, data: any, meta?: any) => AsyncCall;
   // About Command
   protected commandBuses:    CommandAble.Buses;
   protected commandTypes:    CommandAble.Types;
-  protected command:         (target: Typer, streamId: string, data: any, meta?: any) => CommandAble.EventEmitter;
+  protected command:         (target: Typer, streamId: string, data: any, meta?: any) => AsyncCall;
   protected getCommandTyper: (context: string, category: string, order: string) => Typer;
   // About State
   protected repositories: StateAble.Repositories;

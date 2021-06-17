@@ -7,7 +7,7 @@
   , "removeComments": true
   , "preserveConstEnums": true
   , "allowUnreachableCode": true
-  , "declaration": false
+  , "declaration": true
   , "allowSyntheticDefaultImports": true
   , "sourceMap": true
   }

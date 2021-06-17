@@ -27,13 +27,7 @@ export interface AttachmentFile {
   stream?:      fs.WriteStream;
 }
 
-export interface Request<T = any> extends Express.Request {
-  url:              string;
-  method:           string;
-  query:            T;
-  headers:          { [name: string]: string };
-  params:           { [name: string]: string };
-  body:             T;
+export interface Request extends Express.Request {
   remoteAddress:    string;
   readable:         boolean;
 };
@@ -51,6 +45,13 @@ export class AccessError extends Error {
 };
 
 const CRLF = '\r\n';
+const methodsColors: { [method: string]: string } =
+  { GET: 'green'
+  , POST: 'red'
+  , DELETE: 'red'
+  , PUT: 'blue'
+  , OPTIONS: 'grey'
+  };
 
 interface headers { [key: string]: string | number };
 
@@ -96,6 +97,7 @@ export class HTTPService extends Service.Service {
     if (props.HTTP.ip == null)   props.HTTP.ip = '127.0.0.1';
     this.config    = props.HTTP;
     this.express   = Express();
+    this.express.use(this.logCustomHandlerRequest.bind(this));
     this.express.use(cors(props.HTTP.cors));
     const bpOpt    = props.HTTP.bodyParser || {};
     this.express.use(BodyParser.json(bpOpt.json || {}));
@@ -112,6 +114,14 @@ export class HTTPService extends Service.Service {
     this.server.listen(this.config.port, this.config.ip, () => {
       this.logger.log('Listening to %s:%s', this.config.ip, this.config.port);
     });
+  }
+
+  protected logCustomHandlerRequest(req: Request, res: Response, next: () => void) {
+    if (this.useCustomHandler) {
+      const color = methodsColors[req.method] || 'yellow';
+      this.logger.log('%' + color + ' %s', req.method, req.url);
+    }
+    return next();
   }
 
   protected getHandler(req: Request) {
@@ -296,6 +306,8 @@ export class HTTPService extends Service.Service {
     });
   }
 
+  protected respond(res: Response, options: any): Promise<void>;
+  protected respond(res: Response, code: number, data?: any, options?: any): Promise<void>;
   protected respond(res: Response, code: any, data?: any, options?: any): Promise<void> {
     if (code && typeof code !== 'number' && typeof code.code === 'number') {
       options = code;

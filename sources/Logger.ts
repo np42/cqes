@@ -142,20 +142,14 @@ export class Logger {
     const tzo  = -date.getTimezoneOffset();
     const diff = tzo >= 0 ? '+' : '-';
     return date.getFullYear() +
-      '-'  + this._datePad(date.getMonth() + 1) +
-      '-'  + this._datePad(date.getDate()) +
-      'T'  + this._datePad(date.getHours()) +
-      ':'  + this._datePad(date.getMinutes()) +
-      ':'  + this._datePad(date.getSeconds()) +
-      '.'  + this._datePad(date.getMilliseconds(), 3) +
-      diff + this._datePad(tzo / 60) +
-      ':'  + this._datePad(tzo % 60);
-  }
-
-  _datePad(number: number, length: number = 2) {
-    if (length === 2) return number < 10 ? '0' + number : '' + number;
-    if (length === 3) return (number < 10 ? '00' : number < 100 ? '0' : '') + number;
-    return number;
+      '-'  + String(date.getMonth() + 1).padStart(2, '0') +
+      '-'  + String(date.getDate()).padStart(2, '0') +
+      'T'  + String(date.getHours()).padStart(2, '0') +
+      ':'  + String(date.getMinutes()).padStart(2, '0') +
+      ':'  + String(date.getSeconds()).padStart(2, '0') +
+      '.'  + String(date.getMilliseconds()).padStart(2, '0') +
+      diff + String(tzo / 60).padStart(2, '0') +
+      ':'  + String(tzo % 60).padStart(2, '0');
   }
 
   _format(args: any) {

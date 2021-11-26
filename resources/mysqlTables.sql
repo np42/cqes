@@ -5,15 +5,16 @@ SET sql_mode = 'NO_AUTO_VALUE_ON_ZERO';
 
 DROP TABLE IF EXISTS `@events`;
 CREATE TABLE `@events` (
-  `eventId` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `eventId`  bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `category` varchar(64) CHARACTER SET ascii NOT NULL,
   `streamId` char(36) CHARACTER SET ascii NOT NULL,
-  `number` int(10) unsigned DEFAULT NULL,
-  `type` varchar(64) CHARACTER SET ascii NOT NULL,
-  `date` date NOT NULL,
-  `time` time(3) NOT NULL,
-  `data` longtext NOT NULL,
-  `meta` text DEFAULT NULL,
+  `number`   int(10) unsigned DEFAULT NULL,
+  `type`     varchar(64) CHARACTER SET ascii NOT NULL,
+  `version`  int(10) unsigned DEFAULT '0',
+  `date`     date NOT NULL,
+  `time`     time(3) NOT NULL,
+  `data`     longtext NOT NULL,
+  `meta`     text DEFAULT NULL,
   PRIMARY KEY (`eventId`),
   UNIQUE KEY `category_streamId_number` (`category`,`streamId`,`number`),
   KEY `category_eventId` (`category`,`eventId`)
